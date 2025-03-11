@@ -1,0 +1,107 @@
+
+* {
+    box-sizing: border-box;
+     
+}
+
+ 
+
+ 
+nav {
+    padding: 1rem;
+    background-color: rgb(31, 46, 55);
+    color: white;
+    font-size: 2.5rem;
+
+}
+
+h1 {
+    color : white !important;
+}
+
+.home {     
+    height: 100vh;
+    background-image: linear-gradient(rgb(0,0,0,.6),rgb(0,0,0,.6)), url( ../images/backgroung.jpeg) ;  
+    background-size:cover;
+    background-position:center;
+    background-attachment:scroll;
+    background-repeat: no-repeat;
+    margin: 0;
+    padding: 0;
+}
+
+
+ 
+p {
+     
+ font-size: 2rem;
+
+}
+
+ul {
+    text-decoration: none;
+    color:white;
+}
+ 
+
+a:hover {
+    opacity: .65;
+    color: red;
+}
+.Pi{
+    color: red;
+    font-size: 3rem;
+    font-weight: bold;
+}
+
+.post
+{
+    color:white;
+}
+
+
+.trial-details {
+    max-width: 800px;
+    margin: 20px auto;
+    padding: 20px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.trial-details h1 {
+    
+    margin-bottom: 20px;
+}
+
+.word-media {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.word-media img {
+    max-width: 100%;
+    height: auto;
+    border: 1px solid #eee;
+    border-radius: 5px;
+}
+
+.trials-list {
+    margin-top: 20px;
+}
+
+.trials-list article {
+    border-bottom: 1px solid #eee;
+    padding: 10px 0;
+}
+
+.trials-list article:last-child {
+    border-bottom: none;
+}
+
+.trials-list article p {
+    margin: 5px 0;
+}
+
+.trials-list article strong {
+    font-weight: bold;
+}

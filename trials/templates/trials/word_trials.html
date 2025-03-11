@@ -1,0 +1,65 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block title %}
+    Trial for {{ word }}
+{% endblock title %}
+
+{% block content %}
+    <section class="trial-details">
+        <h1>Trials for "{{ word }}"</h1>
+
+        <div class="word-media">
+            <img src="{% static 'images/' %}{{ word }}_motor.gif" alt="{{ word }} Motor Action">
+        </div>
+
+        <div class="trials-list">
+            {% for trial in trials %}
+                <article class='post'>
+                    <form method="get" action="{% url 'capture_stage' %}">
+                        <input type="hidden" name="word" value="{{ word }}">
+                        <input type="hidden" name="stage" value="{{ trial.stage }}">
+                        <button type="submit">
+                            {% if trial.stage == 'stage1' %}
+                                Stage 1 (Vocal)
+                            {% elif trial.stage == 'stage2' %}
+                                Stage 2 (non-Vocal)
+                            {% elif trial.stage == 'stage3' %}
+                                Stage 3 (Motor)
+                            {% elif trial.stage == 'stage4' %}
+                                Stage 4 (Motor + Vocal)
+                            {% elif trial.stage == 'stage5' %}
+                                Stage 5 (Motor + non-Vocal)
+                            {% endif %}
+                        </button>
+                    </form>
+                </article>
+            {% endfor %}
+        </div>
+    </section>
+{% endblock content %}
+
+<script>
+    function staticFileExists(url, callback) {
+        var http = new XMLHttpRequest();
+        http.open('HEAD', url);
+        http.onreadystatechange = function() {
+            if (this.readyState == XMLHttpRequest.DONE) {
+                callback(this.status != 404);
+            }
+        };
+        http.send();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        var imagePath = "{% static 'images/' %}{{ word }}_motor.gif";
+        var imageElement = document.querySelector('.word-media img');
+        var missingImagePath = "{% static 'images/missing.gif' %}";
+
+        staticFileExists(imagePath, function(exists) {
+            if (!exists) {
+                imageElement.src = missingImagePath;
+            }
+        });
+    });
+</script>

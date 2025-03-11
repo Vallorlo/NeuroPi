@@ -1,0 +1,68 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+    <h1>Capture Stage: {{ stage }}</h1>
+    <p>Participant: {{ participant_name }}</p>
+    <p>Word: {{ word }}</p>
+    <p>Attempt: <span class="badge badge-info">{{ attempt_number }} of {{ max_attempts }}</span></p>
+
+    {% if error_message %}
+    <div class="alert alert-danger">
+        {{ error_message }}
+    </div>
+    {% endif %}
+
+    {% if captured_data %}
+    <div class="alert alert-success">
+        <p>Data captured successfully!</p>
+        <pre>{{ captured_data }}</pre>
+        
+        {% if attempt_number|add:"0" < max_attempts|add:"0" %}
+        <div class="mt-2">
+            <a href="?word={{ word }}&stage={{ stage }}&attempt={{ attempt_number|add:"1" }}" class="btn btn-primary">
+                Next Attempt ({{ attempt_number|add:"1" }} of {{ max_attempts }})
+            </a>
+        </div>
+        {% else %}
+        <div class="mt-2">
+            <p>All attempts completed!</p>
+            <a href="{% url 'word_trials' %}?word={{ word }}" class="btn btn-success">Return to Trial List</a>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <div class="row mt-4">
+        <div class="col">
+            <form method="post" id="captureForm">
+                {% csrf_token %}
+                <button type="submit" id="startCaptureBtn" class="btn btn-primary">
+                    Start Capture (Attempt {{ attempt_number }})
+                </button>
+                
+                <button type="button" id="timestampBtn" class="btn btn-warning ml-2" style="display: none;" disabled>
+                    Add Timestamp
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Timestamps display -->
+    <div class="row mt-4" id="timestampsContainer" style="display: none;">
+        <div class="col">
+            <h3>Recorded Timestamps (Attempt {{ attempt_number }})</h3>
+            <ul id="timestampsList" class="list-group">
+                {% for timestamp in timestamps %}
+                <li class="list-group-item">
+                    Time: {{ timestamp.time }}
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script src="{% static 'js/capture.js' %}" defer></script>
+{% endblock %}

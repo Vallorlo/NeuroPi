@@ -1,0 +1,19 @@
+Timestamp file for YES, stage stage2, attempt 5
+Time: 00:01.796
+Time: 00:03.881
+Time: 00:05.667
+Time: 00:07.263
+Time: 00:09.412
+Time: 00:10.718
+Time: 00:11.949
+Time: 00:13.430
+Time: 00:14.724
+Time: 00:16.131
+Time: 00:18.078
+Time: 00:19.634
+Time: 00:21.154
+Time: 00:22.509
+Time: 00:23.765
+Time: 00:25.272
+Time: 00:26.539
+Time: 00:27.883

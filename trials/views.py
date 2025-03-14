@@ -65,10 +65,11 @@ def capture_stage(request):
                 f.write(f"Timestamp file for {word}, stage {stage}, attempt {attempt_number}\n")
             
             output_file = os.path.join(participant_folder, f'eeg_data_attempt_{attempt_number}.csv')
+            output_audio = os.path.join(participant_folder, f'eeg_data_attempt_{attempt_number}.wav')
             
             try:
                 # Collect data
-                captured_data = collect_stage_data(20, output_file)
+                captured_data = collect_stage_data(31, output_file,output_audio)
             
                 # Keep timestamps for display before clearing
                 timestamps = request.session.get('timestamps', []).copy()

@@ -1,0 +1,6 @@
+Timestamp file for Goodbye, stage stage2, attempt 4
+Time: 00:02.726
+Time: 00:06.733
+Time: 00:11.218
+Time: 00:14.673
+Time: 00:19.447

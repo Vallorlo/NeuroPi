@@ -1,0 +1,12 @@
+Timestamp file for Hello, stage stage1, attempt 3
+Time: 00:02.227
+Time: 00:05.272
+Time: 00:07.487
+Time: 00:10.154
+Time: 00:13.034
+Time: 00:15.687
+Time: 00:18.428
+Time: 00:21.233
+Time: 00:24.011
+Time: 00:26.703
+Time: 00:29.620

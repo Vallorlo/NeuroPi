@@ -1,4 +1,3 @@
-Timestamp file for Hello, stage stage2, attempt 2
 Time: 00:02.991
 Time: 00:06.070
 Time: 00:08.444

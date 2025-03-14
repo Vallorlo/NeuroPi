@@ -497,7 +497,7 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True, times
 
 
         # Save combined dataset
-        dataset_path = os.path.join(root_dir, "combined_eeg_dataset.csv")
+        dataset_path = os.path.join(root_dir, "eeg_dataset.csv")
         combined_df.to_csv(dataset_path, index=False)
         print(f"\nCombined dataset saved to {dataset_path}")
 

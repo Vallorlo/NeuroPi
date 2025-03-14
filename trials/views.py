@@ -62,7 +62,7 @@ def capture_stage(request):
         else:
             # For a new capture start, create/overwrite the file
             with open(timestamp_file, 'w') as f:
-                f.write(f"Timestamp file for {word}, stage {stage}, attempt {attempt_number}\n")
+                f.write(f"\n")
             
             output_file = os.path.join(participant_folder, f'eeg_data_attempt_{attempt_number}.csv')
             output_audio = os.path.join(participant_folder, f'eeg_data_attempt_{attempt_number}.wav')

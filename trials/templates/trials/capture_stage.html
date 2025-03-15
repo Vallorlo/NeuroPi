@@ -1,68 +1,373 @@
 {% extends "layout.html" %}
 {% load static %}
 
+{% block title %}
+    Capture Stage {{ stage }}
+{% endblock title %}
+
 {% block content %}
-<div class="container">
-    <h1>Capture Stage: {{ stage }}</h1>
-    <p>Participant: {{ participant_name }}</p>
-    <p>Word: {{ word }}</p>
-    <p>Attempt: <span class="badge badge-info">{{ attempt_number }} of {{ max_attempts }}</span></p>
-
-    {% if error_message %}
-    <div class="alert alert-danger">
-        {{ error_message }}
-    </div>
-    {% endif %}
-
-    {% if captured_data %}
-    <div class="alert alert-success">
-        <p>Data captured successfully!</p>
-        <pre>{{ captured_data }}</pre>
-        
-        {% if attempt_number|add:"0" < max_attempts|add:"0" %}
-        <div class="mt-2">
-            <a href="?word={{ word }}&stage={{ stage }}&attempt={{ attempt_number|add:"1" }}" class="btn btn-primary">
-                Next Attempt ({{ attempt_number|add:"1" }} of {{ max_attempts }})
-            </a>
+<div class="container mt-5">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h1 class="mb-0">Capture Stage</h1>
+            <span class="badge bg-light text-dark fs-5">{{ stage }}</span>
         </div>
-        {% else %}
-        <div class="mt-2">
-            <p>All attempts completed!</p>
-            <a href="{% url 'word_trials' %}?word={{ word }}" class="btn btn-success">Return to Trial List</a>
-        </div>
-        {% endif %}
-    </div>
-    {% endif %}
-
-    <div class="row mt-4">
-        <div class="col">
-            <form method="post" id="captureForm">
-                {% csrf_token %}
-                <button type="submit" id="startCaptureBtn" class="btn btn-primary">
-                    Start Capture (Attempt {{ attempt_number }})
-                </button>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Trial Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Participant:</strong></span>
+                                    <span class="badge bg-primary rounded-pill">{{ participant_name }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Word:</strong></span>
+                                    <span class="badge bg-success rounded-pill">{{ word }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Stage Type:</strong></span>
+                                    <span>
+                                        {% if stage == 'stage1' %}
+                                            <i class="bi bi-mic-fill text-danger"></i> Vocal
+                                        {% elif stage == 'stage2' %}
+                                            <i class="bi bi-mic-mute-fill text-warning"></i> Non-Vocal
+                                        {% elif stage == 'stage3' %}
+                                            <i class="bi bi-hand-index-thumb text-primary"></i> Motor
+                                        {% elif stage == 'stage4' %}
+                                            <i class="bi bi-hand-index-thumb text-primary"></i><i class="bi bi-mic-fill text-danger"></i> Motor + Vocal
+                                        {% elif stage == 'stage5' %}
+                                            <i class="bi bi-hand-index-thumb text-primary"></i><i class="bi bi-mic-mute-fill text-warning"></i> Motor + Non-Vocal
+                                        {% endif %}
+                                    </span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Attempt:</strong></span>
+                                    <span class="badge bg-warning text-dark">{{ attempt_number }} of {{ max_attempts }}</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header bg-warning">
+                            <h5 class="mb-0">Instructions</h5>
+                        </div>
+                        <div class="card-body">
+                            <ol class="ulguide">
+                                <li>Click "Start Capture" to begin EEG and audio recording</li>
+                                <li>Follow the stage instructions:
+                                    {% if stage == 'stage1' %}
+                                        Say the word "{{ word }}" out loud when ready
+                                    {% elif stage == 'stage2' %}
+                                        Think about saying the word "{{ word }}" without speaking
+                                    {% elif stage == 'stage3' %}
+                                        Perform the motion for "{{ word }}" without speaking
+                                    {% elif stage == 'stage4' %}
+                                        Say "{{ word }}" out loud while performing the motion
+                                    {% elif stage == 'stage5' %}
+                                        Think about saying "{{ word }}" while performing the motion
+                                    {% endif %}
+                                </li>
+                                <li>Use the "Add Timestamp" button to mark important moments</li>
+                                <li>Recording will automatically stop after 30 seconds</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
                 
-                <button type="button" id="timestampBtn" class="btn btn-warning ml-2" style="display: none;" disabled>
-                    Add Timestamp
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Timestamps display -->
-    <div class="row mt-4" id="timestampsContainer" style="display: none;">
-        <div class="col">
-            <h3>Recorded Timestamps (Attempt {{ attempt_number }})</h3>
-            <ul id="timestampsList" class="list-group">
-                {% for timestamp in timestamps %}
-                <li class="list-group-item">
-                    Time: {{ timestamp.time }}
-                </li>
-                {% endfor %}
-            </ul>
+                <div class="col-md-6">
+                    {% if error_message %}
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle-fill"></i> {{ error_message }}
+                        </div>
+                    {% endif %}
+                    
+                    {% if captured_data %}
+                        <div class="alert alert-success">
+                            <i class="bi bi-check-circle-fill"></i> Data captured successfully!
+                            <div class="mt-3">
+                                {% if attempt_number|add:"0" < max_attempts|add:"0" %}
+                                    <a href="?word={{ word }}&stage={{ stage }}&attempt={{ attempt_number|add:"1" }}" class="btn btn-primary">
+                                        Next Attempt ({{ attempt_number|add:"1" }} of {{ max_attempts }})
+                                    </a>
+                                {% else %}
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle-fill"></i> All attempts completed!
+                                    </div>
+                                    <a href="{% url 'word_trials' %}?word={{ word }}" class="btn btn-success">
+                                        <i class="bi bi-arrow-left"></i> Return to Trial List
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <div class="card mb-4">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0">Capture Controls</h5>
+                            </div>
+                            <div class="card-body text-center">
+                                <form method="post" id="captureForm">
+                                    {% csrf_token %}
+                                    
+                                    <div class="d-grid gap-3">
+                                        <button type="submit" id="startCaptureBtn" class="btn btn-lg btn-primary">
+                                            <i class="bi bi-record-circle"></i> Start Capture
+                                            <div class="small">(Attempt {{ attempt_number }} of {{ max_attempts }})</div>
+                                        </button>
+                                        
+                                        <button type="button" id="timestampBtn" class="btn btn-lg btn-warning" style="display: none;" disabled>
+                                            <i class="bi bi-bookmark-plus"></i> Add Timestamp
+                                        </button>
+                                    </div>
+                                </form>
+                                
+                                <div id="captureProgress" class="progress mt-4" style="display: none;">
+                                    <div id="progressBar" class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                                </div>
+                                
+                                <div id="captureStatus" class="alert alert-info mt-3" style="display: none;">
+                                    <span id="statusText">Preparing to start capture...</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Audio level visualizer -->
+                        <div class="card mb-4" id="audioVisualizer" style="display: none;">
+                            <div class="card-header bg-secondary text-white">
+                                <h5 class="mb-0">Audio Level</h5>
+                            </div>
+                            <div class="card-body text-center">
+                                <canvas id="audioMeter" width="400" height="80"></canvas>
+                            </div>
+                        </div>
+                    {% endif %}
+                    
+                    <!-- Timestamps display -->
+                    <div class="card" id="timestampsContainer" style="display: none;">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Recorded Timestamps</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul id="timestampsList" class="list-group">
+                                {% for timestamp in timestamps %}
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <i class="bi bi-bookmark-check-fill text-success"></i>
+                                    <span>Time: {{ timestamp.time }}</span>
+                                    <span class="badge bg-primary rounded-pill">Event {{ forloop.counter }}</span>
+                                </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <a href="{% url 'word_trials' %}?word={{ word }}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-left"></i> Back to Stage Selection
+                </a>
+            </div>
         </div>
     </div>
 </div>
 
-<script src="{% static 'js/capture.js' %}" defer></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const startCaptureBtn = document.getElementById('startCaptureBtn');
+        const timestampBtn = document.getElementById('timestampBtn');
+        const captureForm = document.getElementById('captureForm');
+        const timestampsContainer = document.getElementById('timestampsContainer');
+        const timestampsList = document.getElementById('timestampsList');
+        const captureProgress = document.getElementById('captureProgress');
+        const progressBar = document.getElementById('progressBar');
+        const captureStatus = document.getElementById('captureStatus');
+        const statusText = document.getElementById('statusText');
+        const audioVisualizer = document.getElementById('audioVisualizer');
+        const audioCanvas = document.getElementById('audioMeter');
+        
+        let captureStartTime = null;
+        let isCapturing = false;
+        let captureTimer = null;
+        let captureDuration = 30; // seconds
+        
+        // Check if there are existing timestamps
+        if (timestampsList && timestampsList.children.length > 0) {
+            timestampsContainer.style.display = 'block';
+        }
+    
+        // Start capture button
+        if (startCaptureBtn) {
+            startCaptureBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                // Update UI immediately to show we're starting
+                statusText.textContent = 'Starting EEG and audio capture...';
+                captureStatus.style.display = 'block';
+                
+                // Set UI state for capturing
+                isCapturing = true;
+                captureStartTime = new Date();
+                
+                // Show capture UI elements
+                timestampBtn.style.display = 'block';
+                timestampBtn.disabled = false;
+                startCaptureBtn.disabled = true;
+                startCaptureBtn.textContent = 'Recording in progress...';
+                timestampsContainer.style.display = 'block';
+                captureProgress.style.display = 'block';
+                audioVisualizer.style.display = 'block';
+                
+                // Clear existing timestamps from the current attempt
+                while (timestampsList.firstChild) {
+                    timestampsList.removeChild(timestampsList.firstChild);
+                }
+                
+                // Submit the form immediately to start the capture
+                // The actual capture starts on the server
+                captureForm.submit();
+                
+                // The rest of the UI updates are for visual feedback only,
+                // since the actual recording is now happening on the server
+                
+                // Start progress timer for the UI
+                let elapsed = 0;
+                captureTimer = setInterval(function() {
+                    elapsed++;
+                    const percentage = Math.min(Math.round((elapsed / captureDuration) * 100), 100);
+                    progressBar.style.width = percentage + '%';
+                    progressBar.setAttribute('aria-valuenow', percentage);
+                    
+                    // Update status text
+                    statusText.textContent = `Recording in progress... ${elapsed}s / ${captureDuration}s`;
+                    
+                    // Simulate audio visualization
+                    if (audioCanvas) {
+                        const ctx = audioCanvas.getContext('2d');
+                        drawAudioLevel(ctx, audioCanvas.width, audioCanvas.height);
+                    }
+                }, 1000);
+            });
+        }
+    
+        // Timestamp button
+        if (timestampBtn) {
+            timestampBtn.addEventListener('click', function() {
+                if (!isCapturing) return;
+                
+                const currentTime = new Date();
+                const elapsedMs = currentTime - captureStartTime;
+                
+                // Format elapsed time as minutes:seconds.milliseconds
+                const minutes = Math.floor(elapsedMs / 60000);
+                const seconds = Math.floor((elapsedMs % 60000) / 1000);
+                const ms = elapsedMs % 1000;
+                const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+                
+                // Add visual feedback for button press
+                timestampBtn.classList.add('btn-success');
+                timestampBtn.classList.remove('btn-warning');
+                setTimeout(() => {
+                    timestampBtn.classList.add('btn-warning');
+                    timestampBtn.classList.remove('btn-success');
+                }, 300);
+                
+                // Add to the list
+                const listItem = document.createElement('li');
+                listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+                
+                const icon = document.createElement('i');
+                icon.className = 'bi bi-bookmark-check-fill text-success';
+                
+                const timeSpan = document.createElement('span');
+                timeSpan.textContent = `Time: ${formattedTime}`;
+                
+                const badge = document.createElement('span');
+                badge.className = 'badge bg-primary rounded-pill';
+                badge.textContent = `Event ${timestampsList.children.length + 1}`;
+                
+                listItem.appendChild(icon);
+                listItem.appendChild(timeSpan);
+                listItem.appendChild(badge);
+                timestampsList.appendChild(listItem);
+                
+                // Send to server via AJAX
+                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+                
+                fetch(window.location.href, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: new URLSearchParams({
+                        'timestamp_event': 'true',
+                        'timestamp': formattedTime
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Timestamp saved:', data);
+                })
+                .catch(error => {
+                    console.error('Error saving timestamp:', error);
+                });
+            });
+        }
+        
+        // Audio visualization function for UI feedback
+        function drawAudioLevel(ctx, width, height) {
+            // Simulate audio level (higher when speaking, lower when silent)
+            let level = Math.random() * 0.6; // Base random level
+            
+            // Occasionally simulate speech with higher levels
+            if (Math.random() > 0.7) {
+                level = 0.5 + Math.random() * 0.5; // Higher level for "speech"
+            }
+            
+            // Clear canvas
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Draw level bar
+            const barWidth = Math.floor(level * width);
+            
+            // Color gradient based on level
+            let color = '#28a745'; // Green for low
+            if (level > 0.7) color = '#dc3545'; // Red for high
+            else if (level > 0.4) color = '#ffc107'; // Yellow for medium
+            
+            ctx.fillStyle = color;
+            ctx.fillRect(0, 0, barWidth, height);
+            
+            // Draw level markers
+            ctx.fillStyle = '#6c757d';
+            for (let i = 0.2; i <= 1; i += 0.2) {
+                const x = Math.floor(i * width);
+                ctx.fillRect(x, 0, 1, height);
+            }
+        }
+    });
+</script>
+
+<style>
+    #audioMeter {
+        width: 100%;
+        height: 80px;
+        background-color: #f0f0f0;
+        border-radius: 4px;
+    }
+    
+    .badge {
+        font-size: 0.9rem;
+    }
+    
+    .progress {
+        height: 20px;
+    }
+</style>
 {% endblock %}

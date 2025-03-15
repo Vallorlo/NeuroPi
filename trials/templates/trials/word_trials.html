@@ -2,64 +2,137 @@
 {% load static %}
 
 {% block title %}
-    Trial for {{ word }}
+    Trial for "{{ word }}"
 {% endblock title %}
 
 {% block content %}
-    <section class="trial-details">
-        <h1>Trials for "{{ word }}"</h1>
-
-        <div class="word-media">
-            <img src="{% static 'images/' %}{{ word }}_motor.gif" alt="{{ word }} Motor Action">
+<div class="container mt-5">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h1 class="mb-0">EEG Trial for "{{ word }}"</h1>
         </div>
-
-        <div class="trials-list">
-            {% for trial in trials %}
-                <article class='post'>
-                    <form method="get" action="{% url 'capture_stage' %}">
-                        <input type="hidden" name="word" value="{{ word }}">
-                        <input type="hidden" name="stage" value="{{ trial.stage }}">
-                        <button type="submit">
-                            {% if trial.stage == 'stage1' %}
-                                Stage 1 (Vocal)
-                            {% elif trial.stage == 'stage2' %}
-                                Stage 2 (non-Vocal)
-                            {% elif trial.stage == 'stage3' %}
-                                Stage 3 (Motor)
-                            {% elif trial.stage == 'stage4' %}
-                                Stage 4 (Motor + Vocal)
-                            {% elif trial.stage == 'stage5' %}
-                                Stage 5 (Motor + non-Vocal)
-                            {% endif %}
-                        </button>
-                    </form>
-                </article>
-            {% endfor %}
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Trial Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Participant:</strong></span>
+                                    <span class="badge bg-primary rounded-pill">{{ participant_name }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Word:</strong></span>
+                                    <span class="badge bg-success rounded-pill">{{ word }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Trial Date:</strong></span>
+                                    <span>{{ trial_date }}</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-8 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header bg-warning">
+                            <h5 class="mb-0">Word Visualization</h5>
+                        </div>
+                        <div class="card-body text-center word-media">
+                            <img src="{% static 'images/' %}{{ word }}_motor.gif" alt="{{ word }} Motor Action" class="img-fluid rounded" onerror="this.src='{% static 'images/missing.gif' %}'">
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-4">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Select Trial Stage</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row stages-grid">
+                        {% for trial in trials %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card stage-card h-100">
+                                    <div class="card-body text-center">
+                                        <h3 class="stage-name">
+                                            {% if trial.stage == 'stage1' %}
+                                                <i class="bi bi-mic-fill text-danger"></i> Stage 1
+                                            {% elif trial.stage == 'stage2' %}
+                                                <i class="bi bi-mic-mute-fill text-warning"></i> Stage 2
+                                            {% elif trial.stage == 'stage3' %}
+                                                <i class="bi bi-hand-index-thumb text-primary"></i> Stage 3
+                                            {% elif trial.stage == 'stage4' %}
+                                                <i class="bi bi-hand-index-thumb text-primary"></i><i class="bi bi-mic-fill text-danger"></i> Stage 4
+                                            {% elif trial.stage == 'stage5' %}
+                                                <i class="bi bi-hand-index-thumb text-primary"></i><i class="bi bi-mic-mute-fill text-warning"></i> Stage 5
+                                            {% endif %}
+                                        </h3>
+                                        <div class="stage-description mb-3">
+                                            {% if trial.stage == 'stage1' %}
+                                                <p>Vocal - Say the word out loud</p>
+                                            {% elif trial.stage == 'stage2' %}
+                                                <p>Non-Vocal - Think about saying the word</p>
+                                            {% elif trial.stage == 'stage3' %}
+                                                <p>Motor - Perform the action without speaking</p>
+                                            {% elif trial.stage == 'stage4' %}
+                                                <p>Motor + Vocal - Perform the action while saying the word</p>
+                                            {% elif trial.stage == 'stage5' %}
+                                                <p>Motor + Non-Vocal - Perform the action while thinking about the word</p>
+                                            {% endif %}
+                                        </div>
+                                        <a href="{% url 'capture_stage' %}?word={{ word }}&stage={{ trial.stage }}" class="btn btn-success w-100">
+                                            Start Stage
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <a href="{% url 'start_trial' %}" class="btn btn-outline-primary">
+                    <i class="bi bi-arrow-left"></i> Back to Trial Selection
+                </a>
+                {% if completed_stages %}
+                    <a href="{% url 'plot' %}?user={{ participant_name }}" class="btn btn-info">
+                        <i class="bi bi-graph-up"></i> View EEG Data
+                    </a>
+                {% endif %}
+            </div>
         </div>
-    </section>
-{% endblock content %}
+    </div>
+</div>
 
-<script>
-    function staticFileExists(url, callback) {
-        var http = new XMLHttpRequest();
-        http.open('HEAD', url);
-        http.onreadystatechange = function() {
-            if (this.readyState == XMLHttpRequest.DONE) {
-                callback(this.status != 404);
-            }
-        };
-        http.send();
+<style>
+    .stage-card {
+        transition: all 0.3s ease;
+        border: 2px solid #e9ecef;
     }
-
-    document.addEventListener('DOMContentLoaded', function() {
-        var imagePath = "{% static 'images/' %}{{ word }}_motor.gif";
-        var imageElement = document.querySelector('.word-media img');
-        var missingImagePath = "{% static 'images/missing.gif' %}";
-
-        staticFileExists(imagePath, function(exists) {
-            if (!exists) {
-                imageElement.src = missingImagePath;
-            }
-        });
-    });
-</script>
+    
+    .stage-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .word-media img {
+        max-height: 200px;
+        object-fit: contain;
+    }
+    
+    .stage-name {
+        font-size: 1.5rem;
+        margin-bottom: 1rem;
+    }
+    
+    .stage-description {
+        min-height: 60px;
+    }
+</style>
+{% endblock content %}

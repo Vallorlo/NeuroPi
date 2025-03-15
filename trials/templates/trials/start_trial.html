@@ -5,18 +5,149 @@
 {% endblock title %}
 
 {% block content %}
-    <section>
-        <h1>Start Trial</h1>
+<div class="container mt-5">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h1 class="mb-0">Start EEG Trial</h1>
+        </div>
+        <div class="card-body">
+            <form method="post" action="{% url 'word_trials' %}" id="trialForm">
+                {% csrf_token %}
+                
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="participant_select" class="form-label">Select Existing Participant:</label>
+                            <select class="form-select" id="participant_select" name="existing_participant">
+                                <option value="">-- Select Existing Participant --</option>
+                                {% for participant in existing_participants %}
+                                    <option value="{{ participant }}">{{ participant }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="participant_name" class="form-label">Or Create New Participant:</label>
+                            <input type="text" class="form-control" name="participant_name" id="participant_name" placeholder="Enter new participant name">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group mb-4">
+                    <label class="form-label">Select Word:</label>
+                    <div class="row word-selection">
+                        {% for word in unique_words %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card word-card">
+                                    <div class="card-body text-center">
+                                        <h3>{{ word }}</h3>
+                                        <input type="radio" name="word" id="word_{{ word }}" value="{{ word }}" class="form-check-input word-radio" required>
+                                        <label for="word_{{ word }}" class="btn btn-outline-primary w-100 mt-2">Select</label>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-lg btn-success" id="startTrialBtn">
+                        <i class="bi bi-play-circle-fill me-2"></i>Start Trial
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 
-        <form method="post" action="{% url 'word_trials' %}">
-            {% csrf_token %}
-            <label for="participant_name">Participant Name:</label>
-            <input type="text" name="participant_name" id="participant_name" required>
-            <br><br>
+<style>
+    .word-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: 2px solid #e9ecef;
+    }
+    
+    .word-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .word-radio {
+        position: absolute;
+        opacity: 0;
+    }
+    
+    .word-radio:checked + label {
+        background-color: #0d6efd;
+        color: white;
+    }
+    
+    .word-selection label {
+        cursor: pointer;
+    }
+</style>
 
-            {% for word in unique_words %}
-                <button type="submit" name="word" value="{{ word }}">{{ word }}</button>
-            {% endfor %}
-        </form>
-    </section>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Make the entire word card clickable
+        const wordCards = document.querySelectorAll('.word-card');
+        wordCards.forEach(card => {
+            card.addEventListener('click', function() {
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+                
+                // Update all labels to show selection state
+                document.querySelectorAll('.word-radio').forEach(input => {
+                    const label = input.nextElementSibling;
+                    if (input.checked) {
+                        label.classList.remove('btn-outline-primary');
+                        label.classList.add('btn-primary');
+                    } else {
+                        label.classList.remove('btn-primary');
+                        label.classList.add('btn-outline-primary');
+                    }
+                });
+            });
+        });
+        
+        // Form validation
+        const form = document.getElementById('trialForm');
+        form.addEventListener('submit', function(e) {
+            const existingParticipant = document.getElementById('participant_select').value;
+            const newParticipant = document.getElementById('participant_name').value.trim();
+            
+            if (!existingParticipant && !newParticipant) {
+                e.preventDefault();
+                alert('Please select an existing participant or enter a new participant name.');
+                return false;
+            }
+            
+            const wordSelected = document.querySelector('input[name="word"]:checked');
+            if (!wordSelected) {
+                e.preventDefault();
+                alert('Please select a word for the trial.');
+                return false;
+            }
+            
+            return true;
+        });
+        
+        // Toggle between existing and new participant
+        const existingSelect = document.getElementById('participant_select');
+        const newInput = document.getElementById('participant_name');
+        
+        existingSelect.addEventListener('change', function() {
+            if (this.value) {
+                newInput.value = '';
+            }
+        });
+        
+        newInput.addEventListener('input', function() {
+            if (this.value.trim()) {
+                existingSelect.value = '';
+            }
+        });
+    });
+</script>
 {% endblock content %}

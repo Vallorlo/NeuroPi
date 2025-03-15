@@ -11,43 +11,50 @@
     </title>
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
 </head>
 <body>
 
     <nav class="navbar navbar-expand-lg">
         <div class="container-fluid">
-            <a class="navbar-brand fs-2 fw-bolder ms-4 text-white" href="#">Neuro <span class="text-danger">π</span></a>
+            <a class="navbar-brand fs-2 fw-bolder ms-4 text-white" href="/">Neuro <span class="text-danger">π</span></a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
                 <span class="navbar-toggler-icon"></span>
             </button>
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav fs-3 fw-medium ms-auto text-light">
                     <li class="nav-item">
-                        <a class="nav-link active text-white" aria-current="page" href="/">Home</a>
+                        <a class="nav-link active text-white" aria-current="page" href="/">
+                            <i class="bi bi-house-door"></i> Home
+                        </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link text-white" href="/about">About</a>
+                        <a class="nav-link text-white" href="/about">
+                            <i class="bi bi-info-circle"></i> About
+                        </a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link text-white dropdown-toggle" href="#" id="trialsDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-braces-asterisk"></i> Trials
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="trialsDropdown">
+                            <li><a class="dropdown-item" href="{% url 'start_trial' %}">Start New Trial</a></li>
+                            <li><a class="dropdown-item" href="{% url 'completed_trials' %}">View Completed Trials</a></li>
+                        </ul>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link text-white " href="#">Contact us</a>
+                        <a class="nav-link text-white" href="{% url 'eeg_view' %}">
+                            <i class="bi bi-graph-up"></i> Plot
+                        </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white" href="/trials">Trials</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white" href="/plot">Plot</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white" href="/processor">processor</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white" href="/cleaner">cleaner</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white" href="#">Services</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link text-white" href="#">Team</a>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link text-white dropdown-toggle" href="#" id="processingDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-cpu"></i> Processing
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="processingDropdown">
+                            <li><a class="dropdown-item" href="/processor">Data Processor</a></li>
+                            <li><a class="dropdown-item" href="/cleaner">Data Cleaner</a></li>
+                        </ul>
                     </li>
                 </ul>
             </div>
@@ -59,7 +66,41 @@
         {% endblock %}
     </main>
 
+    <footer class="bg-dark text-white mt-5 py-4">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-6">
+                    <h5>Neuro<span class="text-danger">π</span></h5>
+                    <p class="small">A platform for EEG data collection and analysis</p>
+                </div>
+                <div class="col-md-6 text-md-end">
+                    <p class="small">&copy; {% now "Y" %} Neuroπ. All rights reserved.</p>
+                </div>
+            </div>
+        </div>
+    </footer>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <!-- Global JavaScript -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add active class to current nav item
+            const currentPath = window.location.pathname;
+            const navLinks = document.querySelectorAll('.navbar-nav .nav-link');
+            
+            navLinks.forEach(link => {
+                const href = link.getAttribute('href');
+                if (href === currentPath || (href !== '/' && currentPath.startsWith(href))) {
+                    link.classList.add('active');
+                } else {
+                    link.classList.remove('active');
+                }
+            });
+        });
+    </script>
+    
+    {% block extra_js %}{% endblock %}
 </body>
 </html>

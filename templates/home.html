@@ -1,17 +1,154 @@
 {% extends "layout.html" %}
 
-
 {% block title %}
     Home
 {% endblock title %}
 
 {% block content %}
-<div class="home bg-danger">
-    <div class="container bg-info" >
-        <h1>Welcome to Neuro <span class="text-danger"> π</span>   </h1>
-        <p class="text-white">About Neuro<a class ="Pi" href="/about"><b>π</b></a></p>
+<div class="home">
+    <div class="container-fluid py-5">
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2 text-center">
+                <h1 class="display-3 text-white mb-4">Welcome to Neuro<span class="text-danger fw-bold">π</span></h1>
+                <p class="lead text-white mb-5">A comprehensive platform for EEG data collection, processing, and analysis</p>
+                <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
+                    <a href="{% url 'start_trial' %}" class="btn btn-primary btn-lg px-4 me-sm-3">
+                        <i class="bi bi-play-circle-fill"></i> Start New Trial
+                    </a>
+                    <a href="{% url 'completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
+                        <i class="bi bi-list-check"></i> View Completed Trials
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
-     
+
+    <div class="container mt-5 pb-5">
+        <div class="row g-4">
+            <div class="col-lg-4">
+                <div class="card h-100 shadow-lg">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-braces-asterisk text-primary" style="font-size: 3rem;"></i>
+                        <h2 class="card-title mt-3">Data Collection</h2>
+                        <p class="card-text">Collect synchronized EEG and audio data across multiple trial stages. Organize experiments by participant, word, and stage.</p>
+                        <a href="{% url 'start_trial' %}" class="btn btn-outline-primary mt-2">Start Collection</a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card h-100 shadow-lg">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-cpu text-danger" style="font-size: 3rem;"></i>
+                        <h2 class="card-title mt-3">Processing</h2>
+                        <p class="card-text">Process raw EEG data with advanced filtering, artifact removal, and feature extraction to prepare for analysis.</p>
+                        <div class="mt-2">
+                            <a href="/processor" class="btn btn-outline-danger me-2">Process</a>
+                            <a href="/cleaner" class="btn btn-outline-danger">Clean</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="card h-100 shadow-lg">
+                    <div class="card-body text-center p-4">
+                        <i class="bi bi-graph-up text-success" style="font-size: 3rem;"></i>
+                        <h2 class="card-title mt-3">Visualization</h2>
+                        <p class="card-text">Visualize and analyze EEG data with interactive plots, comparing different stages and channels.</p>
+                        <a href="{% url 'eeg_view' %}" class="btn btn-outline-success mt-2">View Plots</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="card shadow-lg">
+                    <div class="card-body p-4">
+                        <h2 class="text-center mb-4">Research Workflow</h2>
+                        <div class="timeline">
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">1</div>
+                                <div class="timeline-content">
+                                    <h4>Trial Setup</h4>
+                                    <p>Create a new trial by selecting a participant and word</p>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">2</div>
+                                <div class="timeline-content">
+                                    <h4>Data Collection</h4>
+                                    <p>Collect EEG and audio data across 5 different stages</p>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">3</div>
+                                <div class="timeline-content">
+                                    <h4>Data Processing</h4>
+                                    <p>Process raw data to identify speech/motor events and create datasets</p>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">4</div>
+                                <div class="timeline-content">
+                                    <h4>Signal Cleaning</h4>
+                                    <p>Apply filters and remove artifacts to improve signal quality</p>
+                                </div>
+                            </div>
+                            <div class="timeline-item">
+                                <div class="timeline-marker bg-primary">5</div>
+                                <div class="timeline-content">
+                                    <h4>Analysis & Visualization</h4>
+                                    <p>Visualize and analyze the processed data</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
-     
+
+<style>
+.timeline {
+    position: relative;
+    margin: 2rem 0;
+    padding-left: 3rem;
+}
+
+.timeline:before {
+    content: '';
+    position: absolute;
+    left: 1.25rem;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #e9ecef;
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 2rem;
+}
+
+.timeline-marker {
+    position: absolute;
+    left: -3rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: bold;
+    z-index: 1;
+}
+
+.timeline-content {
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 0.5rem;
+}
+</style>
 {% endblock content %}

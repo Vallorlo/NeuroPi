@@ -5,7 +5,218 @@
 {% endblock title %}
 
 {% block content %}
-    <h1>About Neuroπ</h1>
-    <p><a href="/">Home</a> </p>
+<div class="container mt-5 mb-5">
+    <div class="row">
+        <div class="col-lg-10 offset-lg-1">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h1 class="mb-0">About Neuro<span class="text-danger fw-bold">π</span></h1>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-5">
+                        <div class="col-md-8">
+                            <h2>Project Overview</h2>
+                            <p class="lead">Neuroπ is a comprehensive platform designed for EEG research, focusing on speech and motor activity patterns in the brain.</p>
+                            
+                            <p>This application enables researchers and practitioners to collect, process, analyze, and visualize electroencephalography (EEG) data. It provides a complete workflow from data collection to analysis, with specialized tools for studying the neural correlates of speech and motor activity.</p>
+                            
+                            <p>By combining EEG recordings with synchronized audio capture and timestamping capabilities, Neuroπ allows for precise alignment of brain activity with speech or motor events, opening new avenues for research in neurolinguistics, brain-computer interfaces, and cognitive neuroscience.</p>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <div class="bg-light p-4 rounded shadow-sm">
+                                <i class="bi bi-braces-asterisk text-primary" style="font-size: 5rem;"></i>
+                                <h3 class="mt-3">Neuro<span class="text-danger">π</span></h3>
+                                <p>Version 1.0</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h2>Key Features</h2>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h4><i class="bi bi-collection text-primary me-2"></i>Structured Trial Design</h4>
+                                    <p>Organize experiments into trials, words, and stages for consistent data collection protocols.</p>
+                                </div>
+                            </div>
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h4><i class="bi bi-mic-fill text-primary me-2"></i>Synchronized Audio Capture</h4>
+                                    <p>Record audio in perfect synchronization with EEG data for speech analysis.</p>
+                                </div>
+                            </div>
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h4><i class="bi bi-cpu text-primary me-2"></i>Advanced Signal Processing</h4>
+                                    <p>Apply filters, ICA, and other techniques to clean and enhance EEG signals.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h4><i class="bi bi-graph-up text-primary me-2"></i>Interactive Visualization</h4>
+                                    <p>Visualize EEG data with customizable plots and comparisons between channels and stages.</p>
+                                </div>
+                            </div>
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h4><i class="bi bi-bookmark-check text-primary me-2"></i>Event Timestamping</h4>
+                                    <p>Mark specific events during trials for precise correlation with EEG data.</p>
+                                </div>
+                            </div>
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h4><i class="bi bi-database text-primary me-2"></i>Dataset Generation</h4>
+                                    <p>Create machine learning-ready datasets with train-test splitting and appropriate stratification.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h2>Research Applications</h2>
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead class="table-primary">
+                                        <tr>
+                                            <th>Field</th>
+                                            <th>Applications</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>Neurolinguistics</td>
+                                            <td>Study neural patterns during speech production and comprehension</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Brain-Computer Interfaces</td>
+                                            <td>Develop systems for controlling devices using speech or motor imagery</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Cognitive Neuroscience</td>
+                                            <td>Investigate cognitive processes underlying speech and motor planning</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Speech Pathology</td>
+                                            <td>Research neural correlates of speech disorders and potential interventions</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Machine Learning</td>
+                                            <td>Create datasets for training models to recognize speech patterns from EEG</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h2>Trial Stages</h2>
+                            <p>Neuroπ's structured approach includes five distinct trial stages that allow for comprehensive analysis:</p>
+                            
+                            <div class="card-group mt-3">
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="bi bi-mic-fill text-danger" style="font-size: 2rem;"></i>
+                                        <h5 class="mt-2">Stage 1</h5>
+                                        <p>Vocal</p>
+                                        <small class="text-muted">Say the word out loud</small>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="bi bi-mic-mute-fill text-warning" style="font-size: 2rem;"></i>
+                                        <h5 class="mt-2">Stage 2</h5>
+                                        <p>Non-Vocal</p>
+                                        <small class="text-muted">Think about saying the word</small>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="bi bi-hand-index-thumb text-primary" style="font-size: 2rem;"></i>
+                                        <h5 class="mt-2">Stage 3</h5>
+                                        <p>Motor</p>
+                                        <small class="text-muted">Perform the action without speaking</small>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="bi bi-hand-index-thumb text-primary" style="font-size: 2rem;"></i>
+                                        <i class="bi bi-mic-fill text-danger" style="font-size: 2rem;"></i>
+                                        <h5 class="mt-2">Stage 4</h5>
+                                        <p>Motor + Vocal</p>
+                                        <small class="text-muted">Perform the action while saying the word</small>
+                                    </div>
+                                </div>
+                                <div class="card">
+                                    <div class="card-body text-center">
+                                        <i class="bi bi-hand-index-thumb text-primary" style="font-size: 2rem;"></i>
+                                        <i class="bi bi-mic-mute-fill text-warning" style="font-size: 2rem;"></i>
+                                        <h5 class="mt-2">Stage 5</h5>
+                                        <p>Motor + Non-Vocal</p>
+                                        <small class="text-muted">Perform the action while thinking about the word</small>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <h2>Technical Information</h2>
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-light">
+                                            <h5 class="mb-0">Technology Stack</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item">Django 5.1 Web Framework</li>
+                                                <li class="list-group-item">Python 3.8+ for Backend Processing</li>
+                                                <li class="list-group-item">SciPy and NumPy for Signal Processing</li>
+                                                <li class="list-group-item">MNE-Python for EEG Analysis</li>
+                                                <li class="list-group-item">Matplotlib and D3.js for Visualization</li>
+                                                <li class="list-group-item">Bootstrap 5 for UI Components</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-light">
+                                            <h5 class="mb-0">Hardware Compatibility</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <p>Neuroπ is designed to work with the Emotiv EPOC+ EEG headset, which provides 14 channels of EEG data at a sampling rate of 128 Hz.</p>
+                                            <p>Key hardware features:</p>
+                                            <ul>
+                                                <li>14 channel EEG recording</li>
+                                                <li>128 Hz sampling rate</li>
+                                                <li>Wireless data transmission</li>
+                                                <li>Built-in battery for portable operation</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-center mt-5 mb-3">
+                        <a href="/" class="btn btn-primary btn-lg">
+                            <i class="bi bi-house-door"></i> Return to Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock content %}
-

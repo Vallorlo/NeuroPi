@@ -1,106 +1,796 @@
 {% extends "layout.html" %}
 
+{% block title %}
+    EEG Data Visualization
+{% endblock %}
+
 {% block content %}
-    
-    <section class="plot">
-        <h2>Select User:</h2>
-    <form id="userForm">
-        <select name="user" id="userSelect">
-            <option value="">-- Select User --</option>
-            {% for user in users %}
-            <option value="{{ user }}" {% if user|stringformat:"s" == selected_user %}selected{% endif %}>{{ user }}</option>
-            {% endfor %}
-        </select>
-    </form>
-    
-    {% if plots %}
-        <h2>EEG Data for {{ selected_user }}</h2>
-
-        {% for word, stages in plots.items %}
-            <h3>{{ word }}</h3>
-
-            {% for stage, images in stages.items %}
-                <button onclick="toggleStage('{{ word }}_{{ stage }}')">{{ stage }}</button>
-                <div id="{{ word }}_{{ stage }}" style="display: none;">
-                    {% for image in images %}
-                        <img src="data:image/png;base64,{{ image }}" alt="EEG Plot"
-                            style="width: 100%; max-width: 800px; margin-bottom: 10px;">
-                    {% endfor %}
+<div class="container mt-4 mb-5">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">EEG Data Visualization</h2>
                 </div>
-            {% endfor %}
-        {% endfor %}
-    {% endif %}
-    </section>
+                <div class="card-body">
+                    <!-- Participant Selection -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <form id="userForm" method="get" action="{% url 'eeg_view' %}">
+                                <div class="mb-3">
+                                    <label for="userSelect" class="form-label">Select Participant:</label>
+                                    <select name="user" id="userSelect" class="form-select" onchange="this.form.submit()">
+                                        <option value="">-- Select Participant --</option>
+                                        {% for user in users %}
+                                        <option value="{{ user }}" {% if user|stringformat:"s" == selected_user %}selected{% endif %}>{{ user }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </form>
+                        </div>
+                        
+                        {% if selected_user %}
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5>Participant: <span class="badge bg-primary">{{ selected_user }}</span></h5>
+                                    <p>Available Words: {{ words|length }} | Available Stages: {{ available_stages|length }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    {% if selected_user %}
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">Display Options</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="wordSelect" class="form-label">Select Word:</label>
+                                        <select id="wordSelect" class="form-select">
+                                            <option value="all">All Words</option>
+                                            {% for word in words %}
+                                            <option value="{{ word }}">{{ word }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="stageSelect" class="form-label">Select Stage:</label>
+                                        <select id="stageSelect" class="form-select">
+                                            <option value="all">All Stages</option>
+                                            {% for stage in available_stages %}
+                                            <option value="{{ stage }}">
+                                                {% if stage == 'stage1' %}
+                                                    Stage 1 - Vocal
+                                                {% elif stage == 'stage2' %}
+                                                    Stage 2 - Non-Vocal
+                                                {% elif stage == 'stage3' %}
+                                                    Stage 3 - Motor
+                                                {% elif stage == 'stage4' %}
+                                                    Stage 4 - Motor+Vocal
+                                                {% elif stage == 'stage5' %}
+                                                    Stage 5 - Motor+Non-Vocal
+                                                {% else %}
+                                                    {{ stage }}
+                                                {% endif %}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="attemptSelect" class="form-label">Select Attempt:</label>
+                                        <select id="attemptSelect" class="form-select">
+                                            <option value="all">All Attempts</option>
+                                            <option value="1">Attempt 1</option>
+                                            <option value="2">Attempt 2</option>
+                                            <option value="3">Attempt 3</option>
+                                            <option value="4">Attempt 4</option>
+                                            <option value="5">Attempt 5</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <button id="updatePlotBtn" class="btn btn-primary w-100">
+                                        <i class="bi bi-graph-up"></i> Show EEG Plot
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">Channel Selection</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="channelSelect" class="form-label">EEG Channels:</label>
+                                        <select id="channelSelect" class="form-select" multiple size="8">
+                                            <option value="F3" selected>F3 - Left Frontal</option>
+                                            <option value="FC5">FC5 - Left Frontocentral</option>
+                                            <option value="AF3">AF3 - Left Anterior Frontal</option>
+                                            <option value="F7" selected>F7 - Left Lateral Frontal</option>
+                                            <option value="T7" selected>T7 - Left Temporal</option>
+                                            <option value="P7">P7 - Left Posterior Temporal</option>
+                                            <option value="O1">O1 - Left Occipital</option>
+                                            <option value="O2">O2 - Right Occipital</option>
+                                            <option value="P8">P8 - Right Posterior Temporal</option>
+                                            <option value="T8" selected>T8 - Right Temporal</option>
+                                            <option value="F8" selected>F8 - Right Lateral Frontal</option>
+                                            <option value="AF4">AF4 - Right Anterior Frontal</option>
+                                            <option value="FC6">FC6 - Right Frontocentral</option>
+                                            <option value="F4" selected>F4 - Right Frontal</option>
+                                        </select>
+                                        <div class="form-text">Hold Ctrl/Cmd to select multiple channels</div>
+                                    </div>
+                                    
+                                    <div class="d-flex justify-content-between">
+                                        <button id="selectAllChannels" class="btn btn-sm btn-outline-primary">Select All</button>
+                                        <button id="selectNoneChannels" class="btn btn-sm btn-outline-secondary">Select None</button>
+                                        <button id="selectDefaultChannels" class="btn btn-sm btn-outline-success">Defaults</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+                                    <h5 class="mb-0">EEG Visualization</h5>
+                                    <div id="plotInfo" class="badge bg-info d-none">No data loaded</div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="eegPlotContainer" style="height: 600px; position: relative;">
+                                        <div id="loadingOverlay" class="d-none position-absolute top-0 start-0 w-100 h-100 bg-light bg-opacity-75 d-flex justify-content-center align-items-center">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Loading...</span>
+                                            </div>
+                                        </div>
+                                        <div id="noDataMessage" class="position-absolute top-0 start-0 w-100 h-100 d-flex justify-content-center align-items-center">
+                                        </div>
+                                        <canvas id="eegCanvas" class="w-100 h-100" style="display: none;"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-3">
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-secondary text-white">
+                                    <h5 class="mb-0">Visualization Controls</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label for="zoomSlider" class="form-label">Zoom Level:</label>
+                                        <div class="d-flex align-items-center">
+                                            <input type="range" class="form-range flex-grow-1 me-2" id="zoomSlider" min="1" max="50" value="5" disabled>
+                                            <span id="zoomValue" class="badge bg-primary">5x</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="amplitudeSlider" class="form-label">Amplitude Scaling:</label>
+                                        <div class="d-flex align-items-center">
+                                            <input type="range" class="form-range flex-grow-1 me-2" id="amplitudeSlider" min="1" max="20" step="1" value="5" disabled>
+                                            <span id="amplitudeValue" class="badge bg-primary">5x</span>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="normalizeChannelsCheck" checked disabled>
+                                        <label class="form-check-label" for="normalizeChannelsCheck">
+                                            Normalize Channel Amplitudes
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-warning text-dark">
+                                    <h5 class="mb-0">Export Options</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-grid gap-2">
+                                        <button id="exportPngBtn" class="btn btn-outline-primary" disabled>
+                                            <i class="bi bi-file-earmark-image"></i> Export as PNG
+                                        </button>
+                                        <button id="exportCsvBtn" class="btn btn-outline-success">
+                                            <i class="bi bi-file-earmark-spreadsheet"></i> Export Data as CSV
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle-fill me-2"></i> Please select a participant to view EEG data options.
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <script>
-        document.getElementById('userSelect').addEventListener('change', function() {
-            var selectedUser = this.value;
-            var url = new URL(window.location.href);
-            url.searchParams.set('user', selectedUser);
-            window.history.pushState({}, '', url);
-            fetch(url, {
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json'
+{% if selected_user %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const eegCanvas = document.getElementById('eegCanvas');
+        const ctx = eegCanvas.getContext('2d');
+        
+        // UI elements
+        const wordSelect = document.getElementById('wordSelect');
+        const stageSelect = document.getElementById('stageSelect');
+        const attemptSelect = document.getElementById('attemptSelect');
+        const channelSelect = document.getElementById('channelSelect');
+        const updatePlotBtn = document.getElementById('updatePlotBtn');
+        const zoomSlider = document.getElementById('zoomSlider');
+        const zoomValue = document.getElementById('zoomValue');
+        const amplitudeSlider = document.getElementById('amplitudeSlider');
+        const amplitudeValue = document.getElementById('amplitudeValue');
+        const normalizeChannelsCheck = document.getElementById('normalizeChannelsCheck');
+        const exportPngBtn = document.getElementById('exportPngBtn');
+        const exportCsvBtn = document.getElementById('exportCsvBtn');
+        const loadingOverlay = document.getElementById('loadingOverlay');
+        const noDataMessage = document.getElementById('noDataMessage');
+        const plotInfo = document.getElementById('plotInfo');
+        
+        // Channel selection buttons
+        const selectAllBtn = document.getElementById('selectAllChannels');
+        const selectNoneBtn = document.getElementById('selectNoneChannels');
+        const selectDefaultBtn = document.getElementById('selectDefaultChannels');
+        
+        // Configuration
+        let config = {
+            zoom: 5, // Zoom level for EEG display
+            amplitudeScale: 5.0, // Amplitude scaling factor
+            normalizeChannels: true, // Whether to normalize channels
+            selectedChannels: Array.from(channelSelect.selectedOptions).map(opt => opt.value),
+            timeOffset: 0 // Current time position to start viewing from
+        };
+        
+        // EEG data storage
+        let eegData = {
+            channels: {},
+            events: [],
+            timeRange: {min: 0, max: 0},
+            valueRange: {min: 0, max: 0},
+            samplingRate: 128,
+            channelRanges: {} // To store the value range for each channel for normalization
+        };
+        
+        // Channel colors - for consistent coloring
+        const channelColors = {
+            'F3': '#e41a1c',
+            'FC5': '#377eb8',
+            'AF3': '#4daf4a',
+            'F7': '#984ea3',
+            'T7': '#ff7f00',
+            'P7': '#ffff33',
+            'O1': '#a65628',
+            'O2': '#f781bf',
+            'P8': '#999999',
+            'T8': '#3498db',
+            'F8': '#e74c3c',
+            'AF4': '#2ecc71',
+            'FC6': '#9b59b6',
+            'F4': '#f1c40f'
+        };
+        
+        // Initialize canvas size
+        function resizeCanvas() {
+            const container = document.getElementById('eegPlotContainer');
+            eegCanvas.width = container.clientWidth;
+            eegCanvas.height = container.clientHeight;
+        }
+        
+        // Draw EEG plot
+        function drawEEGPlot() {
+            // Clear canvas
+            ctx.clearRect(0, 0, eegCanvas.width, eegCanvas.height);
+            
+            // If no data or no channels selected, show message and return
+            if (Object.keys(eegData.channels).length === 0 || config.selectedChannels.length === 0) {
+                ctx.font = '20px Arial';
+                ctx.fillStyle = '#6c757d';
+                ctx.textAlign = 'center';
+                ctx.fillText('No EEG data available or no channels selected', eegCanvas.width / 2, eegCanvas.height / 2);
+                return;
+            }
+            
+            // Calculate time range to display based on zoom level
+            const visibleTimeRange = Math.max(0.5, (eegData.timeRange.max - eegData.timeRange.min) / config.zoom);
+            const startTime = config.timeOffset;
+            const endTime = Math.min(eegData.timeRange.max, startTime + visibleTimeRange);
+            
+            // Draw time axis
+            drawTimeAxis(startTime, endTime);
+            
+            // Available height for all channels
+            const availableHeight = eegCanvas.height - 60; // Leave space for axis
+            const channelHeight = availableHeight / config.selectedChannels.length;
+            
+            // Calculate scaling factor for channel display
+            const calculateChannelScaleFactor = (channel) => {
+                if (config.normalizeChannels) {
+                    // Use the channel's own range for normalization
+                    if (eegData.channelRanges[channel]) {
+                        return eegData.channelRanges[channel].max - eegData.channelRanges[channel].min;
+                    }
+                    return 1;
+                } else {
+                    // Use the global range
+                    return eegData.valueRange.max - eegData.valueRange.min;
                 }
-            })
-            .then(response => response.text())
-            .then(html => {
-                document.open();
-                document.write(html);
-                document.close();
-            })
-            .catch(error => console.error('Error:', error));
+            };
+            
+            // Draw each selected channel
+            config.selectedChannels.forEach((channel, index) => {
+                if (eegData.channels[channel]) {
+                    // Y position for this channel
+                    const yCenter = 40 + index * channelHeight + channelHeight / 2;
+                    
+                    // Draw channel data
+                    drawChannelData(channel, yCenter, channelHeight * 0.8, startTime, endTime, calculateChannelScaleFactor(channel));
+                    
+                    // Draw channel label
+                    ctx.font = '12px Arial';
+                    ctx.fillStyle = channelColors[channel] || '#000000';
+                    ctx.textAlign = 'left';
+                    ctx.fillText(channel, 10, yCenter);
+                }
+            });
+            
+            // Draw events
+            drawEvents(startTime, endTime);
+        }
+        
+        // Draw time axis
+        function drawTimeAxis(startTime, endTime) {
+            const timeRange = endTime - startTime;
+            const timeStep = getTimeAxisStep(timeRange);
+            
+            ctx.strokeStyle = '#dee2e6';
+            ctx.lineWidth = 1;
+            ctx.font = '12px Arial';
+            ctx.fillStyle = '#6c757d';
+            ctx.textAlign = 'center';
+            
+            // Major grid lines and labels
+            for (let t = Math.ceil(startTime / timeStep) * timeStep; t <= endTime; t += timeStep) {
+                const x = mapTimeToX(t, startTime, endTime);
+                
+                // Vertical grid line
+                ctx.beginPath();
+                ctx.moveTo(x, 20);
+                ctx.lineTo(x, eegCanvas.height - 20);
+                ctx.stroke();
+                
+                // Time label
+                ctx.fillText(t.toFixed(1) + 's', x, eegCanvas.height - 5);
+            }
+        }
+        
+        // Get appropriate time step for axis based on time range
+        function getTimeAxisStep(timeRange) {
+            if (timeRange <= 1) return 0.1;
+            if (timeRange <= 2) return 0.2;
+            if (timeRange <= 5) return 0.5;
+            if (timeRange <= 10) return 1;
+            if (timeRange <= 30) return 5;
+            return 10;
+        }
+        
+        // Draw channel data
+        function drawChannelData(channel, yCenter, height, startTime, endTime, scaleFactor) {
+            const channelData = eegData.channels[channel];
+            const color = channelColors[channel] || '#000000';
+            
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            
+            let firstPoint = true;
+            
+            // Draw only points within the time window
+            for (let i = 0; i < channelData.times.length; i++) {
+                const time = channelData.times[i];
+                
+                if (time >= startTime && time <= endTime) {
+                    const x = mapTimeToX(time, startTime, endTime);
+                    
+                    // Get the value and apply amplitude scaling
+                    let value = channelData.values[i];
+                    
+                    // If normalizing, center around zero
+                    if (config.normalizeChannels && eegData.channelRanges[channel]) {
+                        const range = eegData.channelRanges[channel];
+                        const mid = (range.max + range.min) / 2;
+                        value = value - mid;
+                    }
+                    
+                    // Apply amplitude scaling
+                    value = value * config.amplitudeScale;
+                    
+                    // Map to Y position
+                    // Use either the channel's own range or the global range for scaling
+                    const y = yCenter - (value / scaleFactor) * (height / 2);
+                    
+                    if (firstPoint) {
+                        ctx.moveTo(x, y);
+                        firstPoint = false;
+                    } else {
+                        ctx.lineTo(x, y);
+                    }
+                }
+            }
+            
+            ctx.stroke();
+            
+            // Draw a horizontal line at zero for this channel
+            ctx.strokeStyle = '#e9ecef';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(50, yCenter);
+            ctx.lineTo(eegCanvas.width - 20, yCenter);
+            ctx.stroke();
+        }
+        
+        // Draw event markers
+        function drawEvents(startTime, endTime) {
+            ctx.fillStyle = 'rgba(220, 53, 69, 0.5)'; // Red with transparency
+            
+            for (const event of eegData.events) {
+                if (event.time >= startTime && event.time <= endTime) {
+                    const x = mapTimeToX(event.time, startTime, endTime);
+                    
+                    // Draw a vertical line at the event time
+                    ctx.beginPath();
+                    ctx.setLineDash([5, 3]);
+                    ctx.strokeStyle = 'rgba(220, 53, 69, 0.7)';
+                    ctx.lineWidth = 2;
+                    ctx.moveTo(x, 20);
+                    ctx.lineTo(x, eegCanvas.height - 20);
+                    ctx.stroke();
+                    ctx.setLineDash([]);
+                    
+                    // Draw a small circle at the top
+                    ctx.beginPath();
+                    ctx.fillStyle = 'rgba(220, 53, 69, 1)';
+                    ctx.arc(x, 20, 5, 0, Math.PI * 2);
+                    ctx.fill();
+                    
+                    // Draw event label
+                    ctx.font = '10px Arial';
+                    ctx.fillStyle = '#000000';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(event.label || 'Event', x, 35);
+                }
+            }
+        }
+        
+        // Map time value to x coordinate
+        function mapTimeToX(time, startTime, endTime) {
+            // Leave margins on left and right
+            const leftMargin = 50;
+            const rightMargin = 20;
+            const availableWidth = eegCanvas.width - leftMargin - rightMargin;
+            
+            return leftMargin + (time - startTime) / (endTime - startTime) * availableWidth;
+        }
+        
+        // Calculate the range (min/max) for each channel
+        function calculateChannelRanges() {
+            for (const channel in eegData.channels) {
+                const values = eegData.channels[channel].values;
+                if (values.length > 0) {
+                    eegData.channelRanges[channel] = {
+                        min: Math.min(...values),
+                        max: Math.max(...values)
+                    };
+                }
+            }
+        }
+        
+        // Fetch EEG data based on current selection
+        async function fetchEEGData() {
+            try {
+                showLoading(true);
+                
+                // First, make sure we completely hide the message
+                noDataMessage.style.display = 'none';
+                
+                const user = "{{ selected_user }}";
+                const word = wordSelect.value;
+                const stage = stageSelect.value;
+                const attempt = attemptSelect.value;
+                
+                // Build the URL with the current selection
+                const url = `/plot/api/data/?user=${user}${word !== 'all' ? '&word=' + word : ''}${stage !== 'all' ? '&stage=' + stage : ''}${attempt !== 'all' ? '&attempt=' + attempt : ''}`;
+                
+                // Log the URL for debugging
+                console.log("Fetching data from URL:", url);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || "Unknown error fetching data");
+                }
+                
+                // Process data
+                eegData.channels = {};
+                eegData.events = [];
+                eegData.timeRange = {min: Infinity, max: -Infinity};
+                eegData.valueRange = {min: Infinity, max: -Infinity};
+                eegData.channelRanges = {};
+                
+                // Process channel data
+                for (const channel of Object.keys(data.channels)) {
+                    // Only process if the channel is in our color map (valid channel)
+                    if (channelColors[channel]) {
+                        const channelData = data.channels[channel];
+                        
+                        // Skip if no data
+                        if (!channelData.times || channelData.times.length === 0) {
+                            continue;
+                        }
+                        
+                        eegData.channels[channel] = {
+                            times: channelData.times,
+                            values: channelData.values
+                        };
+                        
+                        // Update time and value ranges
+                        const timeMin = Math.min(...channelData.times);
+                        const timeMax = Math.max(...channelData.times);
+                        const valueMin = Math.min(...channelData.values);
+                        const valueMax = Math.max(...channelData.values);
+                        
+                        eegData.timeRange.min = Math.min(eegData.timeRange.min, timeMin);
+                        eegData.timeRange.max = Math.max(eegData.timeRange.max, timeMax);
+                        eegData.valueRange.min = Math.min(eegData.valueRange.min, valueMin);
+                        eegData.valueRange.max = Math.max(eegData.valueRange.max, valueMax);
+                    }
+                }
+                
+                // If no valid data was found, show a message
+                if (Object.keys(eegData.channels).length === 0 || 
+                    eegData.timeRange.min === Infinity || 
+                    eegData.timeRange.max === -Infinity) {
+                    throw new Error("No valid EEG data found for the selected options");
+                }
+                
+                // Process events
+                if (data.events) {
+                    eegData.events = data.events;
+                }
+                
+                // Calculate the range for each channel
+                calculateChannelRanges();
+                
+                // Reset time offset to start
+                config.timeOffset = eegData.timeRange.min;
+                
+                // Enable controls
+                zoomSlider.disabled = false;
+                amplitudeSlider.disabled = false;
+                normalizeChannelsCheck.disabled = false;
+                exportPngBtn.disabled = false;
+                
+                // Show canvas
+                eegCanvas.style.display = 'block';
+                
+                // Update plot info
+                plotInfo.classList.remove('d-none');
+                plotInfo.textContent = `${word !== 'all' ? word : 'All Words'}, ${stage !== 'all' ? stage : 'All Stages'}, ${attempt !== 'all' ? 'Attempt ' + attempt : 'All Attempts'}`;
+                
+                // Draw the plot
+                drawEEGPlot();
+                
+                console.log("Plot drawn successfully");
+                
+            } catch (error) {
+                console.error('Error fetching EEG data:', error);
+                
+                // Show error message on canvas
+                ctx.clearRect(0, 0, eegCanvas.width, eegCanvas.height);
+                ctx.font = '20px Arial';
+                ctx.fillStyle = '#dc3545';
+                ctx.textAlign = 'center';
+                ctx.fillText('Error: ' + error.message, eegCanvas.width / 2, eegCanvas.height / 2);
+                
+                // Hide initial message, show canvas
+                noDataMessage.style.display = 'none';
+                eegCanvas.style.display = 'block';
+                
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // Show/hide loading overlay
+        function showLoading(show) {
+            loadingOverlay.classList.toggle('d-none', !show);
+            loadingOverlay.classList.toggle('d-flex', show);
+        }
+        
+        // Event Listeners
+        updatePlotBtn.addEventListener('click', fetchEEGData);
+        
+        // Channel selection buttons
+        selectAllBtn.addEventListener('click', function() {
+            Array.from(channelSelect.options).forEach(opt => opt.selected = true);
+            config.selectedChannels = Array.from(channelSelect.selectedOptions).map(opt => opt.value);
+            if (eegCanvas.style.display !== 'none') {
+                drawEEGPlot();
+            }
         });
-
-        function toggleStage(stageId) {
-            var div = document.getElementById(stageId);
-            div.style.display = (div.style.display === "none") ? "block" : "none";
-        }
-    </script>
-
-    <style>
-        body {
-            /* font-family: Arial, sans-serif; */
-            /* margin: 20px; */
-        }
-        .id{
-            padding: 20px;
-        }
-
-        h2 {
-            color: #333;
-        }
-
-        form {
-            margin-bottom: 20px;
-        }
-
-        select {
-            padding: 10px;
-            font-size: 16px;
-        }
-
-        button {
-            padding: 10px 20px;
-            margin: 10px 0;
-            font-size: 16px;
-            cursor: pointer;
-            background-color: #007BFF;
-            color: white;
-            border: none;
-            border-radius: 5px;
-        }
-
-        button:hover {
-            background-color: #0056b3;
-        }
-
-        img {
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            padding: 5px;
-            margin: 10px 0;
-        }
-    </style>
+        
+        selectNoneBtn.addEventListener('click', function() {
+            Array.from(channelSelect.options).forEach(opt => opt.selected = false);
+            config.selectedChannels = [];
+            if (eegCanvas.style.display !== 'none') {
+                drawEEGPlot();
+            }
+        });
+        
+        selectDefaultBtn.addEventListener('click', function() {
+            const defaultChannels = ['F3', 'F7', 'T7', 'T8', 'F8', 'F4'];
+            Array.from(channelSelect.options).forEach(opt => {
+                opt.selected = defaultChannels.includes(opt.value);
+            });
+            config.selectedChannels = Array.from(channelSelect.selectedOptions).map(opt => opt.value);
+            if (eegCanvas.style.display !== 'none') {
+                drawEEGPlot();
+            }
+        });
+        
+        // Channel selection change
+        channelSelect.addEventListener('change', function() {
+            config.selectedChannels = Array.from(this.selectedOptions).map(opt => opt.value);
+            if (eegCanvas.style.display !== 'none') {
+                drawEEGPlot();
+            }
+        });
+        
+        // Zoom slider
+        zoomSlider.addEventListener('input', function() {
+            config.zoom = parseInt(this.value);
+            zoomValue.textContent = config.zoom + 'x';
+            if (eegCanvas.style.display !== 'none') {
+                drawEEGPlot();
+            }
+        });
+        
+        // Amplitude slider
+        amplitudeSlider.addEventListener('input', function() {
+            config.amplitudeScale = parseInt(this.value);
+            amplitudeValue.textContent = config.amplitudeScale + 'x';
+            if (eegCanvas.style.display !== 'none') {
+                drawEEGPlot();
+            }
+        });
+        
+        // Normalize channels checkbox
+        normalizeChannelsCheck.addEventListener('change', function() {
+            config.normalizeChannels = this.checked;
+            if (eegCanvas.style.display !== 'none') {
+                drawEEGPlot();
+            }
+        });
+        
+        // Export buttons
+        exportPngBtn.addEventListener('click', function() {
+            // Create a temporary link to download the canvas as PNG
+            const link = document.createElement('a');
+            link.download = `eeg_plot_{{ selected_user }}_${new Date().toISOString().slice(0, 10)}.png`;
+            link.href = eegCanvas.toDataURL('image/png');
+            link.click();
+        });
+        
+        exportCsvBtn.addEventListener('click', function() {
+            const user = "{{ selected_user }}";
+            const word = wordSelect.value;
+            const stage = stageSelect.value;
+            const attempt = attemptSelect.value;
+            
+            // Redirect to the CSV export endpoint
+            window.location.href = `/plot/api/export-csv/?user=${user}${word !== 'all' ? '&word=' + word : ''}${stage !== 'all' ? '&stage=' + stage : ''}${attempt !== 'all' ? '&attempt=' + attempt : ''}`;
+        });
+        
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            resizeCanvas();
+            if (eegCanvas.style.display !== 'none') {
+                drawEEGPlot();
+            }
+        });
+        
+        // Handle keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            // Only process if we have data loaded
+            if (Object.keys(eegData.channels).length === 0 || eegCanvas.style.display === 'none') {
+                return;
+            }
+            
+            // Right arrow - move forward in time
+            if (e.key === 'ArrowRight') {
+                const timeRange = eegData.timeRange.max - eegData.timeRange.min;
+                const increment = timeRange / (config.zoom * 4); // Move 1/4 of the visible time window
+                config.timeOffset = Math.min(eegData.timeRange.max - timeRange / config.zoom, config.timeOffset + increment);
+                drawEEGPlot();
+            }
+            
+            // Left arrow - move backward in time
+            if (e.key === 'ArrowLeft') {
+                const timeRange = eegData.timeRange.max - eegData.timeRange.min;
+                const increment = timeRange / (config.zoom * 4); // Move 1/4 of the visible time window
+                config.timeOffset = Math.max(eegData.timeRange.min, config.timeOffset - increment);
+                drawEEGPlot();
+            }
+            
+            // Up arrow - increase amplitude
+            if (e.key === 'ArrowUp') {
+                config.amplitudeScale = Math.min(20, config.amplitudeScale + 1);
+                amplitudeSlider.value = config.amplitudeScale;
+                amplitudeValue.textContent = config.amplitudeScale + 'x';
+                drawEEGPlot();
+            }
+            
+            // Down arrow - decrease amplitude
+            if (e.key === 'ArrowDown') {
+                config.amplitudeScale = Math.max(1, config.amplitudeScale - 1);
+                amplitudeSlider.value = config.amplitudeScale;
+                amplitudeValue.textContent = config.amplitudeScale + 'x';
+                drawEEGPlot();
+            }
+            
+            // Plus/equals - increase zoom
+            if (e.key === '=' || e.key === '+') {
+                config.zoom = Math.min(50, config.zoom + 1);
+                zoomSlider.value = config.zoom;
+                zoomValue.textContent = config.zoom + 'x';
+                drawEEGPlot();
+            }
+            
+            // Minus - decrease zoom
+            if (e.key === '-' || e.key === '_') {
+                config.zoom = Math.max(1, config.zoom - 1);
+                zoomSlider.value = config.zoom;
+                zoomValue.textContent = config.zoom + 'x';
+                drawEEGPlot();
+            }
+            
+            // Space - toggle normalize channels
+            if (e.key === ' ') {
+                config.normalizeChannels = !config.normalizeChannels;
+                normalizeChannelsCheck.checked = config.normalizeChannels;
+                drawEEGPlot();
+                e.preventDefault(); // Prevent page scrolling
+            }
+        });
+        
+        // Initialize
+        resizeCanvas();
+    });
+</script>
+{% endif %}
 {% endblock content %}

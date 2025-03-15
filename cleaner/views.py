@@ -15,7 +15,7 @@ import json
 import traceback
 import zipfile
 from datetime import datetime
-
+import csv
 
 def clean_data_view(request):
     """Main view for the EEG cleaning tool."""
@@ -69,10 +69,22 @@ def clean_data_view(request):
                 ica_method = form.cleaned_data['ica_method']
                 random_seed = form.cleaned_data['random_seed']
                 
-                # New options
+                # Additional options
                 generate_plots = form.cleaned_data.get('generate_plots', False)
                 extract_features = form.cleaned_data.get('extract_features', False)
                 regions_of_interest = form.cleaned_data.get('regions_of_interest', ['all'])
+                
+                # New options
+                create_train_test_split = form.cleaned_data.get('create_train_test_split', False)
+                test_size = form.cleaned_data.get('test_size', 0.2)
+                random_state = form.cleaned_data.get('random_state', 42)
+                stratify_by_word = form.cleaned_data.get('stratify_by_word', True)
+                
+                include_channels = form.cleaned_data.get('include_channels', None)
+                compute_band_powers = form.cleaned_data.get('compute_band_powers', False)
+                normalize_data = form.cleaned_data.get('normalize_data', False)
+                remove_outliers = form.cleaned_data.get('remove_outliers', False)
+                outlier_threshold = form.cleaned_data.get('outlier_threshold', 3.0)
                 
                 # Automatically detect & fix signal issues
                 check_signal_quality = True
@@ -110,7 +122,16 @@ def clean_data_view(request):
                         generate_plots=generate_plots,
                         extract_features=extract_features,
                         check_signal_quality=check_signal_quality,
-                        auto_scale=auto_scale
+                        auto_scale=auto_scale,
+                        create_train_test_split=create_train_test_split,
+                        test_size=test_size,
+                        random_state=random_state,
+                        stratify_by_word=stratify_by_word,
+                        include_channels=include_channels,
+                        compute_band_powers=compute_band_powers,
+                        normalize_data=normalize_data,
+                        remove_outliers=remove_outliers,
+                        outlier_threshold=outlier_threshold
                     )
                     
                     print(f"clean_eeg_data returned: {result}")  # Debug: Check return value
@@ -166,51 +187,84 @@ def clean_data_view(request):
                                 
                                 zipf.write(report_path, os.path.basename(report_path))
                         
-                        # Return the ZIP file for download
-                        with open(zip_filename, 'rb') as f:
-                            response = HttpResponse(
-                                f.read(),
-                                content_type='application/zip'
-                            )
-                            response['Content-Disposition'] = f'attachment; filename="cleaned_data_package.zip"'
-                            
-                            # Add script to remove overlay
-                            response['X-Remove-Overlay'] = 'true'
+                        # Add train-test split files to zip if they exist
+                        if result.get('train_file') and os.path.exists(result.get('train_file')):
+                            with zipfile.ZipFile(zip_filename, 'a') as zipf:
+                                zipf.write(result['train_file'], os.path.basename(result['train_file']))
                         
-                        print(f"Returning ZIP download: {zip_filename}")
-                        return response
-                    else:
-                        message = result.get('message', 'An error occurred during processing.')
-                        messages.error(request, message)
+                        if result.get('test_file') and os.path.exists(result.get('test_file')):
+                            with zipfile.ZipFile(zip_filename, 'a') as zipf:
+                                zipf.write(result['test_file'], os.path.basename(result['test_file']))
                         
-                        # Return response with script to remove the overlay
-                        response_html = f"""
-                        <html>
-                        <head>
-                            <script>
-                                // Remove the processing overlay
-                                function removeOverlay() {{
-                                    const overlay = document.getElementById('processing-overlay');
-                                    if (overlay) {{
-                                        overlay.remove();
-                                    }}
-                                }}
-                                removeOverlay();
+                        # Prepare data for the clean_complete.html template
+                        # Read a sample of the cleaned data for preview
+                        data_preview = []
+                        try:
+                            # Read the first 10 rows of the cleaned file
+                            with open(output_file_path, 'r') as f:
+                                reader = csv.reader(f)
+                                headers = next(reader)  # Get header row
                                 
-                                // Alert the user
-                                alert('{message}');
+                                # Determine timestamp column and event columns
+                                timestamp_col = 0  # Default to first column
+                                if 'Timestamp' in headers:
+                                    timestamp_col = headers.index('Timestamp')
                                 
-                                // Redirect back to the form page
-                                window.location.href = window.location.href;
-                            </script>
-                        </head>
-                        <body>
-                            <p>Error: {message}</p>
-                            <p>Redirecting...</p>
-                        </body>
-                        </html>
-                        """
-                        return HttpResponse(response_html)
+                                event_cols = [i for i, h in enumerate(headers) if h.endswith('_event')]
+                                
+                                # Get sensor column indices
+                                sensor_cols = []
+                                for channel in result.get('channels_processed', []):
+                                    if channel in headers:
+                                        sensor_cols.append(headers.index(channel))
+                                
+                                # Read up to 10 rows
+                                for i, row in enumerate(reader):
+                                    if i >= 10:  # Only get first 10 rows
+                                        break
+                                        
+                                    # Check if we have an event in any event column
+                                    has_event = any(row[col].lower() == 'true' for col in event_cols) if event_cols else False
+                                    
+                                    # Format the preview data
+                                    preview_row = {
+                                        'timestamp': float(row[timestamp_col]) if row[timestamp_col] else 0,
+                                        'values': [int(float(row[i])) if row[i] and row[i] != 'nan' else 0 for i in sensor_cols],
+                                        'event': has_event
+                                    }
+                                    data_preview.append(preview_row)
+                        except Exception as e:
+                            print(f"Error creating data preview: {e}")
+                            traceback.print_exc()
+                            data_preview = []
+                        
+                        # Add file URLs for downloading
+                        result['output_file_name'] = os.path.basename(output_file_path)
+                        result['output_file_url'] = f"/cleaner/download/{os.path.basename(output_file_path)}"
+                        
+                        if result.get('train_file'):
+                            result['train_file_url'] = f"/cleaner/download/{os.path.basename(result['train_file'])}"
+                        
+                        if result.get('test_file'):
+                            result['test_file_url'] = f"/cleaner/download/{os.path.basename(result['test_file'])}"
+                        
+                        # Fix plots URLs if they exist
+                        if plots:
+                            # Convert full paths to relative URLs
+                            for plot_key, plot_path in plots.items():
+                                rel_path = os.path.relpath(plot_path, settings.BASE_DIR)
+                                plots[plot_key] = f"/{rel_path.replace(os.sep, '/')}"
+                        
+                        # Render the completion template
+                        return render(request, 'cleaner/clean_complete.html', {
+                            'message': message,
+                            'result': result,
+                            'data_preview': data_preview,
+                            'output': output.getvalue()
+                        })
+                        
+                        # Don't return ZIP file directly anymore
+                        # Instead, provide download links in the template
                         
                 except Exception as e:
                     trace = traceback.format_exc()
@@ -305,14 +359,26 @@ def download_file_view(request, filepath):
     try:
         # For security, validate the filepath is within the allowed directory
         base_dir = settings.BASE_DIR
-        requested_path = os.path.abspath(os.path.join(base_dir, filepath))
         
-        # Check if the file is within the allowed directories
+        # Check if the file exists in the Trials_data directory
+        trials_data_path = os.path.join(base_dir, 'Trials_data')
+        full_path = os.path.join(trials_data_path, filepath)
+        
+        # If not found directly, search subdirectories
+        if not os.path.exists(full_path):
+            for root, dirs, files in os.walk(trials_data_path):
+                if filepath in files:
+                    full_path = os.path.join(root, filepath)
+                    break
+        
+        # Check if the file exists and is within the base directory
+        if not os.path.exists(full_path):
+            return HttpResponse("File not found", status=404)
+        
+        # Validate path is within base directory for security
+        requested_path = os.path.abspath(full_path)
         if not requested_path.startswith(base_dir):
             return HttpResponse("Access denied", status=403)
-        
-        if not os.path.exists(requested_path):
-            return HttpResponse("File not found", status=404)
         
         with open(requested_path, 'rb') as f:
             response = HttpResponse(f.read())

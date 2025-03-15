@@ -1,187 +1,215 @@
 {% extends "layout.html" %}
-{% load static %}
-
 {% block content %}
-<div class="container mt-4">
-    <div class="row">
-        <div class="col-lg-12">
-            <div class="card mb-4">
-                <div class="card-header bg-primary text-white">
-                    <h2 class="mb-0"><i class="fas fa-brain mr-2"></i> EEG Speech Detection Processor</h2>
-                </div>
-                <div class="card-body">
-                    <p class="lead">Clean and process EEG data for speech detection with optimized filters.</p>
-                    
-                    <!-- Messages -->
-                    {% if messages %}
-                        {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="close" data-dismiss="alert" aria-label="Close">
-                                    <span aria-hidden="true">&times;</span>
-                                </button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
-                    
-                    <!-- Form Error Display -->
-                    {% if form.errors %}
-                        <div class="alert alert-danger" role="alert">
-                            <h5>Please correct the following errors:</h5>
-                            <ul>
-                                {% for field, errors in form.errors.items %}
-                                    {% for error in errors %}
-                                        <li><strong>{{ field|title }}:</strong> {{ error }}</li>
-                                    {% endfor %}
-                                {% endfor %}
-                            </ul>
-                        </div>
-                    {% endif %}
-                    
-                    <!-- Processing Form -->
-                    <form method="post" enctype="multipart/form-data" id="eeg-processing-form">
-                        {% csrf_token %}
-                        
-                        <!-- File Selection -->
-                        <div class="card mb-4">
-                            <div class="card-header bg-secondary text-white">
-                                <h5 class="mb-0">Data Selection</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="form-group">
-                                    <label for="{{ form.input_file.id_for_label }}">{{ form.input_file.label }}</label>
-                                    {{ form.input_file }}
-                                    <small class="form-text text-muted">Select the EEG data file to process. The file should contain EEG data and speech event markers.</small>
-                                </div>
-                                <div class="form-group">
-                                    <label for="{{ form.output_file_name.id_for_label }}">{{ form.output_file_name.label }}</label>
-                                    {{ form.output_file_name }}
-                                    <small class="form-text text-muted">Name for the processed output file.</small>
+<div class="container mt-5 mb-5">
+    <h1 class="mb-4">EEG Data Cleaner</h1>
+    
+    {% if message %}
+        <div class="alert {% if 'error' in message %}alert-danger{% else %}alert-info{% endif %}" role="alert">
+            {{ message }}
+        </div>
+    {% endif %}
+    
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0">Clean and Prepare EEG Data</h5>
+        </div>
+        <div class="card-body">
+            <form method="post" enctype="multipart/form-data" id="cleaningForm">
+                {% csrf_token %}
+                
+                <div class="row">
+                    <div class="col-lg-6">
+                        <div class="accordion" id="basicAccordion">
+                            <!-- Data Selection Section -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingData">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseData" aria-expanded="true" aria-controls="collapseData">
+                                        Data Selection
+                                    </button>
+                                </h2>
+                                <div id="collapseData" class="accordion-collapse collapse show" aria-labelledby="headingData">
+                                    <div class="accordion-body">
+                                        <div class="mb-3">
+                                            <label for="{{ form.input_file.id_for_label }}" class="form-label">{{ form.input_file.label }}</label>
+                                            {{ form.input_file }}
+                                            <div class="form-text">Select a CSV file containing EEG data to clean.</div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="{{ form.output_file_name.id_for_label }}" class="form-label">{{ form.output_file_name.label }}</label>
+                                            {{ form.output_file_name }}
+                                            <div class="form-text">Name for the cleaned output file.</div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="{{ form.include_channels.id_for_label }}" class="form-label">{{ form.include_channels.label }}</label>
+                                            {{ form.include_channels }}
+                                            <div class="form-text">Select which EEG channels to include in processing.</div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
-                        
-                        <!-- Filter Settings -->
-                        <div class="card mb-4">
-                            <div class="card-header bg-secondary text-white">
-                                <h5 class="mb-0">Filter Settings</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="row">
-                                    <!-- Bandpass Filter -->
-                                    <div class="col-md-4">
-                                        <div class="card h-100">
+                            
+                            <!-- Frequency Filtering Section -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingFilters">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFilters" aria-expanded="false" aria-controls="collapseFilters">
+                                        Frequency Filtering
+                                    </button>
+                                </h2>
+                                <div id="collapseFilters" class="accordion-collapse collapse" aria-labelledby="headingFilters">
+                                    <div class="accordion-body">
+                                        <!-- Bandpass Filter -->
+                                        <div class="card mb-3">
                                             <div class="card-header">
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="{{ form.apply_bandpass.id_for_label }}" name="{{ form.apply_bandpass.html_name }}" {% if form.apply_bandpass.value %}checked{% endif %}>
+                                                    {{ form.apply_bandpass }}
                                                     <label class="form-check-label" for="{{ form.apply_bandpass.id_for_label }}">
-                                                        <strong>{{ form.apply_bandpass.label }}</strong>
+                                                        {{ form.apply_bandpass.label }}
                                                     </label>
                                                 </div>
                                             </div>
-                                            <div class="card-body bandpass-options">
-                                                <div class="form-group">
-                                                    <label for="{{ form.lowcut.id_for_label }}">{{ form.lowcut.label }}</label>
-                                                    {{ form.lowcut }}
-                                                    <small class="form-text text-muted">4 Hz recommended for speech (theta band)</small>
-                                                </div>
-                                                <div class="form-group">
-                                                    <label for="{{ form.highcut.id_for_label }}">{{ form.highcut.label }}</label>
-                                                    {{ form.highcut }}
-                                                    <small class="form-text text-muted">50 Hz recommended for speech (includes gamma)</small>
-                                                </div>
-                                                <div class="form-group">
-                                                    <label for="{{ form.bandpass_order.id_for_label }}">{{ form.bandpass_order.label }}</label>
-                                                    {{ form.bandpass_order }}
-                                                    <small class="form-text text-muted">Higher order = sharper cutoff but more artifacts</small>
+                                            <div class="card-body bandpass-settings">
+                                                <div class="row">
+                                                    <div class="col-md-4">
+                                                        <label for="{{ form.lowcut.id_for_label }}" class="form-label">{{ form.lowcut.label }}</label>
+                                                        {{ form.lowcut }}
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label for="{{ form.highcut.id_for_label }}" class="form-label">{{ form.highcut.label }}</label>
+                                                        {{ form.highcut }}
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label for="{{ form.bandpass_order.id_for_label }}" class="form-label">{{ form.bandpass_order.label }}</label>
+                                                        {{ form.bandpass_order }}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    
-                                    <!-- High/Low Pass Filters -->
-                                    <div class="col-md-4">
-                                        <div class="card h-100">
+                                        
+                                        <!-- Highpass Filter -->
+                                        <div class="card mb-3">
                                             <div class="card-header">
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="{{ form.apply_highpass.id_for_label }}" name="{{ form.apply_highpass.html_name }}" {% if form.apply_highpass.value %}checked{% endif %}>
+                                                    {{ form.apply_highpass }}
                                                     <label class="form-check-label" for="{{ form.apply_highpass.id_for_label }}">
-                                                        <strong>{{ form.apply_highpass.label }}</strong>
+                                                        {{ form.apply_highpass.label }}
                                                     </label>
                                                 </div>
                                             </div>
-                                            <div class="card-body highpass-options">
-                                                <div class="form-group">
-                                                    <label for="{{ form.highpass_cutoff.id_for_label }}">{{ form.highpass_cutoff.label }}</label>
-                                                    {{ form.highpass_cutoff }}
-                                                </div>
-                                                <div class="form-group">
-                                                    <label for="{{ form.highpass_order.id_for_label }}">{{ form.highpass_order.label }}</label>
-                                                    {{ form.highpass_order }}
+                                            <div class="card-body highpass-settings">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label for="{{ form.highpass_cutoff.id_for_label }}" class="form-label">{{ form.highpass_cutoff.label }}</label>
+                                                        {{ form.highpass_cutoff }}
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="{{ form.highpass_order.id_for_label }}" class="form-label">{{ form.highpass_order.label }}</label>
+                                                        {{ form.highpass_order }}
+                                                    </div>
                                                 </div>
                                             </div>
-                                            
-                                            <div class="card-header mt-3">
+                                        </div>
+                                        
+                                        <!-- Lowpass Filter -->
+                                        <div class="card mb-3">
+                                            <div class="card-header">
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="{{ form.apply_lowpass.id_for_label }}" name="{{ form.apply_lowpass.html_name }}" {% if form.apply_lowpass.value %}checked{% endif %}>
+                                                    {{ form.apply_lowpass }}
                                                     <label class="form-check-label" for="{{ form.apply_lowpass.id_for_label }}">
-                                                        <strong>{{ form.apply_lowpass.label }}</strong>
+                                                        {{ form.apply_lowpass.label }}
                                                     </label>
                                                 </div>
                                             </div>
-                                            <div class="card-body lowpass-options">
-                                                <div class="form-group">
-                                                    <label for="{{ form.lowpass_cutoff.id_for_label }}">{{ form.lowpass_cutoff.label }}</label>
-                                                    {{ form.lowpass_cutoff }}
+                                            <div class="card-body lowpass-settings">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label for="{{ form.lowpass_cutoff.id_for_label }}" class="form-label">{{ form.lowpass_cutoff.label }}</label>
+                                                        {{ form.lowpass_cutoff }}
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="{{ form.lowpass_order.id_for_label }}" class="form-label">{{ form.lowpass_order.label }}</label>
+                                                        {{ form.lowpass_order }}
+                                                    </div>
                                                 </div>
-                                                <div class="form-group">
-                                                    <label for="{{ form.lowpass_order.id_for_label }}">{{ form.lowpass_order.label }}</label>
-                                                    {{ form.lowpass_order }}
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Notch Filter -->
+                                        <div class="card mb-3">
+                                            <div class="card-header">
+                                                <div class="form-check">
+                                                    {{ form.apply_notch }}
+                                                    <label class="form-check-label" for="{{ form.apply_notch.id_for_label }}">
+                                                        {{ form.apply_notch.label }}
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="card-body notch-settings">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label for="{{ form.notch_freq.id_for_label }}" class="form-label">{{ form.notch_freq.label }}</label>
+                                                        {{ form.notch_freq }}
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="{{ form.notch_quality.id_for_label }}" class="form-label">{{ form.notch_quality.label }}</label>
+                                                        {{ form.notch_quality }}
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                    
-                                    <!-- Notch Filter and ICA -->
-                                    <div class="col-md-4">
-                                        <div class="card h-100">
+                                </div>
+                            </div>
+                            
+                            <!-- Artifact Removal Section -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingArtifacts">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseArtifacts" aria-expanded="false" aria-controls="collapseArtifacts">
+                                        Artifact Removal
+                                    </button>
+                                </h2>
+                                <div id="collapseArtifacts" class="accordion-collapse collapse" aria-labelledby="headingArtifacts">
+                                    <div class="accordion-body">
+                                        <!-- ICA -->
+                                        <div class="card mb-3">
                                             <div class="card-header">
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="{{ form.apply_notch.id_for_label }}" name="{{ form.apply_notch.html_name }}" {% if form.apply_notch.value %}checked{% endif %}>
-                                                    <label class="form-check-label" for="{{ form.apply_notch.id_for_label }}">
-                                                        <strong>{{ form.apply_notch.label }}</strong>
-                                                    </label>
-                                                </div>
-                                            </div>
-                                            <div class="card-body notch-options">
-                                                <div class="form-group">
-                                                    <label for="{{ form.notch_freq.id_for_label }}">{{ form.notch_freq.label }}</label>
-                                                    {{ form.notch_freq }}
-                                                    <small class="form-text text-muted">50 Hz for Europe/Asia, 60 Hz for US</small>
-                                                </div>
-                                                <div class="form-group">
-                                                    <label for="{{ form.notch_quality.id_for_label }}">{{ form.notch_quality.label }}</label>
-                                                    {{ form.notch_quality }}
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="card-header mt-3">
-                                                <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" id="{{ form.apply_ica.id_for_label }}" name="{{ form.apply_ica.html_name }}" {% if form.apply_ica.value %}checked{% endif %}>
+                                                    {{ form.apply_ica }}
                                                     <label class="form-check-label" for="{{ form.apply_ica.id_for_label }}">
-                                                        <strong>{{ form.apply_ica.label }}</strong>
+                                                        {{ form.apply_ica.label }}
                                                     </label>
                                                 </div>
                                             </div>
-                                            <div class="card-body ica-options">
-                                                <div class="form-group">
-                                                    <label for="{{ form.ica_method.id_for_label }}">{{ form.ica_method.label }}</label>
-                                                    {{ form.ica_method }}
+                                            <div class="card-body ica-settings">
+                                                <div class="row">
+                                                    <div class="col-md-6">
+                                                        <label for="{{ form.ica_method.id_for_label }}" class="form-label">{{ form.ica_method.label }}</label>
+                                                        {{ form.ica_method }}
+                                                    </div>
+                                                    <div class="col-md-6">
+                                                        <label for="{{ form.random_seed.id_for_label }}" class="form-label">{{ form.random_seed.label }}</label>
+                                                        {{ form.random_seed }}
+                                                    </div>
                                                 </div>
-                                                <div class="form-group">
-                                                    <label for="{{ form.random_seed.id_for_label }}">{{ form.random_seed.label }}</label>
-                                                    {{ form.random_seed }}
-                                                    <small class="form-text text-muted">For reproducible results</small>
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Outlier Removal -->
+                                        <div class="card mb-3">
+                                            <div class="card-header">
+                                                <div class="form-check">
+                                                    {{ form.remove_outliers }}
+                                                    <label class="form-check-label" for="{{ form.remove_outliers.id_for_label }}">
+                                                        {{ form.remove_outliers.label }}
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="card-body outlier-settings">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.outlier_threshold.id_for_label }}" class="form-label">{{ form.outlier_threshold.label }}</label>
+                                                    {{ form.outlier_threshold }}
+                                                    <div class="form-text">Higher values remove fewer points. Typical range is 2.5 to 4.0</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -189,264 +217,273 @@
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Advanced Options -->
-                        <div class="card mb-4">
-                            <div class="card-header bg-secondary text-white">
-                                <h5 class="mb-0">Advanced Speech Detection Options</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="row">
-                                    <div class="col-md-6">
+                    </div>
+                    
+                    <div class="col-lg-6">
+                        <div class="accordion" id="advancedAccordion">
+                            <!-- Data Transformation Section -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingTransform">
+                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTransform" aria-expanded="true" aria-controls="collapseTransform">
+                                        Data Transformation
+                                    </button>
+                                </h2>
+                                <div id="collapseTransform" class="accordion-collapse collapse show" aria-labelledby="headingTransform">
+                                    <div class="accordion-body">
                                         <div class="form-check mb-3">
-                                            <input class="form-check-input" type="checkbox" id="{{ form.generate_plots.id_for_label }}" name="{{ form.generate_plots.html_name }}" {% if form.generate_plots.value %}checked{% endif %}>
-                                            <label class="form-check-label" for="{{ form.generate_plots.id_for_label }}">
-                                                {{ form.generate_plots.label }}
+                                            {{ form.normalize_data }}
+                                            <label class="form-check-label" for="{{ form.normalize_data.id_for_label }}">
+                                                {{ form.normalize_data.label }}
                                             </label>
-                                            <small class="form-text text-muted">Generate time and frequency plots of the data</small>
+                                            <div class="form-text">Standardize each channel to zero mean and unit variance</div>
+                                        </div>
+                                        
+                                        <div class="form-check mb-3">
+                                            {{ form.compute_band_powers }}
+                                            <label class="form-check-label" for="{{ form.compute_band_powers.id_for_label }}">
+                                                {{ form.compute_band_powers.label }}
+                                            </label>
+                                            <div class="form-text">Calculate power in delta, theta, alpha, beta, and gamma bands</div>
                                         </div>
                                     </div>
-                                    <div class="col-md-6">
+                                </div>
+                            </div>
+                            
+                            <!-- Speech Feature Extraction Section -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingFeatures">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFeatures" aria-expanded="false" aria-controls="collapseFeatures">
+                                        Speech Feature Extraction
+                                    </button>
+                                </h2>
+                                <div id="collapseFeatures" class="accordion-collapse collapse" aria-labelledby="headingFeatures">
+                                    <div class="accordion-body">
                                         <div class="form-check mb-3">
-                                            <input class="form-check-input" type="checkbox" id="{{ form.extract_features.id_for_label }}" name="{{ form.extract_features.html_name }}" {% if form.extract_features.value %}checked{% endif %}>
+                                            {{ form.extract_features }}
                                             <label class="form-check-label" for="{{ form.extract_features.id_for_label }}">
                                                 {{ form.extract_features.label }}
                                             </label>
-                                            <small class="form-text text-muted">Extract features optimized for speech detection</small>
+                                            <div class="form-text">Create features optimized for speech detection</div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label class="form-label">{{ form.regions_of_interest.label }}</label>
+                                            <div>
+                                                {% for choice in form.regions_of_interest %}
+                                                    <div class="form-check">
+                                                        {{ choice.tag }}
+                                                        <label class="form-check-label" for="{{ choice.id_for_label }}">
+                                                            {{ choice.choice_label }}
+                                                        </label>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="form-check mb-3">
+                                            {{ form.generate_plots }}
+                                            <label class="form-check-label" for="{{ form.generate_plots.id_for_label }}">
+                                                {{ form.generate_plots.label }}
+                                            </label>
+                                            <div class="form-text">Create time-series and spectral plots of the data</div>
                                         </div>
                                     </div>
                                 </div>
-                                
-                                <!-- Region of Interest -->
-                                <div class="form-group mt-3">
-                                    <label><strong>{{ form.regions_of_interest.label }}</strong></label>
-                                    <div class="row">
-                                        {% for value, text in form.regions_of_interest.field.choices %}
-                                            <div class="col-md-4">
+                            </div>
+                            
+                            <!-- Dataset Organization Section -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingDataset">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseDataset" aria-expanded="false" aria-controls="collapseDataset">
+                                        Dataset Organization
+                                    </button>
+                                </h2>
+                                <div id="collapseDataset" class="accordion-collapse collapse" aria-labelledby="headingDataset">
+                                    <div class="accordion-body">
+                                        <div class="card mb-3">
+                                            <div class="card-header">
                                                 <div class="form-check">
-                                                    <input class="form-check-input" type="checkbox" 
-                                                           name="{{ form.regions_of_interest.html_name }}" 
-                                                           id="id_{{ form.regions_of_interest.html_name }}_{{ forloop.counter0 }}" 
-                                                           value="{{ value }}"
-                                                           {% if value in form.regions_of_interest.value %}checked{% endif %}>
-                                                    <label class="form-check-label" for="id_{{ form.regions_of_interest.html_name }}_{{ forloop.counter0 }}">
-                                                        {{ text }}
+                                                    {{ form.create_train_test_split }}
+                                                    <label class="form-check-label" for="{{ form.create_train_test_split.id_for_label }}">
+                                                        {{ form.create_train_test_split.label }}
                                                     </label>
                                                 </div>
                                             </div>
-                                        {% endfor %}
+                                            <div class="card-body train-test-settings">
+                                                <div class="row">
+                                                    <div class="col-md-4">
+                                                        <label for="{{ form.test_size.id_for_label }}" class="form-label">{{ form.test_size.label }}</label>
+                                                        {{ form.test_size }}
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <label for="{{ form.random_state.id_for_label }}" class="form-label">{{ form.random_state.label }}</label>
+                                                        {{ form.random_state }}
+                                                    </div>
+                                                    <div class="col-md-4">
+                                                        <div class="form-check mt-4">
+                                                            {{ form.stratify_by_word }}
+                                                            <label class="form-check-label" for="{{ form.stratify_by_word.id_for_label }}">
+                                                                {{ form.stratify_by_word.label }}
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                    <small class="form-text text-muted">Select relevant regions for speech detection. Frontal and temporal areas are most important.</small>
                                 </div>
                             </div>
                         </div>
-                        
-                        <!-- Submit Button -->
-                        <div class="text-center mb-4">
-                            <button type="submit" class="btn btn-primary btn-lg">
-                                <i class="fas fa-brain mr-2"></i> Process EEG Data
-                            </button>
-                        </div>
-                    </form>
-                    
-                    <!-- Processing Output -->
-                    {% if message %}
-                        <div class="card mb-4">
-                            <div class="card-header bg-info text-white">
-                                <h5 class="mb-0">Processing Results</h5>
-                            </div>
-                            <div class="card-body">
-                                <div class="alert alert-info" role="alert">
-                                    {{ message }}
-                                </div>
-                            </div>
-                        </div>
-                    {% endif %}
-                    
-                    {% if output %}
-                        <div class="card mb-4">
-                            <div class="card-header bg-secondary text-white">
-                                <h5 class="mb-0">Processing Details</h5>
-                                <button class="btn btn-sm btn-light float-right" type="button" data-toggle="collapse" data-target="#outputLog">
-                                    Toggle Log
-                                </button>
-                            </div>
-                            <div class="card-body collapse" id="outputLog">
-                                <pre class="bg-light p-3 text-monospace">{{ output }}</pre>
-                            </div>
-                        </div>
-                    {% endif %}
+                    </div>
                 </div>
+                
+                <div class="row mt-4">
+                    <div class="col-12 d-flex justify-content-center">
+                        <button type="submit" class="btn btn-primary btn-lg" id="cleanButton">
+                            <i class="bi bi-gear-fill me-2"></i>Clean and Process Data
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    {% if output %}
+        <div class="card mt-4 shadow">
+            <div class="card-header bg-secondary text-white">
+                <h5 class="card-title mb-0">Processing Output</h5>
             </div>
-            
-            <!-- Guide Card -->
-            <div class="card mb-4">
-                <div class="card-header bg-info text-white">
-                    <h4 class="mb-0">Speech Detection from EEG: Quick Guide</h4>
-                </div>
-                <div class="card-body">
-                    <h5>Recommended Settings</h5>
-                    <ul class="ulguide">
-                        <li><strong>Frequency Range:</strong> 4-50 Hz (bandpass) to capture theta, alpha, beta, and low gamma activity</li>
-                        <li><strong>Notch Filter:</strong> 50 Hz (Europe/Asia) or 60 Hz (US) to remove power line interference</li>
-                        <li><strong>ICA Method:</strong> Infomax works best for speech-related processing</li>
-                        <li><strong>Regions of Interest:</strong> Focus on frontal (F3, F4, F7, F8) and temporal (T7, T8) regions</li>
-                    </ul>
-                    
-                    <h5>Speech-Related EEG Bands</h5>
-                    <ul class="ulguide">
-                        <li><strong>Theta (4-8 Hz):</strong> Language processing and working memory</li>
-                        <li><strong>Alpha (8-13 Hz):</strong> Speech inhibition and attention</li>
-                        <li><strong>Beta (13-30 Hz):</strong> Motor planning for speech production</li>
-                        <li><strong>Gamma (30-50 Hz):</strong> Higher linguistic processing and integration</li>
-                    </ul>
-                </div>
+            <div class="card-body">
+                <pre class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">{{ output }}</pre>
             </div>
         </div>
+    {% endif %}
+</div>
+
+<!-- Processing overlay -->
+<div id="processing-overlay" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.7); z-index: 9999;">
+    <div class="d-flex flex-column justify-content-center align-items-center h-100">
+        <div class="spinner-border text-light" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <h4 class="text-light mt-3">Processing EEG Data...</h4>
+        <p class="text-light">This may take several minutes. Please wait.</p>
     </div>
 </div>
 
-<!-- JavaScript for form interactions -->
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Toggle dependent options visibility based on checkboxes
-        function toggleOptions() {
-            // Bandpass filter options
-            const bandpassChecked = document.getElementById('{{ form.apply_bandpass.id_for_label }}').checked;
-            document.querySelectorAll('.bandpass-options input, .bandpass-options select').forEach(function(el) {
-                el.disabled = !bandpassChecked;
-            });
+    document.addEventListener('DOMContentLoaded', function () {
+        // Form element references
+        const form = document.getElementById('cleaningForm');
+        const applyBandpass = document.getElementById('{{ form.apply_bandpass.id_for_label }}');
+        const applyHighpass = document.getElementById('{{ form.apply_highpass.id_for_label }}');
+        const applyLowpass = document.getElementById('{{ form.apply_lowpass.id_for_label }}');
+        const applyNotch = document.getElementById('{{ form.apply_notch.id_for_label }}');
+        const applyIca = document.getElementById('{{ form.apply_ica.id_for_label }}');
+        const removeOutliers = document.getElementById('{{ form.remove_outliers.id_for_label }}');
+        const createTrainTest = document.getElementById('{{ form.create_train_test_split.id_for_label }}');
+        const extractFeatures = document.getElementById('{{ form.extract_features.id_for_label }}');
+        
+        // Settings section references
+        const bandpassSettings = document.querySelector('.bandpass-settings');
+        const highpassSettings = document.querySelector('.highpass-settings');
+        const lowpassSettings = document.querySelector('.lowpass-settings');
+        const notchSettings = document.querySelector('.notch-settings');
+        const icaSettings = document.querySelector('.ica-settings');
+        const outlierSettings = document.querySelector('.outlier-settings');
+        const trainTestSettings = document.querySelector('.train-test-settings');
+        
+        // Toggle visibility based on checkbox state
+        function toggleVisibility() {
+            bandpassSettings.style.display = applyBandpass.checked ? 'block' : 'none';
+            highpassSettings.style.display = applyHighpass.checked ? 'block' : 'none';
+            lowpassSettings.style.display = applyLowpass.checked ? 'block' : 'none';
+            notchSettings.style.display = applyNotch.checked ? 'block' : 'none';
+            icaSettings.style.display = applyIca.checked ? 'block' : 'none';
+            outlierSettings.style.display = removeOutliers.checked ? 'block' : 'none';
+            trainTestSettings.style.display = createTrainTest.checked ? 'block' : 'none';
             
-            // Highpass filter options
-            const highpassChecked = document.getElementById('{{ form.apply_highpass.id_for_label }}').checked;
-            document.querySelectorAll('.highpass-options input, .highpass-options select').forEach(function(el) {
-                el.disabled = !highpassChecked;
-            });
-            
-            // Lowpass filter options
-            const lowpassChecked = document.getElementById('{{ form.apply_lowpass.id_for_label }}').checked;
-            document.querySelectorAll('.lowpass-options input, .lowpass-options select').forEach(function(el) {
-                el.disabled = !lowpassChecked;
-            });
-            
-            // Notch filter options
-            const notchChecked = document.getElementById('{{ form.apply_notch.id_for_label }}').checked;
-            document.querySelectorAll('.notch-options input, .notch-options select').forEach(function(el) {
-                el.disabled = !notchChecked;
-            });
-            
-            // ICA options
-            const icaChecked = document.getElementById('{{ form.apply_ica.id_for_label }}').checked;
-            document.querySelectorAll('.ica-options input, .ica-options select').forEach(function(el) {
-                el.disabled = !icaChecked;
-            });
-            
-            // Disable conflicting filters
-            if (bandpassChecked) {
-                document.getElementById('{{ form.apply_highpass.id_for_label }}').disabled = true;
-                document.getElementById('{{ form.apply_lowpass.id_for_label }}').disabled = true;
+            // Disable conflicting filter options
+            if (applyBandpass.checked) {
+                applyHighpass.disabled = true;
+                applyLowpass.disabled = true;
             } else {
-                document.getElementById('{{ form.apply_highpass.id_for_label }}').disabled = false;
-                document.getElementById('{{ form.apply_lowpass.id_for_label }}').disabled = false;
+                applyHighpass.disabled = false;
+                applyLowpass.disabled = false;
+            }
+            
+            if (applyHighpass.checked || applyLowpass.checked) {
+                applyBandpass.disabled = true;
+            } else {
+                applyBandpass.disabled = false;
             }
         }
         
-        // Set up event listeners for all checkboxes
-        document.getElementById('{{ form.apply_bandpass.id_for_label }}').addEventListener('change', toggleOptions);
-        document.getElementById('{{ form.apply_highpass.id_for_label }}').addEventListener('change', toggleOptions);
-        document.getElementById('{{ form.apply_lowpass.id_for_label }}').addEventListener('change', toggleOptions);
-        document.getElementById('{{ form.apply_notch.id_for_label }}').addEventListener('change', toggleOptions);
-        document.getElementById('{{ form.apply_ica.id_for_label }}').addEventListener('change', toggleOptions);
+        // Add event listeners
+        applyBandpass.addEventListener('change', toggleVisibility);
+        applyHighpass.addEventListener('change', toggleVisibility);
+        applyLowpass.addEventListener('change', toggleVisibility);
+        applyNotch.addEventListener('change', toggleVisibility);
+        applyIca.addEventListener('change', toggleVisibility);
+        removeOutliers.addEventListener('change', toggleVisibility);
+        createTrainTest.addEventListener('change', toggleVisibility);
         
-        // Initial toggle
-        toggleOptions();
+        // Initialize visibility states
+        toggleVisibility();
         
-        // Form submission handling with loading indicator
-        document.getElementById('eeg-processing-form').addEventListener('submit', function(e) {
-            // Check if there's already a processing overlay
-            let existingOverlay = document.getElementById('processing-overlay');
-            if (existingOverlay) {
-                existingOverlay.remove();
+        // Form submission handling
+        form.addEventListener('submit', function(e) {
+            // Validate form
+            let isValid = true;
+            
+            // Check filter conflicts
+            if (applyBandpass.checked && (applyHighpass.checked || applyLowpass.checked)) {
+                alert('Cannot apply bandpass filter together with highpass or lowpass filters. Please choose one approach.');
+                isValid = false;
             }
             
-            // Create and show loading overlay
-            const overlay = document.createElement('div');
-            overlay.id = 'processing-overlay';
-            overlay.style.position = 'fixed';
-            overlay.style.top = '0';
-            overlay.style.left = '0';
-            overlay.style.width = '100%';
-            overlay.style.height = '100%';
-            overlay.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-            overlay.style.display = 'flex';
-            overlay.style.alignItems = 'center';
-            overlay.style.justifyContent = 'center';
-            overlay.style.zIndex = '9999';
+            if (!isValid) {
+                e.preventDefault();
+                return;
+            }
             
-            const spinner = document.createElement('div');
-            spinner.className = 'spinner-border text-light';
-            spinner.style.width = '5rem';
-            spinner.style.height = '5rem';
-            spinner.setAttribute('role', 'status');
+            // Show processing overlay
+            document.getElementById('processing-overlay').style.display = 'block';
+            document.getElementById('cleanButton').disabled = true;
+        });
+        
+        // Initialize Select2 for better dropdown experience if available
+        if (typeof $.fn.select2 !== 'undefined') {
+            $('.select2').select2({
+                placeholder: 'Select options',
+                allowClear: true
+            });
+        }
+
+                // Handle redirect after form submission
+        window.addEventListener('beforeunload', function() {
+            // When navigating away from the page, make sure the overlay remains visible
+            // This ensures it doesn't disappear during page transitions
+            const overlay = document.getElementById('processing-overlay');
+            if (overlay && overlay.style.display === 'block') {
+                sessionStorage.setItem('showProcessingOverlay', 'true');
+            }
+        });
+
+        // Check if we need to hide the overlay (if we returned to this page after an error)
+        document.addEventListener('DOMContentLoaded', function() {
+            const overlay = document.getElementById('processing-overlay');
             
-            const spinnerText = document.createElement('span');
-            spinnerText.className = 'sr-only';
-            spinnerText.textContent = 'Processing...';
-            
-            spinner.appendChild(spinnerText);
-            overlay.appendChild(spinner);
-            
-            const loadingText = document.createElement('div');
-            loadingText.textContent = 'Processing EEG data. This may take a few minutes...';
-            loadingText.style.color = 'white';
-            loadingText.style.marginLeft = '20px';
-            loadingText.style.fontSize = '20px';
-            
-            const cancelButton = document.createElement('button');
-            cancelButton.textContent = 'Cancel';
-            cancelButton.style.marginLeft = '20px';
-            cancelButton.className = 'btn btn-sm btn-danger';
-            cancelButton.onclick = function() {
-                overlay.remove();
-                return false;
-            };
-            
-            overlay.appendChild(loadingText);
-            overlay.appendChild(cancelButton);
-            document.body.appendChild(overlay);
-            
-            // Set a timeout to automatically remove the overlay after 2 minutes
-            // in case the response doesn't come back properly
-            setTimeout(function() {
-                if (document.getElementById('processing-overlay')) {
-                    document.getElementById('processing-overlay').remove();
-                    alert('Processing is taking longer than expected. Please check if the server is responding.');
+            // If we're back on the form page, hide the overlay
+            if (overlay && window.location.href.includes('processor') || window.location.href.includes('cleaner')) {
+                overlay.style.display = 'none';
+                const submitButton = document.querySelector('button[type="submit"]');
+                if (submitButton) {
+                    submitButton.disabled = false;
                 }
-            }, 120000); // 2 minutes
+                sessionStorage.removeItem('showProcessingOverlay');
+            }
         });
     });
-    
-    // Function to remove the processing overlay (can be called from anywhere)
-    function removeProcessingOverlay() {
-        const overlay = document.getElementById('processing-overlay');
-        if (overlay) {
-            overlay.remove();
-        }
-    }
-    
-    // Remove overlay on page load if it exists from a previous submission
-    document.addEventListener('DOMContentLoaded', function() {
-        removeProcessingOverlay();
-    });
 </script>
-
-{% comment %}
-<!-- Add this script to handle AJAX request completion -->
-<script>
-    // This script will run when the page is loaded from a server response
-    document.addEventListener('DOMContentLoaded', function() {
-        removeProcessingOverlay();
-    });
-</script>
-{% endcomment %}
-{% endblock content %}
+{% endblock %}

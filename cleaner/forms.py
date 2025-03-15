@@ -12,8 +12,39 @@ class CleaningForm(forms.Form):
 
     output_file_name = forms.CharField(
         label='Output File Name', 
-        initial='cleaned_speech_eeg.csv',
+        initial='cleaned_eeg_data.csv',
         widget=forms.TextInput(attrs={'class': 'form-control'})
+    )
+
+    # NEW: Advanced data organization
+    create_train_test_split = forms.BooleanField(
+        required=False, 
+        label='Create Train/Test Split', 
+        initial=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
+    test_size = forms.FloatField(
+        required=False, 
+        label='Test Size Ratio',
+        initial=0.2,
+        min_value=0.1, 
+        max_value=0.5,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.05'})
+    )
+    
+    random_state = forms.IntegerField(
+        required=False, 
+        label='Random Seed',
+        initial=42,
+        widget=forms.NumberInput(attrs={'class': 'form-control'})
+    )
+    
+    stratify_by_word = forms.BooleanField(
+        required=False, 
+        label='Stratify by Event Type',
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
 
     # Filter settings with speech detection defaults
@@ -120,7 +151,7 @@ class CleaningForm(forms.Form):
         widget=forms.NumberInput(attrs={'class': 'form-control'})
     )
 
-    # New options for speech detection
+    # Options for speech detection
     generate_plots = forms.BooleanField(
         required=False, 
         label="Generate Diagnostic Plots",
@@ -145,6 +176,61 @@ class CleaningForm(forms.Form):
         ],
         initial=['frontal', 'temporal'],
         widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
+    )
+    
+    # NEW: Channel selection
+    include_channels = forms.MultipleChoiceField(
+        required=False,
+        label="Include Channels",
+        choices=[
+            ('F3', 'F3 - Left Frontal'), 
+            ('FC5', 'FC5 - Left Frontocentral'),
+            ('AF3', 'AF3 - Left Anterior Frontal'),
+            ('F7', 'F7 - Left Lateral Frontal'),
+            ('T7', 'T7 - Left Temporal'),
+            ('P7', 'P7 - Left Posterior Temporal'),
+            ('O1', 'O1 - Left Occipital'),
+            ('O2', 'O2 - Right Occipital'),
+            ('P8', 'P8 - Right Posterior Temporal'),
+            ('T8', 'T8 - Right Temporal'),
+            ('F8', 'F8 - Right Lateral Frontal'),
+            ('AF4', 'AF4 - Right Anterior Frontal'),
+            ('FC6', 'FC6 - Right Frontocentral'),
+            ('F4', 'F4 - Right Frontal')
+        ],
+        initial=['F3', 'T7', 'T8', 'F4'],
+        widget=forms.SelectMultiple(attrs={'class': 'form-control select2', 'size': '6'})
+    )
+    
+    # NEW: Feature engineering options
+    compute_band_powers = forms.BooleanField(
+        required=False,
+        label="Compute Frequency Band Powers",
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
+    normalize_data = forms.BooleanField(
+        required=False,
+        label="Normalize Data (Z-score)",
+        initial=True,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
+    remove_outliers = forms.BooleanField(
+        required=False,
+        label="Remove Outliers",
+        initial=False,
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
+    outlier_threshold = forms.FloatField(
+        required=False,
+        label="Outlier Threshold (Standard Deviations)",
+        initial=3.0,
+        min_value=1.0,
+        max_value=10.0,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.5'})
     )
 
     def __init__(self, *args, **kwargs):
@@ -183,6 +269,20 @@ class CleaningForm(forms.Form):
                 if filename.endswith('.csv'):
                     filepath = os.path.join(trials_data_path, filename)
                     choices.append((filepath, filename))  # (value, label)
+                    
+            # Also look for combined datasets from processor
+            if 'combined_eeg_dataset.csv' in os.listdir(trials_data_path):
+                filepath = os.path.join(trials_data_path, 'combined_eeg_dataset.csv')
+                choices.append((filepath, '📊 combined_eeg_dataset.csv'))
+                
+            # Add train/test datasets if they exist
+            if 'train_dataset.csv' in os.listdir(trials_data_path):
+                filepath = os.path.join(trials_data_path, 'train_dataset.csv')
+                choices.append((filepath, '🧠 train_dataset.csv'))
+                
+            if 'test_dataset.csv' in os.listdir(trials_data_path):
+                filepath = os.path.join(trials_data_path, 'test_dataset.csv')
+                choices.append((filepath, '🔍 test_dataset.csv'))
         
         return choices
 
@@ -237,5 +337,21 @@ class CleaningForm(forms.Form):
                 self.add_error('apply_highpass', "")
             if cleaned_data.get('apply_lowpass'):
                 self.add_error('apply_lowpass', "")
+                
+        # Validate train-test split parameters
+        if cleaned_data.get('create_train_test_split'):
+            test_size = cleaned_data.get('test_size')
+            if test_size is None:
+                self.add_error('test_size', "Test size is required when creating train-test split")
+            elif test_size < 0.1 or test_size > 0.5:
+                self.add_error('test_size', "Test size must be between 0.1 and 0.5")
+                
+        # Validate outlier removal parameters
+        if cleaned_data.get('remove_outliers'):
+            outlier_threshold = cleaned_data.get('outlier_threshold')
+            if outlier_threshold is None:
+                self.add_error('outlier_threshold', "Outlier threshold is required when removing outliers")
+            elif outlier_threshold < 1.0:
+                self.add_error('outlier_threshold', "Outlier threshold must be at least 1.0")
 
         return cleaned_data

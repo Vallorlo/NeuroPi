@@ -800,6 +800,8 @@ def extract_speech_features(data, fs=128, event_data=None):
         print(f"Error extracting speech features: {e}")
         return None
 
+
+
 def clean_eeg_data(input_file, output_file,
                    apply_bandpass=False, lowcut=None, highcut=None, fs=128, bandpass_order=5,
                    apply_highpass=False, highpass_cutoff=None, highpass_order=5,
@@ -807,9 +809,13 @@ def clean_eeg_data(input_file, output_file,
                    apply_notch=False, notch_freq=None, notch_quality=30,
                    apply_ica=False, ica_method='fastica', random_seed=None,
                    generate_plots=False, extract_features=False,
-                   check_signal_quality=True, auto_scale=True):
+                   check_signal_quality=True, auto_scale=True,
+                   create_train_test_split=False, test_size=0.2, random_state=42, stratify_by_word=True,
+                   include_channels=None, compute_band_powers=False, normalize_data=False,
+                   remove_outliers=False, outlier_threshold=3.0):
     """
     Cleans EEG data optimized for speech detection, applying appropriate filters and ICA.
+    Also supports train-test splitting and additional preprocessing options.
     
     Parameters:
     -----------
@@ -857,13 +863,29 @@ def clean_eeg_data(input_file, output_file,
         Whether to check and report signal quality issues
     auto_scale : bool
         Whether to automatically scale data if values are unusually low
+    create_train_test_split : bool
+        Whether to create train and test datasets
+    test_size : float
+        Proportion of data to use for testing (0.0 to 1.0)
+    random_state : int
+        Random seed for train-test split
+    stratify_by_word : bool
+        Whether to stratify train-test split by word
+    include_channels : list
+        List of channel names to include (None for all channels)
+    compute_band_powers : bool
+        Whether to compute frequency band powers as features
+    normalize_data : bool
+        Whether to normalize data (z-score)
+    remove_outliers : bool
+        Whether to remove outliers
+    outlier_threshold : float
+        Threshold for outlier removal in standard deviations
         
     Returns:
     --------
-    str
-        Message indicating success or failure
-    dict, optional
-        Dictionary containing additional information (plots, features)
+    dict
+        Dictionary containing status, message, and other information
     """
 
     try:
@@ -878,12 +900,26 @@ def clean_eeg_data(input_file, output_file,
         df = pd.read_csv(input_file)
         print(f"Dataframe shape: {df.shape}")
 
+        # Check for metadata columns from the processor
+        metadata_columns = ['participant_id', 'word', 'stage', 'attempt']
+        has_metadata = all(col in df.columns for col in metadata_columns)
+        
+        if has_metadata:
+            print("Detected metadata columns from processor. These will be preserved.")
+        
         # Identify columns for EEG data and event markers
-        sensor_columns = [col for col in df.columns if col != 'Timestamp' and not col.endswith('_event')]
+        sensor_columns = [col for col in df.columns if col not in ['Timestamp', 'participant_id', 'word', 'stage', 'attempt'] and not col.endswith('_event')]
         event_columns = [col for col in df.columns if col.endswith('_event')]
         
         print(f"Sensor columns: {sensor_columns}")
         print(f"Event columns: {event_columns}")
+        
+        # Filter channels if specified
+        if include_channels:
+            print(f"Filtering to include only specified channels: {include_channels}")
+            sensor_columns = [col for col in sensor_columns if col in include_channels]
+            if not sensor_columns:
+                return {'status': 'error', 'message': "No matching channels found. Please check channel names."}
         
         # Extract EEG data into a format suitable for processing (channels x samples)
         data = df[sensor_columns].values.T
@@ -993,6 +1029,40 @@ def clean_eeg_data(input_file, output_file,
                 print("Applying ICA for artifact removal...")
                 data = apply_mne_ica(data, method=ica_method, random_state=random_seed, fs=fs)
                 print("ICA artifact removal completed")
+        
+        # Remove outliers if requested
+        if remove_outliers:
+            print(f"Removing outliers (threshold: {outlier_threshold} standard deviations)...")
+            # Calculate mean and std for each channel
+            means = np.mean(data, axis=1, keepdims=True)
+            stds = np.std(data, axis=1, keepdims=True)
+            
+            # Find outliers
+            z_scores = np.abs((data - means) / stds)
+            outlier_mask = z_scores > outlier_threshold
+            
+            # Replace outliers with channel mean
+            data_cleaned = data.copy()
+            for i in range(data.shape[0]):
+                channel_outliers = outlier_mask[i]
+                if np.any(channel_outliers):
+                    # Replace with interpolation or mean
+                    data_cleaned[i, channel_outliers] = means[i, 0]
+                    print(f"Channel {sensor_columns[i]}: {np.sum(channel_outliers)} outliers removed")
+            
+            data = data_cleaned
+            print("Outlier removal completed")
+            
+        # Normalize data if requested
+        if normalize_data:
+            print("Normalizing data (z-score)...")
+            # Calculate mean and std for each channel
+            means = np.mean(data, axis=1, keepdims=True)
+            stds = np.std(data, axis=1, keepdims=True)
+            
+            # Z-score normalization
+            data = (data - means) / stds
+            print("Data normalized")
 
         # Generate diagnostic plots if requested
         plot_info = None
@@ -1000,6 +1070,41 @@ def clean_eeg_data(input_file, output_file,
             print("Generating diagnostic plots...")
             plot_info = generate_diagnostic_plots(data, fs, output_dir=diag_dir)
             print(f"Diagnostic plots saved to: {diag_dir}")
+
+        # Compute frequency band powers if requested
+        band_powers_df = None
+        if compute_band_powers:
+            print("Computing frequency band powers...")
+            # Define frequency bands of interest
+            bands = {
+                'delta': (0.5, 4),
+                'theta': (4, 8),
+                'alpha': (8, 13),
+                'beta': (13, 30),
+                'gamma': (30, 50)
+            }
+            
+            # Compute band powers for each channel
+            band_powers = {}
+            for i, channel in enumerate(sensor_columns):
+                channel_powers = {}
+                for band_name, (low, high) in bands.items():
+                    # Filter data to isolate band
+                    band_data = butter_bandpass_filter(data[i], low, high, fs)
+                    # Compute power (variance of filtered signal)
+                    power = np.var(band_data)
+                    channel_powers[f"{channel}_{band_name}"] = power
+                
+                band_powers.update(channel_powers)
+            
+            # Create dataframe with band powers
+            band_powers_df = pd.DataFrame(band_powers, index=[0])
+            print("Frequency band powers computed")
+            
+            # Save band powers to a separate file
+            band_powers_file = os.path.join(os.path.dirname(output_file), 'band_powers.csv')
+            band_powers_df.to_csv(band_powers_file, index=False)
+            print(f"Band powers saved to: {band_powers_file}")
 
         # Extract speech-related features if requested
         feature_info = None
@@ -1021,13 +1126,56 @@ def clean_eeg_data(input_file, output_file,
         df.to_csv(output_file, index=False)
         print(f"Cleaned data saved to: {output_file}")
         
+        # Create train-test split if requested
+        train_file = None
+        test_file = None
+        if create_train_test_split:
+            print("Creating train-test split...")
+            try:
+                from sklearn.model_selection import train_test_split
+                
+                # Determine stratification
+                stratify = None
+                if stratify_by_word and 'word' in df.columns:
+                    stratify = df['word']
+                elif event_columns and stratify_by_word:
+                    # Use the first event column for stratification
+                    stratify = df[event_columns[0]]
+                
+                # Create the split
+                train_df, test_df = train_test_split(
+                    df, 
+                    test_size=test_size,
+                    random_state=random_state,
+                    stratify=stratify
+                )
+                
+                # Save the train and test datasets
+                train_file = os.path.join(os.path.dirname(output_file), 'train_' + os.path.basename(output_file))
+                test_file = os.path.join(os.path.dirname(output_file), 'test_' + os.path.basename(output_file))
+                
+                train_df.to_csv(train_file, index=False)
+                test_df.to_csv(test_file, index=False)
+                
+                print(f"Train dataset saved to: {train_file} ({len(train_df)} rows)")
+                print(f"Test dataset saved to: {test_file} ({len(test_df)} rows)")
+            except Exception as e:
+                print(f"Error creating train-test split: {e}")
+                
         # Return success message and additional information
         result = {
             'status': 'success',
             'message': 'Data cleaned and saved successfully!',
             'plots': plot_info,
             'features': feature_info is not None,
-            'signal_stats': signal_stats
+            'band_powers': compute_band_powers,
+            'train_test_split': create_train_test_split,
+            'train_file': train_file,
+            'test_file': test_file,
+            'signal_stats': signal_stats,
+            'channels_processed': sensor_columns,
+            'total_samples': data.shape[1],
+            'event_types': event_columns
         }
         
         # Add warnings to result if any
@@ -1046,50 +1194,4 @@ def clean_eeg_data(input_file, output_file,
         print(error_message)
         import traceback
         traceback.print_exc()
-        return {'status': 'error', 'message': error_message}
-
-        # Generate diagnostic plots if requested
-        plot_info = None
-        if generate_plots:
-            print("Generating diagnostic plots...")
-            plot_info = generate_diagnostic_plots(data, fs, output_dir=diag_dir)
-            print(f"Diagnostic plots saved to: {diag_dir}")
-
-        # Extract speech-related features if requested
-        feature_info = None
-        if extract_features:
-            print("Extracting speech-related features...")
-            feature_info = extract_speech_features(data, fs, event_data=event_data)
-            
-            # Save features to a separate file
-            if feature_info:
-                feature_file = os.path.join(os.path.dirname(output_file), 'speech_features.npz')
-                np.savez(feature_file, **feature_info)
-                print(f"Speech features saved to: {feature_file}")
-
-        # Write cleaned data back to the dataframe
-        df[sensor_columns] = data.T
-        print(f"Data shape after processing: {df[sensor_columns].values.shape}")
-
-        # Save the cleaned data
-        df.to_csv(output_file, index=False)
-        print(f"Cleaned data saved to: {output_file}")
-        
-        # Return success message and additional information
-        result = {
-            'status': 'success',
-            'message': 'Data cleaned and saved successfully!',
-            'plots': plot_info,
-            'features': feature_info is not None
-        }
-        
-        return result
-
-    except FileNotFoundError:
-        error_message = f"Error: Input file not found: {input_file}"
-        print(error_message)
-        return {'status': 'error', 'message': error_message}
-    except Exception as e:
-        error_message = f"An unexpected error occurred: {str(e)}"
-        print(error_message)
         return {'status': 'error', 'message': error_message}

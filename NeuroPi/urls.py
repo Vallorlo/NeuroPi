@@ -26,4 +26,5 @@ urlpatterns = [
     path('trials/', include('trials.urls')),# look inside the trials app, then look inside the urls file inside.
     path('plot/', include('plot.urls')),
     path('processor/', include('processor.urls')),  # Include processor app's URLs
+    path('cleaner/', include('cleaner.urls')),
 ]

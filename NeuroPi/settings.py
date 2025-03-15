@@ -41,6 +41,7 @@ INSTALLED_APPS = [
     'trials',
     'plot.apps.PlotConfig',
     'processor',
+    'cleaner', 
 ]
 
 MIDDLEWARE = [

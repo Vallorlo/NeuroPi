@@ -42,6 +42,10 @@ ul {
     text-decoration: none;
     color:white;
 }
+
+.ulguide{
+    color:black !important;
+}
  
 
 a:hover {

@@ -23,5 +23,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.homepage ), #for the main site - #page to be called, #a function that is called when a reuest is sent to that page 
     path('about/', views.about ), #an about section
-    path('trials/', include('trials.urls'))# look inside the trials app, then look inside the urls file inside.
+    path('trials/', include('trials.urls')),# look inside the trials app, then look inside the urls file inside.
+    path('plot/', include('plot.urls')),
 ]

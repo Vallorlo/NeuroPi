@@ -95,17 +95,6 @@
                     </div>
                 </div>
             </div>
-            
-            <div class="d-flex justify-content-between mt-4">
-                <a href="{% url 'start_trial' %}" class="btn btn-outline-primary">
-                    <i class="bi bi-arrow-left"></i> Back to Trial Selection
-                </a>
-                {% if completed_stages %}
-                    <a href="{% url 'plot' %}?user={{ participant_name }}" class="btn btn-info">
-                        <i class="bi bi-graph-up"></i> View EEG Data
-                    </a>
-                {% endif %}
-            </div>
         </div>
     </div>
 </div>

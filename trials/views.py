@@ -124,6 +124,19 @@ def capture_stage(request):
             except Exception as e:
                 return JsonResponse({'status': 'error', 'message': str(e)})
             
+        # Check if it's a capture restart request
+        elif 'restart_capture' in request.POST:
+            # Clear existing timestamps
+            if os.path.exists(timestamp_file):
+                os.remove(timestamp_file)
+                
+            # Clear session timestamps
+            request.session['timestamps'] = []
+            request.session.modified = True
+            
+            # Redirect back to the same page to restart the capture
+            return redirect(f"{request.path}?word={word}&stage={stage}&attempt={attempt_number}")
+            
         else:
             # For a new capture start, create/overwrite the timestamp file
             # Just create an empty file - no headers or additional info
@@ -135,7 +148,7 @@ def capture_stage(request):
             output_audio = os.path.join(participant_folder, f'audio_attempt_{attempt_number}.wav')
             
             try:
-                # Start data collection immediately (EEG and audio)
+                # Start data collection (EEG and audio)
                 # Set duration to 30 seconds
                 capture_duration = 30
                 captured_data = collect_stage_data(capture_duration, output_file, output_audio)
@@ -167,6 +180,7 @@ def capture_stage(request):
         'timestamps': timestamps,
         'max_attempts': 5,  # Set the maximum number of attempts
     })
+
 
 
 def completed_trials(request):

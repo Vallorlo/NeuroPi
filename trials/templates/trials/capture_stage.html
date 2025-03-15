@@ -91,17 +91,30 @@
                         <div class="alert alert-success">
                             <i class="bi bi-check-circle-fill"></i> Data captured successfully!
                             <div class="mt-3">
-                                {% if attempt_number|add:"0" < max_attempts|add:"0" %}
-                                    <a href="?word={{ word }}&stage={{ stage }}&attempt={{ attempt_number|add:"1" }}" class="btn btn-primary">
-                                        Next Attempt ({{ attempt_number|add:"1" }} of {{ max_attempts }})
-                                    </a>
-                                {% else %}
-                                    <div class="alert alert-info">
+                                <div class="d-flex justify-content-between">
+                                    <form method="post" id="restartForm">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="restart_capture" value="true">
+                                        <button type="submit" class="btn btn-warning">
+                                            <i class="bi bi-arrow-repeat"></i> Restart This Attempt
+                                        </button>
+                                    </form>
+                                    
+                                    {% if attempt_number|add:"0" < max_attempts|add:"0" %}
+                                        <a href="?word={{ word }}&stage={{ stage }}&attempt={{ attempt_number|add:"1" }}" class="btn btn-primary">
+                                            Next Attempt ({{ attempt_number|add:"1" }} of {{ max_attempts }})
+                                        </a>
+                                    {% else %}
+                                        <a href="{% url 'word_trials' %}?word={{ word }}" class="btn btn-success">
+                                            <i class="bi bi-arrow-left"></i> Return to Trial List
+                                        </a>
+                                    {% endif %}
+                                </div>
+                                
+                                {% if attempt_number|add:"0" >= max_attempts|add:"0" %}
+                                    <div class="alert alert-info mt-3">
                                         <i class="bi bi-info-circle-fill"></i> All attempts completed!
                                     </div>
-                                    <a href="{% url 'word_trials' %}?word={{ word }}" class="btn btn-success">
-                                        <i class="bi bi-arrow-left"></i> Return to Trial List
-                                    </a>
                                 {% endif %}
                             </div>
                         </div>
@@ -148,7 +161,7 @@
                     {% endif %}
                     
                     <!-- Timestamps display -->
-                    <div class="card" id="timestampsContainer" style="display: none;">
+                    <div class="card" id="timestampsContainer" style="display: {% if timestamps %}block{% else %}none{% endif %};">
                         <div class="card-header bg-info text-white">
                             <h5 class="mb-0">Recorded Timestamps</h5>
                         </div>
@@ -171,187 +184,218 @@
                 <a href="{% url 'word_trials' %}?word={{ word }}" class="btn btn-outline-primary">
                     <i class="bi bi-arrow-left"></i> Back to Stage Selection
                 </a>
+                
+                <!-- If this is a completed attempt, add view data button -->
+                {% if captured_data %}
+                <a href="{% url 'eeg_view' %}?user={{ participant_name }}" class="btn btn-outline-info">
+                    <i class="bi bi-graph-up"></i> View EEG Data
+                </a>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        const startCaptureBtn = document.getElementById('startCaptureBtn');
-        const timestampBtn = document.getElementById('timestampBtn');
-        const captureForm = document.getElementById('captureForm');
-        const timestampsContainer = document.getElementById('timestampsContainer');
-        const timestampsList = document.getElementById('timestampsList');
-        const captureProgress = document.getElementById('captureProgress');
-        const progressBar = document.getElementById('progressBar');
-        const captureStatus = document.getElementById('captureStatus');
-        const statusText = document.getElementById('statusText');
-        const audioVisualizer = document.getElementById('audioVisualizer');
-        const audioCanvas = document.getElementById('audioMeter');
-        
-        let captureStartTime = null;
-        let isCapturing = false;
-        let captureTimer = null;
-        let captureDuration = 30; // seconds
-        
-        // Check if there are existing timestamps
-        if (timestampsList && timestampsList.children.length > 0) {
+document.addEventListener('DOMContentLoaded', function() {
+    const startCaptureBtn = document.getElementById('startCaptureBtn');
+    const timestampBtn = document.getElementById('timestampBtn');
+    const captureForm = document.getElementById('captureForm');
+    const timestampsContainer = document.getElementById('timestampsContainer');
+    const timestampsList = document.getElementById('timestampsList');
+    const captureProgress = document.getElementById('captureProgress');
+    const progressBar = document.getElementById('progressBar');
+    const captureStatus = document.getElementById('captureStatus');
+    const statusText = document.getElementById('statusText');
+    const audioVisualizer = document.getElementById('audioVisualizer');
+    const audioCanvas = document.getElementById('audioMeter');
+    
+    let captureStartTime = null;
+    let isCapturing = false;
+    let captureTimer = null;
+    let captureDuration = 30; // seconds
+    
+    // Check if there are existing timestamps
+    if (timestampsList && timestampsList.children.length > 0) {
+        timestampsContainer.style.display = 'block';
+    }
+
+    // Start capture button
+    if (startCaptureBtn) {
+        startCaptureBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            // Set UI state for capturing
+            isCapturing = true;
+            captureStartTime = new Date();
+            
+            // Show capture UI elements
+            timestampBtn.style.display = 'block';
+            timestampBtn.disabled = false;
+            startCaptureBtn.disabled = true;
+            captureProgress.style.display = 'block';
+            captureStatus.style.display = 'block';
+            audioVisualizer.style.display = 'block';
+            
+            // Clear existing timestamps from the current attempt
+            while (timestampsList.firstChild) {
+                timestampsList.removeChild(timestampsList.firstChild);
+            }
             timestampsContainer.style.display = 'block';
-        }
-    
-        // Start capture button
-        if (startCaptureBtn) {
-            startCaptureBtn.addEventListener('click', function(e) {
-                e.preventDefault();
-                
-                // Update UI immediately to show we're starting
-                statusText.textContent = 'Starting EEG and audio capture...';
-                captureStatus.style.display = 'block';
-                
-                // Set UI state for capturing
-                isCapturing = true;
-                captureStartTime = new Date();
-                
-                // Show capture UI elements
-                timestampBtn.style.display = 'block';
-                timestampBtn.disabled = false;
-                startCaptureBtn.disabled = true;
-                startCaptureBtn.textContent = 'Recording in progress...';
-                timestampsContainer.style.display = 'block';
-                captureProgress.style.display = 'block';
-                audioVisualizer.style.display = 'block';
-                
-                // Clear existing timestamps from the current attempt
-                while (timestampsList.firstChild) {
-                    timestampsList.removeChild(timestampsList.firstChild);
-                }
-                
-                // Submit the form immediately to start the capture
-                // The actual capture starts on the server
-                captureForm.submit();
-                
-                // The rest of the UI updates are for visual feedback only,
-                // since the actual recording is now happening on the server
-                
-                // Start progress timer for the UI
-                let elapsed = 0;
-                captureTimer = setInterval(function() {
-                    elapsed++;
-                    const percentage = Math.min(Math.round((elapsed / captureDuration) * 100), 100);
-                    progressBar.style.width = percentage + '%';
-                    progressBar.setAttribute('aria-valuenow', percentage);
-                    
-                    // Update status text
-                    statusText.textContent = `Recording in progress... ${elapsed}s / ${captureDuration}s`;
-                    
-                    // Simulate audio visualization
-                    if (audioCanvas) {
-                        const ctx = audioCanvas.getContext('2d');
-                        drawAudioLevel(ctx, audioCanvas.width, audioCanvas.height);
-                    }
-                }, 1000);
-            });
-        }
-    
-        // Timestamp button
-        if (timestampBtn) {
-            timestampBtn.addEventListener('click', function() {
-                if (!isCapturing) return;
-                
-                const currentTime = new Date();
-                const elapsedMs = currentTime - captureStartTime;
-                
-                // Format elapsed time as minutes:seconds.milliseconds
-                const minutes = Math.floor(elapsedMs / 60000);
-                const seconds = Math.floor((elapsedMs % 60000) / 1000);
-                const ms = elapsedMs % 1000;
-                const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
-                
-                // Add visual feedback for button press
-                timestampBtn.classList.add('btn-success');
-                timestampBtn.classList.remove('btn-warning');
-                setTimeout(() => {
-                    timestampBtn.classList.add('btn-warning');
-                    timestampBtn.classList.remove('btn-success');
-                }, 300);
-                
-                // Add to the list
-                const listItem = document.createElement('li');
-                listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
-                
-                const icon = document.createElement('i');
-                icon.className = 'bi bi-bookmark-check-fill text-success';
-                
-                const timeSpan = document.createElement('span');
-                timeSpan.textContent = `Time: ${formattedTime}`;
-                
-                const badge = document.createElement('span');
-                badge.className = 'badge bg-primary rounded-pill';
-                badge.textContent = `Event ${timestampsList.children.length + 1}`;
-                
-                listItem.appendChild(icon);
-                listItem.appendChild(timeSpan);
-                listItem.appendChild(badge);
-                timestampsList.appendChild(listItem);
-                
-                // Send to server via AJAX
-                const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
-                
-                fetch(window.location.href, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: new URLSearchParams({
-                        'timestamp_event': 'true',
-                        'timestamp': formattedTime
-                    })
+            
+            // Update status text
+            statusText.textContent = 'Starting data collection...';
+            
+            // Submit the form to start data collection
+            captureForm.submit();
+        });
+    }
+
+    // Timestamp button
+    if (timestampBtn) {
+        timestampBtn.addEventListener('click', function() {
+            if (!isCapturing) return;
+            
+            const currentTime = new Date();
+            const elapsedMs = currentTime - captureStartTime;
+            
+            // Format elapsed time as minutes:seconds.milliseconds
+            const minutes = Math.floor(elapsedMs / 60000);
+            const seconds = Math.floor((elapsedMs % 60000) / 1000);
+            const ms = elapsedMs % 1000;
+            const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${ms.toString().padStart(3, '0')}`;
+            
+            // Add visual feedback for button press
+            timestampBtn.classList.add('btn-success');
+            timestampBtn.classList.remove('btn-warning');
+            setTimeout(() => {
+                timestampBtn.classList.add('btn-warning');
+                timestampBtn.classList.remove('btn-success');
+            }, 300);
+            
+            // Add to the list
+            const listItem = document.createElement('li');
+            listItem.className = 'list-group-item d-flex justify-content-between align-items-center';
+            
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-bookmark-check-fill text-success';
+            
+            const timeSpan = document.createElement('span');
+            timeSpan.textContent = `Time: ${formattedTime}`;
+            
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-primary rounded-pill';
+            badge.textContent = `Event ${timestampsList.children.length + 1}`;
+            
+            listItem.appendChild(icon);
+            listItem.appendChild(timeSpan);
+            listItem.appendChild(badge);
+            timestampsList.appendChild(listItem);
+            
+            // Send to server via AJAX
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrfToken
+                },
+                body: new URLSearchParams({
+                    'timestamp_event': 'true',
+                    'timestamp': formattedTime
                 })
-                .then(response => response.json())
-                .then(data => {
-                    console.log('Timestamp saved:', data);
-                })
-                .catch(error => {
-                    console.error('Error saving timestamp:', error);
-                });
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Timestamp saved:', data);
+            })
+            .catch(error => {
+                console.error('Error saving timestamp:', error);
             });
+        });
+    }
+    
+    // Audio visualization function for UI feedback
+    function startAudioVisualization() {
+        if (!audioCanvas) return;
+        
+        const ctx = audioCanvas.getContext('2d');
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
+        
+        // Simulated audio levels
+        let audioTimer = setInterval(() => {
+            drawAudioLevel(ctx, audioCanvas.width, audioCanvas.height);
+        }, 100);
+        
+        // Store timer ID for cleanup
+        audioCanvas.dataset.timerId = audioTimer;
+    }
+    
+    function stopAudioVisualization() {
+        if (!audioCanvas) return;
+        
+        // Clear the visualization timer
+        const timerId = audioCanvas.dataset.timerId;
+        if (timerId) {
+            clearInterval(parseInt(timerId));
+            delete audioCanvas.dataset.timerId;
         }
         
-        // Audio visualization function for UI feedback
-        function drawAudioLevel(ctx, width, height) {
-            // Simulate audio level (higher when speaking, lower when silent)
-            let level = Math.random() * 0.6; // Base random level
-            
-            // Occasionally simulate speech with higher levels
-            if (Math.random() > 0.7) {
-                level = 0.5 + Math.random() * 0.5; // Higher level for "speech"
-            }
-            
-            // Clear canvas
-            ctx.fillStyle = '#f0f0f0';
-            ctx.fillRect(0, 0, width, height);
-            
-            // Draw level bar
-            const barWidth = Math.floor(level * width);
-            
-            // Color gradient based on level
-            let color = '#28a745'; // Green for low
-            if (level > 0.7) color = '#dc3545'; // Red for high
-            else if (level > 0.4) color = '#ffc107'; // Yellow for medium
-            
-            ctx.fillStyle = color;
-            ctx.fillRect(0, 0, barWidth, height);
-            
-            // Draw level markers
-            ctx.fillStyle = '#6c757d';
-            for (let i = 0.2; i <= 1; i += 0.2) {
-                const x = Math.floor(i * width);
-                ctx.fillRect(x, 0, 1, height);
-            }
+        // Draw empty visualization
+        const ctx = audioCanvas.getContext('2d');
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
+    }
+    
+    function drawAudioLevel(ctx, width, height) {
+        // Simulate audio level (higher when speaking, lower when silent)
+        let level = Math.random() * 0.6; // Base random level
+        
+        // Occasionally simulate speech with higher levels
+        if (Math.random() > 0.7) {
+            level = 0.5 + Math.random() * 0.5; // Higher level for "speech"
         }
-    });
+        
+        // Clear canvas
+        ctx.fillStyle = '#f0f0f0';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Draw level bar
+        const barWidth = Math.floor(level * width);
+        
+        // Color gradient based on level
+        let color = '#28a745'; // Green for low
+        if (level > 0.7) color = '#dc3545'; // Red for high
+        else if (level > 0.4) color = '#ffc107'; // Yellow for medium
+        
+        ctx.fillStyle = color;
+        ctx.fillRect(0, 0, barWidth, height);
+        
+        // Draw level markers
+        ctx.fillStyle = '#6c757d';
+        for (let i = 0.2; i <= 1; i += 0.2) {
+            const x = Math.floor(i * width);
+            ctx.fillRect(x, 0, 1, height);
+        }
+    }
+    
+    // Start visualizations when the page loads
+    if (startCaptureBtn) {
+        startAudioVisualization();
+        
+        // Start progress timer for the UI
+        let elapsed = 0;
+        captureTimer = setInterval(function() {
+            elapsed++;
+            if (elapsed >= captureDuration) {
+                clearInterval(captureTimer);
+                stopAudioVisualization();
+            }
+        }, 1000);
+    }
+});
 </script>
 
 <style>

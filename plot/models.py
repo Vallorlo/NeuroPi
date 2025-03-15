@@ -1,4 +1,6 @@
 from django.db import models
+import matplotlib
+matplotlib.use('Agg')  # Use the non-GUI 'Agg' backend
 import os
 import pandas as pd
 import numpy as np

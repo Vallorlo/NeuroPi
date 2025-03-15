@@ -1,0 +1,30 @@
+<!-- processor/templates/processor/process_data.html -->
+
+{% extends "layout.html" %}
+{% block content%}
+<body>
+ <div class="container mt-5">
+    <h1>EEG Data Processor</h1>
+    <form method="post" enctype="multipart/form-data">  <!-- Add enctype for file uploads -->
+        {% csrf_token %}
+        {{ form.as_p }}  <!-- Render the form -->
+
+         <button type="submit" class="btn btn-primary">Process Data</button>
+    </form>
+
+     {% if message %}
+         <div class="alert alert-info mt-3" role="alert">
+             {{ message }}
+         </div>
+     {% endif %}
+
+     {% if output %}
+         <div class="mt-3">
+             <h2>Output:</h2>
+             <pre>{{ output }}</pre> <!-- Display output in a preformatted block -->
+         </div>
+     {% endif %}
+     </div>
+
+</body>
+{%endblock content%}

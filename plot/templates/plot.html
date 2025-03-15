@@ -1,0 +1,106 @@
+{% extends "layout.html" %}
+
+{% block content %}
+    
+    <section class="plot">
+        <h2>Select User:</h2>
+    <form id="userForm">
+        <select name="user" id="userSelect">
+            <option value="">-- Select User --</option>
+            {% for user in users %}
+            <option value="{{ user }}" {% if user|stringformat:"s" == selected_user %}selected{% endif %}>{{ user }}</option>
+            {% endfor %}
+        </select>
+    </form>
+    
+    {% if plots %}
+        <h2>EEG Data for {{ selected_user }}</h2>
+
+        {% for word, stages in plots.items %}
+            <h3>{{ word }}</h3>
+
+            {% for stage, images in stages.items %}
+                <button onclick="toggleStage('{{ word }}_{{ stage }}')">{{ stage }}</button>
+                <div id="{{ word }}_{{ stage }}" style="display: none;">
+                    {% for image in images %}
+                        <img src="data:image/png;base64,{{ image }}" alt="EEG Plot"
+                            style="width: 100%; max-width: 800px; margin-bottom: 10px;">
+                    {% endfor %}
+                </div>
+            {% endfor %}
+        {% endfor %}
+    {% endif %}
+    </section>
+
+    <script>
+        document.getElementById('userSelect').addEventListener('change', function() {
+            var selectedUser = this.value;
+            var url = new URL(window.location.href);
+            url.searchParams.set('user', selectedUser);
+            window.history.pushState({}, '', url);
+            fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.text())
+            .then(html => {
+                document.open();
+                document.write(html);
+                document.close();
+            })
+            .catch(error => console.error('Error:', error));
+        });
+
+        function toggleStage(stageId) {
+            var div = document.getElementById(stageId);
+            div.style.display = (div.style.display === "none") ? "block" : "none";
+        }
+    </script>
+
+    <style>
+        body {
+            /* font-family: Arial, sans-serif; */
+            /* margin: 20px; */
+        }
+        .id{
+            padding: 20px;
+        }
+
+        h2 {
+            color: #333;
+        }
+
+        form {
+            margin-bottom: 20px;
+        }
+
+        select {
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 10px 0;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #007BFF;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        img {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 5px;
+            margin: 10px 0;
+        }
+    </style>
+{% endblock content %}

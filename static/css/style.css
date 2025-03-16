@@ -20,7 +20,7 @@ h1 {
 }
 
 .home {     
-    height: 100vh;
+    /* height: 100vh; */
     background-image: linear-gradient(rgb(0,0,0,.6),rgb(0,0,0,.6)), url( ../images/backgroung.jpeg) ;  
     background-size:cover;
     background-position:center;
@@ -33,9 +33,7 @@ h1 {
 
  
 p {
-     
- font-size: 2rem;
-
+ font-size: 1rem;
 }
 
 ul {

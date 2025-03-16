@@ -6,12 +6,34 @@
 
 {% block content %}
 <div class="home">
+    <!-- after -->
     <div class="container-fluid py-5">
         <div class="row">
             <div class="col-lg-8 offset-lg-2 text-center">
                 <h1 class="display-3 text-white mb-4">Welcome to Neuro<span class="text-danger fw-bold">π</span></h1>
                 <p class="lead text-white mb-5">A comprehensive platform for EEG data collection, processing, and neural network analysis</p>
+                <div class="d-grid gap-3 d-sm-flex justify-content-sm-center custom-layout">
+                    <a href="{% url 'start_trial' %}" class="btn btn-primary btn-lg px-4">
+                        <i class="bi bi-play-circle-fill"></i> Start New Trial
+                    </a>
+                    <a href="{% url 'pi_main:model_dashboard' %}" class="btn btn-success btn-lg px-4">
+                        <i class="bi bi-lightning-charge"></i> Neural Networks
+                    </a>
+                    <a href="{% url 'completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
+                        <i class="bi bi-list-check"></i> View Completed Trials
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- before -->
+    <!-- <div class="container-fluid py-5">
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2 text-center">
+                <h1 class="display-3 text-white mb-4">Welcome to Neuro<span class="text-danger fw-bold">π</span></h1>
+                <p class="lead text-white mb-5">A comprehensive platform for EEG data collection, processing, and neural network analysis</p>
                 <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
+
                     <a href="{% url 'start_trial' %}" class="btn btn-primary btn-lg px-4 me-sm-3">
                         <i class="bi bi-play-circle-fill"></i> Start New Trial
                     </a>
@@ -24,11 +46,13 @@
                 </div>
             </div>
         </div>
-    </div>
-
-    <div class="container mt-5 pb-5">
+    </div> -->
+    <!-- --------------------- -->
+    <div class="container-fluid container-md mt-5 pb-5">
+        <!-- 4 card -->
         <div class="row g-4">
-            <div class="col-lg-3">
+            <!-- Data Collection card -->
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div class="card h-100 shadow-lg">
                     <div class="card-body text-center p-4">
                         <i class="bi bi-braces-asterisk text-primary" style="font-size: 3rem;"></i>
@@ -38,7 +62,8 @@
                     </div>
                 </div>
             </div>
-            <div class="col-lg-3">
+            <!-- Processing card -->
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div class="card h-100 shadow-lg">
                     <div class="card-body text-center p-4">
                         <i class="bi bi-cpu text-danger" style="font-size: 3rem;"></i>
@@ -51,17 +76,19 @@
                     </div>
                 </div>
             </div>
-            <div class="col-lg-3">
+            <!-- Visualization card -->
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div class="card h-100 shadow-lg">
                     <div class="card-body text-center p-4">
                         <i class="bi bi-graph-up text-success" style="font-size: 3rem;"></i>
-                        <h2 class="card-title mt-3">Visualization</h2>
+                        <h2 class="card-title mt-3 text-nowrap">Visualization</h2>
                         <p class="card-text">Visualize and analyze EEG data with interactive plots, comparing different stages and channels.</p>
                         <a href="{% url 'eeg_view' %}" class="btn btn-outline-success mt-2">View Plots</a>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-3">
+            <!-- Neural Networks card-->
+            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div class="card h-100 shadow-lg">
                     <div class="card-body text-center p-4">
                         <i class="bi bi-lightning-charge text-warning" style="font-size: 3rem;"></i>
@@ -75,54 +102,55 @@
                 </div>
             </div>
         </div>
-        
-        <div class="row mt-5">
-            <div class="col-12">
-                <div class="card shadow-lg">
-                    <div class="card-body p-4">
-                        <h2 class="text-center mb-4">Research Workflow</h2>
-                        <div class="timeline">
-                            <div class="timeline-item">
-                                <div class="timeline-marker bg-primary">1</div>
-                                <div class="timeline-content">
-                                    <h4>Trial Setup</h4>
-                                    <p>Create a new trial by selecting a participant and word</p>
-                                </div>
+    </div>
+</div>
+<div class="container-fluid container-md pb-5">
+    <div class="row mt-5 research-workflow">
+        <div class="col-12">
+            <div class="card shadow-lg">
+                <div class="card-body p-4">
+                    <h2 class="text-center mb-4">Research Workflow</h2>
+                    <div class="timeline">
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary">1</div>
+                            <div class="timeline-content">
+                                <h4>Trial Setup</h4>
+                                <p>Create a new trial by selecting a participant and word</p>
                             </div>
-                            <div class="timeline-item">
-                                <div class="timeline-marker bg-primary">2</div>
-                                <div class="timeline-content">
-                                    <h4>Data Collection</h4>
-                                    <p>Collect EEG and audio data across 5 different stages</p>
-                                </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary">2</div>
+                            <div class="timeline-content">
+                                <h4>Data Collection</h4>
+                                <p>Collect EEG and audio data across 5 different stages</p>
                             </div>
-                            <div class="timeline-item">
-                                <div class="timeline-marker bg-primary">3</div>
-                                <div class="timeline-content">
-                                    <h4>Data Processing</h4>
-                                    <p>Process raw data to identify speech/motor events and create datasets</p>
-                                </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary">3</div>
+                            <div class="timeline-content">
+                                <h4>Data Processing</h4>
+                                <p>Process raw data to identify speech/motor events and create datasets</p>
                             </div>
-                            <div class="timeline-item">
-                                <div class="timeline-marker bg-primary">4</div>
-                                <div class="timeline-content">
-                                    <h4>Signal Cleaning</h4>
-                                    <p>Apply filters and remove artifacts to improve signal quality</p>
-                                </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary">4</div>
+                            <div class="timeline-content">
+                                <h4>Signal Cleaning</h4>
+                                <p>Apply filters and remove artifacts to improve signal quality</p>
                             </div>
-                            <div class="timeline-item">
-                                <div class="timeline-marker bg-primary">5</div>
-                                <div class="timeline-content">
-                                    <h4>Neural Network Training</h4>
-                                    <p>Train RNN models on the processed EEG data</p>
-                                </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary">5</div>
+                            <div class="timeline-content">
+                                <h4>Neural Network Training</h4>
+                                <p>Train RNN models on the processed EEG data</p>
                             </div>
-                            <div class="timeline-item">
-                                <div class="timeline-marker bg-primary">6</div>
-                                <div class="timeline-content">
-                                    <h4>Live Prediction</h4>
-                                    <p>Use trained models for real-time EEG speech recognition</p>
-                                </div>
+                        </div>
+                        <div class="timeline-item">
+                            <div class="timeline-marker bg-primary">6</div>
+                            <div class="timeline-content">
+                                <h4>Live Prediction</h4>
+                                <p>Use trained models for real-time EEG speech recognition</p>
                             </div>
                         </div>
                     </div>
@@ -133,6 +161,24 @@
 </div>
 
 <style>
+
+@media (min-width: 575px) and (max-width: 767.98px) {
+    .custom-layout {
+        flex-wrap: wrap;
+    }
+    .custom-layout .btn {
+        flex: 0 0 48%; /* Slightly less than 50% to account for gap */
+        margin-bottom: 1rem; /* Replaces gap-3 for vertical spacing */
+    }
+    .custom-layout .btn:nth-child(3) {
+        flex: 0 0 51%; /* Third button takes full width */
+    }
+}
+
+.research-workflow p{
+    font-size: 1.125rem;
+}
+
 .timeline {
     position: relative;
     margin: 2rem 0;

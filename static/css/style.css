@@ -164,3 +164,4 @@ a:hover {
   .navbar-toggler:not(.collapsed) .navbar-toggler-icon::after {
     transform: rotate(-90deg) translateX(7px);
   }
+  

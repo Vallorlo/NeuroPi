@@ -42,6 +42,7 @@ INSTALLED_APPS = [
     'plot.apps.PlotConfig',
     'processor',
     'cleaner', 
+    'pi_main',
 ]
 
 MIDDLEWARE = [

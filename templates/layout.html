@@ -56,6 +56,17 @@
                             <li><a class="dropdown-item" href="/cleaner">Data Cleaner</a></li>
                         </ul>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link text-white dropdown-toggle" href="#" id="neuralDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-lightning-charge"></i> Neural Networks
+                        </a>
+                        <ul class="dropdown-menu" aria-labelledby="neuralDropdown">
+                            <li><a class="dropdown-item" href="{% url 'pi_main:model_dashboard' %}">Dashboard</a></li>
+                            <li><a class="dropdown-item" href="{% url 'pi_main:train_model' %}">Train New Model</a></li>
+                            <li><a class="dropdown-item" href="{% url 'pi_main:model_list' %}">View Models</a></li>
+                            <li><a class="dropdown-item" href="{% url 'pi_main:live_prediction' %}">Live Prediction</a></li>
+                        </ul>
+                    </li>
                 </ul>
             </div>
         </div>
@@ -71,7 +82,7 @@
             <div class="row">
                 <div class="col-md-6">
                     <h5>Neuro<span class="text-danger">π</span></h5>
-                    <p class="small">A platform for EEG data collection and analysis</p>
+                    <p class="small">A platform for EEG data collection, processing, and neural network analysis</p>
                 </div>
                 <div class="col-md-6 text-md-end">
                     <p class="small">&copy; {% now "Y" %} Neuroπ. All rights reserved.</p>

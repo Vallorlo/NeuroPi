@@ -27,4 +27,5 @@ urlpatterns = [
     path('plot/', include('plot.urls')),
     path('processor/', include('processor.urls')),  # Include processor app's URLs
     path('cleaner/', include('cleaner.urls')),
+    path('pi_main/', include('pi_main.urls', namespace='pi_main')),  # Include pi_main app's URLs with namespace
 ]

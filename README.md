@@ -1,7 +1,7 @@
 # NeuroPi - EEG Speech Detection Platform
 
 <div align="center">
-  <img src="static/images/logo.png" alt="NeuroPi Logo" width="200"/>
+  <img src="static/images/logo.jpg" alt="NeuroPi Logo" width="200"/>
   <h3>A comprehensive platform for EEG data collection, processing, and neural network analysis</h3>
 </div>
 

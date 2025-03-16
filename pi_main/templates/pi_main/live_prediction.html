@@ -154,7 +154,7 @@
                     </div>
                     
                     <div class="d-flex justify-content-between mt-4">
-                        <a href="{% url 'model_dashboard' %}" class="btn btn-outline-primary">
+                        <a href="{% url 'pi_main:model_dashboard' %}" class="btn btn-outline-primary">
                             <i class="bi bi-arrow-left"></i> Back to Dashboard
                         </a>
                     </div>
@@ -187,7 +187,7 @@
                 </div>
                 
                 <h5>Tips for best results:</h5>
-                <ul>
+                <ul class="ulguide">
                     <li>Ensure the EEG headset is positioned correctly and has good contact</li>
                     <li>Try to minimize movement and muscle tension</li>
                     <li>Focus clearly on the word you're thinking about</li>
@@ -196,7 +196,7 @@
                 </ul>
                 
                 <h5>Troubleshooting:</h5>
-                <ul>
+                <ul class = "ulguide">
                     <li>If the EEG status indicator remains red, check your headset connection</li>
                     <li>If predictions seem random, try increasing the sample duration</li>
                     <li>Different models may perform better with different participants</li>

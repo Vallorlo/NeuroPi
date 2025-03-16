@@ -10,6 +10,7 @@ urlpatterns = [
     path('job/<uuid:job_id>/delete/', views.delete_job, name='delete_job'),
     path('job/<uuid:job_id>/cancel/', views.cancel_training, name='cancel_training'),
     path('models/<str:model_id>/', views.model_detail, name='model_detail'),
+    path('models/<str:model_id>/delete/', views.delete_model, name='delete_model'),
     path('api/start-training/', views.start_training_api, name='start_training_api'),
     path('api/training-status/', views.training_status_api, name='training_status_api'),
     path('api/predict-eeg/', views.predict_eeg_api, name='predict_eeg_api'),

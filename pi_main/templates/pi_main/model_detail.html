@@ -101,7 +101,7 @@
                                     <ul class="list-group list-group-flush">
                                         <li class="list-group-item d-flex justify-content-between align-items-center">
                                             <span><strong>Training Job:</strong></span>
-                                            <span class="badge bg-{{ job.status == 'completed' ? 'success' : job.status == 'failed' ? 'danger' : 'primary' }}">
+                                            <span class="badge bg-{% if job.status == 'completed' %}success{% elif job.status == 'failed' %}danger{% else %}primary{% endif %}">
                                                 {{ job.get_status_display }}
                                             </span>
                                         </li>
@@ -212,7 +212,7 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form method="post" action="{% url 'delete_model' model.id %}">
+                <form method="post" action="{% url 'pi_main:delete_model' model.id %}">
                     {% csrf_token %}
                     <button type="submit" class="btn btn-danger">Delete Model</button>
                 </form>

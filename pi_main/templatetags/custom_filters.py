@@ -1,7 +1,11 @@
-# pi_main/templatetags/custom_filters.py
 from django import template
 
 register = template.Library()
+
+@register.filter
+def split(value, arg):
+    """Split a string into a list on the specified delimiter"""
+    return value.split(arg)
 
 @register.filter
 def mul(value, arg):
@@ -10,6 +14,7 @@ def mul(value, arg):
         return float(value) * float(arg)
     except (ValueError, TypeError):
         return None
+    
 
 @register.filter
 def sub(value, arg):
@@ -18,10 +23,3 @@ def sub(value, arg):
         return float(value) - float(arg)
     except (ValueError, TypeError):
         return None
-
-@register.filter
-def split(value, arg):
-    """Split a string into a list on the specified delimiter"""
-    if value is None:
-        return []
-    return value.split(arg)

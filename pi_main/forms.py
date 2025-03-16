@@ -23,13 +23,23 @@ class ModelTrainingForm(forms.ModelForm):
         widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': '5'})
     )
     
+    # Add filtering option
+    apply_filtering = forms.BooleanField(
+        required=False,
+        initial=False,
+        label='Apply Bandpass Filter (4-50Hz)',
+        help_text='Enable if your data has not been pre-filtered',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
     class Meta:
         model = TrainingJob
         fields = [
             'model_name', 'description', 'dataset_path', 
             'epochs', 'batch_size', 'learning_rate', 
             'validation_split', 'hidden_units', 
-            'dropout_rate', 'recurrent_dropout'
+            'dropout_rate', 'recurrent_dropout',
+            'apply_filtering'
         ]
         widgets = {
             'model_name': forms.TextInput(attrs={'class': 'form-control'}),

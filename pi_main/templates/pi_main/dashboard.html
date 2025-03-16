@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-
+{% load custom_filters %}
 {% block title %}
     Neural Network Dashboard
 {% endblock title %}
@@ -144,7 +144,7 @@
                                     {% else %}
                                         <div class="alert alert-info">
                                             <i class="bi bi-info-circle"></i> No models have been trained yet. 
-                                            <a href="{% url 'train_model' %}" class="alert-link">Train your first model!</a>
+                                            <a href="{% url 'pi_main:train_model' %}" class="alert-link">Train your first model!</a>
                                         </div>
                                     {% endif %}
                                 </div>

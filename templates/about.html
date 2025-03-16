@@ -21,12 +21,15 @@
                             <p>This application enables researchers and practitioners to collect, process, analyze, and visualize electroencephalography (EEG) data. It provides a complete workflow from data collection to analysis, with specialized tools for studying the neural correlates of speech and motor activity.</p>
                             
                             <p>By combining EEG recordings with synchronized audio capture and timestamping capabilities, Neuroπ allows for precise alignment of brain activity with speech or motor events, opening new avenues for research in neurolinguistics, brain-computer interfaces, and cognitive neuroscience.</p>
+                            
+                            <p>The platform integrates data collection, signal processing, visualization, and neural network analysis in a unified environment, making it easier for researchers to explore the relationship between brain activity and speech or motor functions.</p>
                         </div>
                         <div class="col-md-4 text-center">
                             <div class="bg-light p-4 rounded shadow-sm">
                                 <i class="bi bi-braces-asterisk text-primary" style="font-size: 5rem;"></i>
                                 <h3 class="mt-3">Neuro<span class="text-danger">π</span></h3>
                                 <p>Version 1.0</p>
+                                <p class="small text-muted">An open-source platform for EEG research</p>
                             </div>
                         </div>
                     </div>
@@ -70,8 +73,8 @@
                             </div>
                             <div class="card mb-3">
                                 <div class="card-body">
-                                    <h4><i class="bi bi-database text-primary me-2"></i>Dataset Generation</h4>
-                                    <p>Create machine learning-ready datasets with train-test splitting and appropriate stratification.</p>
+                                    <h4><i class="bi bi-lightning-charge text-primary me-2"></i>Neural Network Analysis</h4>
+                                    <p>Train and deploy recurrent neural networks to recognize speech patterns from EEG data.</p>
                                 </div>
                             </div>
                         </div>
@@ -108,6 +111,10 @@
                                         <tr>
                                             <td>Machine Learning</td>
                                             <td>Create datasets for training models to recognize speech patterns from EEG</td>
+                                        </tr>
+                                        <tr>
+                                            <td>Assistive Technology</td>
+                                            <td>Develop communication aids for people with speech disabilities</td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -167,6 +174,81 @@
                         </div>
                     </div>
                     
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h2>Data Processing Pipeline</h2>
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-3 text-center">
+                                            <i class="bi bi-collection-play text-primary" style="font-size: 3rem;"></i>
+                                            <h5 class="mt-2">1. Data Collection</h5>
+                                        </div>
+                                        <div class="col-md-9">
+                                            <p>Record EEG data synchronized with audio (when applicable) across the five trial stages. Mark timestamps for important events during the recording sessions.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-3 text-center">
+                                            <i class="bi bi-cpu text-primary" style="font-size: 3rem;"></i>
+                                            <h5 class="mt-2">2. Signal Processing</h5>
+                                        </div>
+                                        <div class="col-md-9">
+                                            <p>Process raw EEG data to identify speech/motor events and align them with audio or timestamps. Generate combined datasets ready for cleaning and analysis.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-3 text-center">
+                                            <i class="bi bi-filter-circle text-primary" style="font-size: 3rem;"></i>
+                                            <h5 class="mt-2">3. Signal Cleaning</h5>
+                                        </div>
+                                        <div class="col-md-9">
+                                            <p>Apply bandpass filters, notch filters, and Independent Component Analysis (ICA) to remove artifacts and improve signal quality. Generate train/test splits for machine learning.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-3 text-center">
+                                            <i class="bi bi-graph-up text-primary" style="font-size: 3rem;"></i>
+                                            <h5 class="mt-2">4. Visualization</h5>
+                                        </div>
+                                        <div class="col-md-9">
+                                            <p>Visualize the EEG data with interactive plots showing different channels, stages, and events. Compare patterns between vocal and non-vocal trials.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <div class="row align-items-center">
+                                        <div class="col-md-3 text-center">
+                                            <i class="bi bi-lightning-charge text-primary" style="font-size: 3rem;"></i>
+                                            <h5 class="mt-2">5. Neural Network</h5>
+                                        </div>
+                                        <div class="col-md-9">
+                                            <p>Train recurrent neural networks (RNNs) on the processed data to recognize speech patterns from EEG signals. Use trained models for real-time prediction.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
                     <div class="row">
                         <div class="col-12">
                             <h2>Technical Information</h2>
@@ -178,12 +260,14 @@
                                         </div>
                                         <div class="card-body">
                                             <ul class="list-group list-group-flush">
-                                                <li class="list-group-item">Django 5.1 Web Framework</li>
-                                                <li class="list-group-item">Python 3.8+ for Backend Processing</li>
+                                                <li class="list-group-item">Django 5.1+ Web Framework</li>
+                                                <li class="list-group-item">Python 3.9+ for Backend Processing</li>
                                                 <li class="list-group-item">SciPy and NumPy for Signal Processing</li>
                                                 <li class="list-group-item">MNE-Python for EEG Analysis</li>
-                                                <li class="list-group-item">Matplotlib and D3.js for Visualization</li>
+                                                <li class="list-group-item">TensorFlow for Neural Network Training</li>
+                                                <li class="list-group-item">Matplotlib and Chart.js for Visualization</li>
                                                 <li class="list-group-item">Bootstrap 5 for UI Components</li>
+                                                <li class="list-group-item">SQLite for Data Storage</li>
                                             </ul>
                                         </div>
                                     </div>
@@ -201,12 +285,22 @@
                                                 <li>128 Hz sampling rate</li>
                                                 <li>Wireless data transmission</li>
                                                 <li>Built-in battery for portable operation</li>
+                                                <li>Sensor locations based on the 10-20 system</li>
                                             </ul>
+                                            
+                                            <p class="mt-3">The platform can also be extended to work with other EEG devices by modifying the data collection module.</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    
+                    <div class="mt-5">
+                        <h2>About the Project</h2>
+                        <p>NeuroPi was developed as an open-source project to advance research in brain-computer interfaces and speech detection from EEG signals. The platform aims to make EEG research more accessible by providing an integrated environment for data collection, processing, and analysis.</p>
+                        
+                        <p>The project is continuously evolving, with ongoing development focused on improving signal processing algorithms, expanding neural network capabilities, and enhancing the user interface. Contributions from the research community are welcome!</p>
                     </div>
                     
                     <div class="text-center mt-5 mb-3">

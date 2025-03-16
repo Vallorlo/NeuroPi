@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-
+{% load custom_filters %}
 {% block title %}
     Model: {{ model.name }}
 {% endblock title %}
@@ -30,7 +30,7 @@
                                         </li>
                                         <li class="list-group-item d-flex justify-content-between align-items-center">
                                             <span><strong>Status:</strong></span>
-                                            <span class="badge bg-{{ model.status == 'active' ? 'success' : 'secondary' }}">
+                                            <span class="badge bg-{% if model.status == 'active' %}success{% else %}secondary{% endif %}">
                                                 {{ model.get_status_display }}
                                             </span>
                                         </li>
@@ -150,7 +150,7 @@
                                 <div class="card-body">
                                     {% if job.word_list %}
                                         <div class="d-flex flex-wrap">
-                                            {% for word in job.word_list.split ',' %}
+                                            {% for word in job.word_list|split:"," %}
                                                 <span class="badge bg-primary me-2 mb-2">{{ word }}</span>
                                             {% endfor %}
                                         </div>

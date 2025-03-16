@@ -95,7 +95,7 @@ def train_model_background(job_id):
         # Load dataset
         dataset_path = os.path.join(settings.TRIAL_DIR, job.dataset_path)
         
-        # Create trainer
+        # Create trainer with apply_filtering parameter
         trainer = RNNModelTrainer(
             dataset_path=dataset_path,
             model_name=job.model_name,
@@ -106,7 +106,8 @@ def train_model_background(job_id):
             validation_split=job.validation_split,
             hidden_units=job.hidden_units,
             dropout_rate=job.dropout_rate,
-            recurrent_dropout=job.recurrent_dropout
+            recurrent_dropout=job.recurrent_dropout,
+            apply_filtering=job.apply_filtering  # Pass the filtering option
         )
         
         # Train model

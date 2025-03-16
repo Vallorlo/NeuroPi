@@ -18,7 +18,7 @@ class RNNModelTrainer:
     
     def __init__(self, dataset_path, model_name, word_list=None, epochs=50, batch_size=32, 
                  learning_rate=0.001, validation_split=0.2, hidden_units=64, 
-                 dropout_rate=0.2, recurrent_dropout=0.2):
+                 dropout_rate=0.2, recurrent_dropout=0.2, apply_filtering=False):
         # Path settings
         self.dataset_path = dataset_path
         self.model_name = model_name
@@ -35,6 +35,7 @@ class RNNModelTrainer:
         self.hidden_units = hidden_units
         self.dropout_rate = dropout_rate
         self.recurrent_dropout = recurrent_dropout
+        self.apply_filtering = apply_filtering
         
         # Create output directory
         os.makedirs(self.output_dir, exist_ok=True)
@@ -48,7 +49,7 @@ class RNNModelTrainer:
         self.sequence_length = 50  # Default sequence length, will be adjusted based on data
         
     def preprocess_data(self):
-        """Load and preprocess the EEG dataset."""
+        """Load and preprocess the EEG dataset with improved error handling."""
         print(f"Loading dataset from {self.dataset_path}")
         
         # Get full path if relative
@@ -62,23 +63,29 @@ class RNNModelTrainer:
         print(f"Dataset loaded with shape: {df.shape}")
         
         # Identify EEG channels and event columns
-        self.eeg_columns = [col for col in df.columns if col not in 
-                           ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt'] 
+        self.eeg_columns = [col for col in df.columns if col not in ['Timestamp'] 
                            and not col.endswith('_event')]
         
         # Find word event columns
         self.word_event_columns = [col for col in df.columns if col.endswith('_event')]
-        print(f"Found {len(self.word_event_columns)} word event columns")
+        print(f"Found {len(self.word_event_columns)} word event columns: {self.word_event_columns}")
         
         # If word_list is provided, filter the event columns
         if self.word_list:
             self.word_event_columns = [col for col in self.word_event_columns 
                                       if col.replace('_event', '') in self.word_list]
-            print(f"Filtered to {len(self.word_event_columns)} word event columns based on word_list")
+            print(f"Filtered to {len(self.word_event_columns)} word event columns based on word_list: {self.word_event_columns}")
         
         # If no word events found, raise error
         if not self.word_event_columns:
             raise ValueError("No word event columns found in the dataset")
+        
+        # Check if there are any True values in the event columns
+        event_counts = {col: df[col].sum() for col in self.word_event_columns}
+        print(f"Event counts: {event_counts}")
+        
+        if all(count == 0 for count in event_counts.values()):
+            raise ValueError("No events (True values) found in any event column")
             
         # Extract word labels from event columns
         word_labels = []
@@ -87,49 +94,72 @@ class RNNModelTrainer:
         # For each word event
         for event_col in self.word_event_columns:
             word = event_col.replace('_event', '')
+            print(f"Processing word: {word}")
             
             # Find sequences where the event is True
             event_indices = df.index[df[event_col] == True].tolist()
+            print(f"Found {len(event_indices)} timestamps where {event_col} is True")
             
-            # Group consecutive indices into sequences
-            sequences = []
-            current_sequence = []
-            
-            for i, idx in enumerate(event_indices):
-                if i == 0 or idx == event_indices[i-1] + 1:
-                    current_sequence.append(idx)
-                else:
-                    if len(current_sequence) >= 5:  # Minimum sequence length
-                        sequences.append(current_sequence)
-                    current_sequence = [idx]
-                    
-            # Add the last sequence if it's long enough
-            if current_sequence and len(current_sequence) >= 5:
-                sequences.append(current_sequence)
+            if not event_indices:
+                print(f"No True events found for {word}, skipping...")
+                continue
                 
-            # For each valid sequence, extract EEG data
-            for sequence in sequences:
-                if len(sequence) >= 5:  # Minimum sequence length check again for safety
-                    # Get the EEG data for this sequence
-                    sequence_data = df.loc[sequence, self.eeg_columns].values
+            # Take a window around each True event
+            window_size = 40  # Take 40 samples centered around each event (increased from 20)
+            
+            for idx in event_indices:
+                # Get a window of data around the event
+                start_idx = max(0, idx - window_size // 2)
+                end_idx = min(len(df) - 1, idx + window_size // 2)
+                
+                # Ensure the sequence is long enough
+                if end_idx - start_idx < 34:  # Need at least 34 samples (padlen is 33)
+                    print(f"Sequence too short ({end_idx - start_idx} samples), skipping")
+                    continue
                     
-                    # Apply bandpass filter (4-50 Hz) to focus on relevant EEG frequencies
+                # Get the EEG data for this window
+                sequence_data = df.loc[start_idx:end_idx, self.eeg_columns].values
+                
+                # Apply bandpass filter if requested, otherwise use raw data
+                if self.apply_filtering:
+                    print("Applying bandpass filter to sequence")
                     filtered_data = self._apply_bandpass_filter(sequence_data)
+                else:
+                    filtered_data = sequence_data
                     
-                    # Add to our training data
-                    X_sequences.append(filtered_data)
-                    word_labels.append(word)
+                # Add to our training data
+                X_sequences.append(filtered_data)
+                word_labels.append(word)
         
         print(f"Extracted {len(X_sequences)} valid sequences across {len(set(word_labels))} unique words")
         
+        # Check if we have any sequences
+        if not X_sequences:
+            raise ValueError("No valid EEG sequences extracted. Check that your data contains events marked as True.")
+        
         # Standardize sequence lengths
-        self.sequence_length = min(50, min(len(seq) for seq in X_sequences))
+        min_seq_length = min(len(seq) for seq in X_sequences)
+        print(f"Minimum sequence length: {min_seq_length}")
+        
+        self.sequence_length = min(50, min_seq_length)
+        print(f"Using sequence length: {self.sequence_length}")
+        
+        if self.sequence_length < 5:
+            raise ValueError(f"Sequences are too short (minimum length: {min_seq_length}). Need at least 5 samples per sequence.")
+        
         X_standardized = np.array([seq[:self.sequence_length] for seq in X_sequences])
+        
+        # Make sure we have at least 2 different word classes
+        unique_words = set(word_labels)
+        if len(unique_words) < 2:
+            raise ValueError(f"Need at least 2 different word classes, but only found: {unique_words}")
         
         # Encode the word labels
         self.label_encoder = LabelEncoder()
         y_encoded = self.label_encoder.fit_transform(word_labels)
         y_categorical = to_categorical(y_encoded)
+        
+        print(f"Final data shape: X={X_standardized.shape}, y={y_categorical.shape}")
         
         # Save the label encoder
         with open(os.path.join(self.output_dir, 'label_encoder.pkl'), 'wb') as f:
@@ -149,7 +179,15 @@ class RNNModelTrainer:
         return X_standardized, y_categorical
     
     def _apply_bandpass_filter(self, eeg_data, lowcut=4.0, highcut=50.0, fs=128.0, order=5):
-        """Apply a bandpass filter to EEG data."""
+        """Apply a bandpass filter to EEG data with safety checks for short sequences."""
+        # Check if the sequence is long enough for filtering
+        min_seq_length = 3 * order + 1  # This is roughly the minimum length needed for filtfilt
+        
+        if eeg_data.shape[0] < min_seq_length:
+            print(f"Sequence too short for filtering: {eeg_data.shape[0]} samples (need at least {min_seq_length})")
+            # Return the original data instead of trying to filter
+            return eeg_data
+            
         nyq = 0.5 * fs
         low = lowcut / nyq
         high = highcut / nyq
@@ -159,8 +197,13 @@ class RNNModelTrainer:
         # Apply filter to each channel
         filtered_data = np.zeros_like(eeg_data)
         for i in range(eeg_data.shape[1]):
-            filtered_data[:, i] = signal.filtfilt(b, a, eeg_data[:, i])
-            
+            try:
+                filtered_data[:, i] = signal.filtfilt(b, a, eeg_data[:, i])
+            except ValueError as e:
+                # If filtering fails, just use original data for this channel
+                print(f"Filtering failed for channel {i}: {e}. Using original data.")
+                filtered_data[:, i] = eeg_data[:, i]
+                
         return filtered_data
     
     def build_model(self, input_shape, num_classes):
@@ -197,6 +240,36 @@ class RNNModelTrainer:
     
     def train(self):
         """Train the RNN model on the preprocessed data."""
+        # Check for GPU availability
+        physical_devices = tf.config.list_physical_devices('GPU')
+        if physical_devices:
+            print(f"Found {len(physical_devices)} GPUs: {physical_devices}")
+            # Enable memory growth to prevent allocation errors
+            for device in physical_devices:
+                try:
+                    tf.config.experimental.set_memory_growth(device, True)
+                    print(f"Memory growth enabled for {device}")
+                except:
+                    print(f"Failed to enable memory growth for {device}")
+        else:
+            print("No GPU found. Using CPU for training.")
+            print("Available devices:", tf.config.list_physical_devices())
+        
+        # Print TensorFlow version and device placement
+        print(f"TensorFlow version: {tf.__version__}")
+        print(f"Eager execution: {tf.executing_eagerly()}")
+        print("Device placement test:")
+        
+        # Test device placement
+        try:
+            with tf.device('/GPU:0'):
+                a = tf.constant([[1.0, 2.0, 3.0], [4.0, 5.0, 6.0]])
+                b = tf.constant([[1.0, 2.0], [3.0, 4.0], [5.0, 6.0]])
+                c = tf.matmul(a, b)
+                print(f"Matrix multiplication result shape: {c.shape}, device: {c.device}")
+        except Exception as e:
+            print(f"Device placement test failed: {e}")
+        
         # Preprocess data
         X, y = self.preprocess_data()
         
@@ -290,36 +363,18 @@ class RNNPredictor:
             # Single channel data, reshape
             eeg_data = eeg_data.reshape(-1, 1)
             
-        # Apply bandpass filter (4-50 Hz)
-        filtered_data = self._apply_bandpass_filter(eeg_data)
-        
         # Ensure we have the right sequence length
-        if filtered_data.shape[0] > self.sequence_length:
+        if eeg_data.shape[0] > self.sequence_length:
             # Too long, truncate
-            filtered_data = filtered_data[:self.sequence_length]
-        elif filtered_data.shape[0] < self.sequence_length:
+            eeg_data = eeg_data[:self.sequence_length]
+        elif eeg_data.shape[0] < self.sequence_length:
             # Too short, pad with zeros
-            pad_length = self.sequence_length - filtered_data.shape[0]
-            padding = np.zeros((pad_length, filtered_data.shape[1]))
-            filtered_data = np.vstack([filtered_data, padding])
+            pad_length = self.sequence_length - eeg_data.shape[0]
+            padding = np.zeros((pad_length, eeg_data.shape[1]))
+            eeg_data = np.vstack([eeg_data, padding])
             
         # Add batch dimension
-        return np.expand_dims(filtered_data, axis=0)
-    
-    def _apply_bandpass_filter(self, eeg_data, lowcut=4.0, highcut=50.0, fs=128.0, order=5):
-        """Apply a bandpass filter to EEG data."""
-        nyq = 0.5 * fs
-        low = lowcut / nyq
-        high = highcut / nyq
-        
-        b, a = signal.butter(order, [low, high], btype='band')
-        
-        # Apply filter to each channel
-        filtered_data = np.zeros_like(eeg_data)
-        for i in range(eeg_data.shape[1]):
-            filtered_data[:, i] = signal.filtfilt(b, a, eeg_data[:, i])
-            
-        return filtered_data
+        return np.expand_dims(eeg_data, axis=0)
     
     def predict(self, eeg_data):
         """Make predictions from raw EEG data."""

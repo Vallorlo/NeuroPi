@@ -18,6 +18,9 @@ class TrainingJob(models.Model):
     dataset_path = models.CharField(max_length=255)
     word_list = models.TextField(blank=True, help_text="Comma-separated list of words to include")
     
+    # Added field for filtering option
+    apply_filtering = models.BooleanField(default=False, help_text="Whether to apply bandpass filtering during preprocessing")
+    
     # Training parameters
     epochs = models.IntegerField(default=50)
     batch_size = models.IntegerField(default=32)

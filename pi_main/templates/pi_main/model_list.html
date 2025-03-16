@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-
+{% load custom_filters %}
 {% block title %}
     EEG Neural Network Models
 {% endblock title %}
@@ -47,7 +47,7 @@
                                                 <small>{{ model.accuracy|floatformat:2|mul:100 }}%</small>
                                             </td>
                                             <td>
-                                                <span class="badge bg-{{ model.status == 'active' ? 'success' : 'secondary' }}">
+                                                <span class="badge bg-{% if model.status == 'active' %}success{% else %}secondary{% endif %}">
                                                     {{ model.get_status_display }}
                                                 </span>
                                             </td>

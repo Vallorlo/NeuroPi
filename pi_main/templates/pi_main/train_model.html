@@ -73,6 +73,14 @@
                                             {{ form.selected_words }}
                                             <small class="form-text text-muted">{{ form.selected_words.help_text }}</small>
                                         </div>
+                                        
+                                        <div class="form-check mb-3">
+                                            {{ form.apply_filtering }}
+                                            <label for="{{ form.apply_filtering.id_for_label }}" class="form-check-label">
+                                                {{ form.apply_filtering.label }}
+                                            </label>
+                                            <small class="form-text text-muted d-block">{{ form.apply_filtering.help_text }}</small>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -165,7 +173,7 @@
                         </div>
                         
                         <div class="d-flex justify-content-between">
-                            <a href="{% url 'model_dashboard' %}" class="btn btn-outline-secondary">
+                            <a href="{% url 'pi_main:model_dashboard' %}" class="btn btn-outline-secondary">
                                 <i class="bi bi-arrow-left"></i> Back to Dashboard
                             </a>
                             <button type="submit" class="btn btn-primary" id="submitBtn">
@@ -196,6 +204,7 @@
     document.addEventListener('DOMContentLoaded', function() {
         const datasetSelect = document.getElementById('{{ form.dataset_path.id_for_label }}');
         const wordSelect = document.getElementById('{{ form.selected_words.id_for_label }}');
+        const applyFilteringCheck = document.getElementById('{{ form.apply_filtering.id_for_label }}');
         const trainingForm = document.getElementById('trainingForm');
         const submitBtn = document.getElementById('submitBtn');
         const trainingOverlay = document.getElementById('trainingOverlay');
@@ -239,6 +248,35 @@
                 console.error('Error fetching words:', error);
                 wordSelect.disabled = false;
             });
+            
+            // Check if the dataset is already filtered/cleaned
+            if (selectedDataset.toLowerCase().includes('clean') || 
+                selectedDataset.toLowerCase().includes('processed')) {
+                // Dataset is already filtered, suggest turning off additional filtering
+                applyFilteringCheck.checked = false;
+                const filteringHintEl = document.createElement('div');
+                filteringHintEl.className = 'alert alert-info mt-2';
+                filteringHintEl.id = 'filtering-hint';
+                filteringHintEl.innerHTML = '<i class="bi bi-info-circle"></i> This dataset appears to be pre-filtered. Additional filtering is usually not needed.';
+                
+                // Remove any existing hint
+                const existingHint = document.getElementById('filtering-hint');
+                if (existingHint) {
+                    existingHint.remove();
+                }
+                
+                // Add the hint after the checkbox
+                applyFilteringCheck.parentNode.appendChild(filteringHintEl);
+            } else {
+                // Dataset might be raw, suggest filtering
+                applyFilteringCheck.checked = true;
+                
+                // Remove any existing hint
+                const existingHint = document.getElementById('filtering-hint');
+                if (existingHint) {
+                    existingHint.remove();
+                }
+            }
         }
         
         // Update word options when dataset changes

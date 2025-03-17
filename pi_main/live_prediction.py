@@ -6,6 +6,10 @@ from django.conf import settings
 from trials.data.aq_raw import EEG
 from scipy import signal
 
+
+headset = EEG()
+
+
 class LiveEEGPredictor:
     """Class for collecting EEG data and making real-time predictions."""
     
@@ -29,7 +33,7 @@ class LiveEEGPredictor:
                 self.close()
             
             # Create a new headset connection
-            self.cyHeadset = EEG()
+            self.cyHeadset = headset
             
             # Check if the headset was properly initialized
             if not self.cyHeadset.hid:

@@ -25,7 +25,7 @@ from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 
 # Global predictor instance to maintain EEG connection across requests
-_eeg_predictor = None
+_eeg_predictor = LiveEEGPredictor()
 
 def get_eeg_predictor():
     """Get or create the global EEG predictor instance."""

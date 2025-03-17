@@ -14,6 +14,186 @@ import threading
 from .models import EEGModel, TrainingJob, Prediction
 from .forms import ModelTrainingForm, PredictionForm
 from .rnn_model import RNNModelTrainer, RNNPredictor
+# Add this to pi_main/views.py
+
+from .live_prediction import LiveEEGPredictor
+from .rnn_model import RNNPredictor
+import time
+import traceback
+import json
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+
+# Global predictor instance to maintain EEG connection across requests
+_eeg_predictor = None
+
+def get_eeg_predictor():
+    """Get or create the global EEG predictor instance."""
+    global _eeg_predictor
+    if _eeg_predictor is None:
+        _eeg_predictor = LiveEEGPredictor()
+    return _eeg_predictor
+
+@csrf_exempt
+def live_predict_api(request):
+    """API endpoint for capturing EEG data and making real-time predictions."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method is allowed'}, status=405)
+    
+    # Get or create predictor
+    eeg_predictor = get_eeg_predictor()
+    
+    try:
+        # Get model ID from request
+        model_id = request.POST.get('model_id')
+        if not model_id:
+            return JsonResponse({'error': 'No model ID provided'}, status=400)
+        
+        # Get collection duration
+        try:
+            duration = int(request.POST.get('duration', 5))
+            # Limit duration to reasonable values
+            duration = max(1, min(duration, 30))
+        except (ValueError, TypeError):
+            duration = 5  # Default to 5 seconds
+        
+        # Get optional parameters
+        target_word = request.POST.get('target_word', '')
+        participant = request.POST.get('participant', '')
+        apply_filtering = request.POST.get('apply_filtering', 'true').lower() == 'true'
+        
+        # Get model
+        try:
+            model = get_object_or_404(EEGModel, id=model_id)
+        except:
+            return JsonResponse({'error': 'Model not found'}, status=404)
+        
+        # Make sure the EEG headset is initialized
+        if not eeg_predictor.initialized:
+            success = eeg_predictor.initialize()
+            if not success:
+                return JsonResponse({
+                    'error': 'Failed to initialize EEG headset. Please check the connection.'
+                }, status=400)
+        
+        # Collect EEG data
+        data, timestamps = eeg_predictor.collect_eeg_data(duration)
+        
+        if data is None or not data:
+            return JsonResponse({
+                'error': 'Failed to collect EEG data. Please check the headset connection.'
+            }, status=400)
+        
+        # Load model
+        try:
+            model_predictor = RNNPredictor(model_path=model.model_path)
+        except Exception as e:
+            traceback.print_exc()
+            return JsonResponse({
+                'error': f'Failed to load model: {str(e)}'
+            }, status=500)
+        
+        # Make prediction
+        predictions = eeg_predictor.predict(model_predictor, data, apply_filtering)
+        
+        if 'error' in predictions:
+            return JsonResponse({'error': predictions['error']}, status=400)
+        
+        # Create prediction record
+        # Handle empty target word - ensure it's an empty string not None
+        target_word = target_word if target_word else ""
+        
+        try:
+            # Create prediction record with proper handling of target_word
+            prediction = Prediction(
+                model=model,
+                predicted_word=predictions['predicted_word'],
+                confidence=predictions['confidence'],
+                actual_word=target_word,  # This is now allowed to be empty string
+                is_correct=predictions['predicted_word'].lower() == target_word.lower() if target_word else None,
+                participant=participant,
+                session_id=request.POST.get('session_id', '')
+            )
+            prediction.save()
+        except Exception as e:
+            # Log the error but continue - don't fail the entire request just because
+            # saving to the database failed
+            print(f"Error saving prediction to database: {e}")
+            traceback.print_exc()
+        
+        # Return predictions
+        return JsonResponse({
+            'status': 'success',
+            'predictions': predictions,
+            'model_name': model.name,
+            'prediction_id': prediction.id if 'prediction' in locals() else None,
+            'samples_collected': len(data)
+        })
+        
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+    finally:
+        # Always clear the queue after use - important to prevent accumulation of data
+        if eeg_predictor and eeg_predictor.cyHeadset:
+            eeg_predictor.cyHeadset.clear_data()
+
+@csrf_exempt
+def initialize_eeg_api(request):
+    """API endpoint to initialize EEG connection."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method is allowed'}, status=405)
+    
+    try:
+        # First, make sure to close any existing connection
+        eeg_predictor = get_eeg_predictor()
+        if eeg_predictor.initialized:
+            eeg_predictor.close()
+        
+        # Initialize a fresh connection
+        success = eeg_predictor.initialize()
+        
+        if success:
+            return JsonResponse({
+                'status': 'success',
+                'message': 'EEG headset initialized successfully'
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Failed to initialize EEG headset. Please check the connection.'
+            }, status=400)
+            
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
+
+@csrf_exempt
+def close_eeg_api(request):
+    """API endpoint to explicitly close the EEG connection."""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Only POST method is allowed'}, status=405)
+    
+    try:
+        eeg_predictor = get_eeg_predictor()
+        eeg_predictor.close()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'EEG headset connection closed successfully'
+        })
+    except Exception as e:
+        traceback.print_exc()
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)
 
 def model_dashboard(request):
     """Main dashboard for the model training and prediction app."""

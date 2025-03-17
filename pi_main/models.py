@@ -106,7 +106,7 @@ class Prediction(models.Model):
     confidence = models.FloatField(default=0.0)
     
     # Optional reference to actual word (if known)
-    actual_word = models.CharField(max_length=100, blank=True)
+    actual_word = models.CharField(max_length=100, blank=True, null=True)  # Added null=True
     is_correct = models.BooleanField(null=True)
     
     # Session information

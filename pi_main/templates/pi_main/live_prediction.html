@@ -21,6 +21,7 @@
                                 </div>
                                 <div class="card-body">
                                     <form id="predictionForm">
+                                        {% csrf_token %}
                                         <div class="mb-3">
                                             <label for="modelSelect" class="form-label">Select Model</label>
                                             <select id="modelSelect" class="form-select" required>
@@ -57,12 +58,22 @@
                                                    placeholder="Word to think/speak">
                                         </div>
                                         
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="checkbox" id="applyFiltering" checked>
+                                            <label class="form-check-label" for="applyFiltering">
+                                                Apply Bandpass Filter (4-50Hz)
+                                            </label>
+                                            <small class="form-text text-muted d-block">Enable filtering to improve signal quality</small>
+                                        </div>
                                         <div class="d-grid gap-2">
-                                            <button type="button" id="startPredictionBtn" class="btn btn-success">
-                                                <i class="bi bi-play-circle"></i> Start Prediction
+                                            <button type="button" id="connectEEGBtn" class="btn btn-secondary">
+                                                <i class="bi bi-hdd-network"></i> Connect EEG Headset
                                             </button>
-                                            <button type="button" id="stopPredictionBtn" class="btn btn-danger" disabled>
-                                                <i class="bi bi-stop-circle"></i> Stop
+                                            <button type="button" id="disconnectEEGBtn" class="btn btn-outline-danger" disabled>
+                                                <i class="bi bi-x-circle"></i> Disconnect Headset
+                                            </button>
+                                            <button type="button" id="startPredictionBtn" class="btn btn-success" disabled>
+                                                <i class="bi bi-play-circle"></i> Start Prediction
                                             </button>
                                         </div>
                                     </form>
@@ -85,7 +96,7 @@
                                     </div>
                                     
                                     <div id="statusMessage" class="alert alert-info mt-3">
-                                        Select a model and click "Start Prediction" to begin.
+                                        Select a model and connect your EEG headset to begin.
                                     </div>
                                 </div>
                             </div>
@@ -97,6 +108,17 @@
                                     <h5 class="mb-0">Prediction Results</h5>
                                 </div>
                                 <div class="card-body text-center">
+                                    <div id="recordingIndicator" class="alert alert-warning" style="display: none;">
+                                        <i class="bi bi-record-circle text-danger"></i> Recording EEG Data...
+                                        <div class="progress mt-2">
+                                            <div id="recordingProgress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                                 role="progressbar" style="width: 0%" 
+                                                 aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                            </div>
+                                        </div>
+                                        <span id="recordingCountdown">5</span> seconds remaining
+                                    </div>
+                                    
                                     <div id="predictionContainer" class="prediction-container mb-4">
                                         <h2 id="predictedWord">--</h2>
                                         <div class="progress mb-3">
@@ -116,10 +138,27 @@
                             
                             <div class="card">
                                 <div class="card-header bg-warning text-dark">
-                                    <h5 class="mb-0">EEG Visualization</h5>
+                                    <h5 class="mb-0">Collection Details</h5>
                                 </div>
                                 <div class="card-body">
-                                    <canvas id="eegCanvas" width="700" height="300"></canvas>
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="card">
+                                                <div class="card-body text-center">
+                                                    <h2 id="sampleCount" class="display-4">0</h2>
+                                                    <p class="mb-0">Samples Collected</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card">
+                                                <div class="card-body text-center">
+                                                    <h2 id="sampleRate" class="display-4">0</h2>
+                                                    <p class="mb-0">Samples/Second</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -141,6 +180,7 @@
                                                     <th>Confidence</th>
                                                     <th>Target Word</th>
                                                     <th>Status</th>
+                                                    <th>Samples</th>
                                                 </tr>
                                             </thead>
                                             <tbody>
@@ -177,12 +217,13 @@
                     <h5>How to use the Live Prediction tool:</h5>
                     <ol>
                         <li>Select a trained model from the dropdown</li>
+                        <li>Connect your EEG headset by clicking the "Connect EEG Headset" button</li>
                         <li>Choose a participant (optional)</li>
                         <li>Set the sample duration (default: 5 seconds)</li>
                         <li>Enter a target word if you're testing specific words</li>
                         <li>Click "Start Prediction"</li>
                         <li>Think about or speak the word during the recording period</li>
-                        <li>View results in real-time</li>
+                        <li>View results when collection is complete</li>
                     </ol>
                 </div>
                 
@@ -196,8 +237,8 @@
                 </ul>
                 
                 <h5>Troubleshooting:</h5>
-                <ul class = "ulguide">
-                    <li>If the EEG status indicator remains red, check your headset connection</li>
+                <ul class="ulguide">
+                    <li>If the EEG status indicator remains red, try reconnecting or reseating the headset</li>
                     <li>If predictions seem random, try increasing the sample duration</li>
                     <li>Different models may perform better with different participants</li>
                 </ul>
@@ -211,7 +252,6 @@
 {% endblock content %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // UI Elements
@@ -219,8 +259,9 @@
         const participantSelect = document.getElementById('participantSelect');
         const sampleDuration = document.getElementById('sampleDuration');
         const targetWord = document.getElementById('targetWord');
+        const applyFiltering = document.getElementById('applyFiltering');
+        const connectEEGBtn = document.getElementById('connectEEGBtn');
         const startPredictionBtn = document.getElementById('startPredictionBtn');
-        const stopPredictionBtn = document.getElementById('stopPredictionBtn');
         const eegStatus = document.getElementById('eegStatus');
         const modelStatus = document.getElementById('modelStatus');
         const statusMessage = document.getElementById('statusMessage');
@@ -229,49 +270,121 @@
         const confidenceValue = document.getElementById('confidenceValue');
         const topPredictions = document.getElementById('topPredictions');
         const historyTable = document.getElementById('historyTable').querySelector('tbody');
+        const recordingIndicator = document.getElementById('recordingIndicator');
+        const recordingProgress = document.getElementById('recordingProgress');
+        const recordingCountdown = document.getElementById('recordingCountdown');
+        const sampleCount = document.getElementById('sampleCount');
+        const sampleRate = document.getElementById('sampleRate');
+        const disconnectEEGBtn = document.getElementById('disconnectEEGBtn');
         
-        // Chart for EEG visualization
-        const eegCanvas = document.getElementById('eegCanvas');
-        const eegChart = new Chart(eegCanvas, {
-            type: 'line',
-            data: {
-                labels: Array(100).fill(''),
-                datasets: [{
-                    label: 'EEG Data',
-                    data: Array(100).fill(0),
-                    borderColor: '#3e95cd',
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    fill: false
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    x: {
-                        display: false
-                    },
-                    y: {
-                        display: true
-                    }
-                },
-                animation: {
-                    duration: 0
-                },
-                plugins: {
-                    legend: {
-                        display: false
-                    }
+        // Session ID for grouping predictions
+        const sessionId = Date.now().toString();
+        
+        // Counter for keeping track of prediction attempts
+        let predictionCount = 0;
+        
+
+        disconnectEEGBtn.addEventListener('click', function() {
+            // Show disconnecting status
+            eegStatus.className = 'status-indicator bg-warning me-2';
+            statusMessage.className = 'alert alert-warning';
+            statusMessage.textContent = 'Disconnecting EEG headset...';
+            disconnectEEGBtn.disabled = true;
+            connectEEGBtn.disabled = true;
+            
+            // Call the close-eeg endpoint
+            fetch('/pi_main/api/close-eeg/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
                 }
-            }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Update UI for disconnected state
+                eegStatus.className = 'status-indicator bg-danger me-2';
+                statusMessage.className = 'alert alert-info';
+                statusMessage.textContent = data.message || 'EEG headset disconnected';
+                
+                // Update button states
+                connectEEGBtn.disabled = false;
+                disconnectEEGBtn.disabled = true;
+                startPredictionBtn.disabled = true;
+            })
+            .catch(error => {
+                console.error('Error disconnecting EEG headset:', error);
+                eegStatus.className = 'status-indicator bg-danger me-2';
+                statusMessage.className = 'alert alert-danger';
+                statusMessage.textContent = 'Error disconnecting EEG headset';
+                
+                // Re-enable buttons
+                connectEEGBtn.disabled = false;
+                disconnectEEGBtn.disabled = false;
+            });
         });
         
-        // Flag to track if prediction is active
-        let isPredicting = false;
+        // Update Connect EEG button handler to enable the disconnect button
+        connectEEGBtn.addEventListener('click', function() {
+            // Rest of the existing code...
+            
+            // Call the initialize endpoint
+            fetch('/pi_main/api/initialize-eeg/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Connection successful
+                    eegStatus.className = 'status-indicator bg-success me-2';
+                    statusMessage.className = 'alert alert-success';
+                    statusMessage.textContent = data.message;
+                    
+                    // Enable disconnect button
+                    disconnectEEGBtn.disabled = false;
+                    
+                    // Enable start button if model is selected
+                    if (modelSelect.value) {
+                        startPredictionBtn.disabled = false;
+                    }
+                } else {
+                    // Connection failed
+                    eegStatus.className = 'status-indicator bg-danger me-2';
+                    statusMessage.className = 'alert alert-danger';
+                    statusMessage.textContent = data.message || 'Failed to connect to EEG headset';
+                    disconnectEEGBtn.disabled = true;
+                }
+                
+                // Re-enable connect button
+                connectEEGBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error connecting to EEG headset:', error);
+                eegStatus.className = 'status-indicator bg-danger me-2';
+                statusMessage.className = 'alert alert-danger';
+                statusMessage.textContent = 'Error connecting to EEG headset. Please try again.';
+                connectEEGBtn.disabled = false;
+                disconnectEEGBtn.disabled = true;
+            });
+        });
         
-        // Simulated EEG data (for demonstration)
-        let eegData = Array(100).fill(0);
-        
+        // Clean up EEG connection when leaving the page
+        window.addEventListener('beforeunload', function() {
+            // Only try to disconnect if the EEG is connected (green status)
+            if (eegStatus.className.includes('bg-success')) {
+                // Use a synchronous request to ensure it completes before page unload
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/pi_main/api/close-eeg/', false);  // false makes it synchronous
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr.setRequestHeader('X-CSRFToken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+                xhr.send();
+            }
+        });
+
         // Show instructions modal on first load
         const instructionsModal = new bootstrap.Modal(document.getElementById('instructionsModal'));
         if (!localStorage.getItem('predictionInstructionsShown')) {
@@ -279,128 +392,181 @@
             localStorage.setItem('predictionInstructionsShown', 'true');
         }
         
-        // Handle Start Prediction button
+        // Connect EEG button handler
+        connectEEGBtn.addEventListener('click', function() {
+            // Show connecting status
+            eegStatus.className = 'status-indicator bg-warning me-2';
+            statusMessage.className = 'alert alert-warning';
+            statusMessage.textContent = 'Connecting to EEG headset...';
+            connectEEGBtn.disabled = true;
+            
+            // Call the initialize endpoint
+            fetch('/pi_main/api/initialize-eeg/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Connection successful
+                    eegStatus.className = 'status-indicator bg-success me-2';
+                    statusMessage.className = 'alert alert-success';
+                    statusMessage.textContent = data.message;
+                    
+                    // Enable start button if model is selected
+                    if (modelSelect.value) {
+                        startPredictionBtn.disabled = false;
+                    }
+                } else {
+                    // Connection failed
+                    eegStatus.className = 'status-indicator bg-danger me-2';
+                    statusMessage.className = 'alert alert-danger';
+                    statusMessage.textContent = data.message || 'Failed to connect to EEG headset';
+                }
+                
+                // Re-enable connect button
+                connectEEGBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error connecting to EEG headset:', error);
+                eegStatus.className = 'status-indicator bg-danger me-2';
+                statusMessage.className = 'alert alert-danger';
+                statusMessage.textContent = 'Error connecting to EEG headset. Please try again.';
+                connectEEGBtn.disabled = false;
+            });
+        });
+        
+        // Model select change handler
+        modelSelect.addEventListener('change', function() {
+            if (this.value) {
+                modelStatus.className = 'status-indicator bg-success me-2';
+                // Enable start button if EEG is connected
+                if (eegStatus.className.includes('bg-success')) {
+                    startPredictionBtn.disabled = false;
+                }
+            } else {
+                modelStatus.className = 'status-indicator bg-danger me-2';
+                startPredictionBtn.disabled = true;
+            }
+        });
+        
+        // Start prediction button handler
         startPredictionBtn.addEventListener('click', function() {
             if (!modelSelect.value) {
                 alert('Please select a model first');
                 return;
             }
             
-            // Update UI
+            // Update UI for recording state
             startPredictionBtn.disabled = true;
-            stopPredictionBtn.disabled = false;
+            recordingIndicator.style.display = 'block';
             statusMessage.className = 'alert alert-warning';
-            statusMessage.textContent = `Recording for ${sampleDuration.value} seconds...`;
+            statusMessage.textContent = 'Recording EEG data...';
+            predictionCount++;
             
-            // Start prediction
-            isPredicting = true;
+            // Get the sample duration
+            const duration = parseInt(sampleDuration.value);
             
-            // For demo purposes, show a countdown
-            let timeLeft = parseInt(sampleDuration.value);
-            statusMessage.textContent = `Recording: ${timeLeft} seconds remaining...`;
+            // Show countdown
+            recordingCountdown.textContent = duration;
+            recordingProgress.style.width = '0%';
             
+            // Create FormData for the request
+            const formData = new FormData();
+            formData.append('model_id', modelSelect.value);
+            formData.append('duration', duration);
+            formData.append('target_word', targetWord.value.trim());
+            formData.append('participant', participantSelect.value);
+            formData.append('apply_filtering', applyFiltering.checked);
+            formData.append('session_id', sessionId);
+            
+            // Start countdown
+            let timeLeft = duration;
             const countdownInterval = setInterval(() => {
                 timeLeft--;
-                statusMessage.textContent = `Recording: ${timeLeft} seconds remaining...`;
+                recordingCountdown.textContent = timeLeft;
+                
+                // Update progress bar
+                const progress = ((duration - timeLeft) / duration) * 100;
+                recordingProgress.style.width = `${progress}%`;
                 
                 if (timeLeft <= 0) {
                     clearInterval(countdownInterval);
-                    finishPrediction();
                 }
             }, 1000);
             
-            // Simulate changing EEG data
-            simulateEEGData();
-            
-            // Set model status to active
-            modelStatus.className = 'status-indicator bg-success me-2';
-            
-            // Simulate EEG connection after a delay
-            setTimeout(() => {
-                eegStatus.className = 'status-indicator bg-success me-2';
-            }, 500);
-        });
-        
-        // Handle Stop Prediction button
-        stopPredictionBtn.addEventListener('click', function() {
-            isPredicting = false;
-            finishPrediction();
-        });
-        
-        function finishPrediction() {
-            // Update UI
-            isPredicting = false;
-            startPredictionBtn.disabled = false;
-            stopPredictionBtn.disabled = true;
-            statusMessage.className = 'alert alert-success';
-            statusMessage.textContent = 'Prediction complete!';
-            
-            // Simulate prediction result
-            // In a real implementation, this would come from the server
-            const predictions = generatePredictions();
-            updatePredictionDisplay(predictions);
-            
-            // Add to history
-            addToHistory(predictions);
-            
-            // Reset statuses after a delay
-            setTimeout(() => {
-                eegStatus.className = 'status-indicator bg-danger me-2';
-            }, 2000);
-        }
-        
-        function simulateEEGData() {
-            if (!isPredicting) return;
-            
-            // Generate random EEG-like data
-            eegData.shift();
-            const newValue = eegData[eegData.length - 1] + (Math.random() - 0.5) * 20;
-            eegData.push(Math.max(-100, Math.min(100, newValue)));
-            
-            // Update chart
-            eegChart.data.datasets[0].data = eegData;
-            eegChart.update();
-            
-            // Continue simulation if still predicting
-            if (isPredicting) {
-                requestAnimationFrame(simulateEEGData);
-            }
-        }
-        
-        function generatePredictions() {
-            // In a real implementation, this would be replaced with actual predictions from the model
-            const words = ['apple', 'banana', 'orange', 'grape', 'melon', 'water', 'coffee', 'tree', 'book', 'phone'];
-            
-            // If target word is provided, make it more likely to be the top prediction
-            const target = targetWord.value.trim().toLowerCase();
-            
-            let predictions = words.map(word => {
-                let confidence = Math.random();
-                // Increase confidence for target word if provided
-                if (target && word === target) {
-                    confidence = 0.7 + Math.random() * 0.3;
+            // Make the prediction API call
+            fetch('/pi_main/api/live-predict/', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
                 }
-                return {
-                    word: word,
-                    confidence: confidence
-                };
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Clear any remaining interval
+                clearInterval(countdownInterval);
+                
+                // Hide recording indicator
+                recordingIndicator.style.display = 'none';
+                
+                if (data.status === 'success') {
+                    // Update sample count and rate
+                    sampleCount.textContent = data.samples_collected;
+                    sampleRate.textContent = Math.round(data.samples_collected / duration);
+                    
+                    // Show prediction results
+                    updatePredictionDisplay(data.predictions);
+                    
+                    // Add to history
+                    addToHistory(data.predictions, data.samples_collected);
+                    
+                    // Update status message
+                    statusMessage.className = 'alert alert-success';
+                    statusMessage.textContent = 'Prediction completed successfully!';
+                } else {
+                    // Show error
+                    statusMessage.className = 'alert alert-danger';
+                    statusMessage.textContent = data.error || data.message || 'Prediction failed';
+                    
+                    // Reset prediction display
+                    predictedWord.textContent = '--';
+                    confidenceBar.style.width = '0%';
+                    confidenceValue.textContent = 'Confidence: 0%';
+                    topPredictions.innerHTML = '';
+                }
+                
+                // Re-enable start button
+                startPredictionBtn.disabled = false;
+            })
+            .catch(error => {
+                // Clear any remaining interval
+                clearInterval(countdownInterval);
+                
+                // Hide recording indicator
+                recordingIndicator.style.display = 'none';
+                
+                console.error('Prediction error:', error);
+                statusMessage.className = 'alert alert-danger';
+                statusMessage.textContent = 'Error during prediction. Please try again.';
+                
+                // Re-enable start button
+                startPredictionBtn.disabled = false;
             });
-            
-            // Sort by confidence
-            predictions.sort((a, b) => b.confidence - a.confidence);
-            
-            return predictions;
-        }
+        });
         
         function updatePredictionDisplay(predictions) {
-            if (!predictions || predictions.length === 0) return;
+            if (!predictions || !predictions.predicted_word) return;
             
             // Update main prediction
-            const topPrediction = predictions[0];
-            predictedWord.textContent = topPrediction.word;
+            predictedWord.textContent = predictions.predicted_word;
             
             // Update confidence bar
-            const confidencePercent = Math.round(topPrediction.confidence * 100);
+            const confidencePercent = Math.round(predictions.confidence * 100);
             confidenceBar.style.width = `${confidencePercent}%`;
             confidenceBar.setAttribute('aria-valuenow', confidencePercent);
             confidenceValue.textContent = `Confidence: ${confidencePercent}%`;
@@ -417,54 +583,55 @@
             // Update top predictions grid
             topPredictions.innerHTML = '';
             
-            // Show top 6 predictions
-            predictions.slice(0, 6).forEach(prediction => {
-                const col = document.createElement('div');
-                col.className = 'col-md-4 mb-2';
-                
-                const card = document.createElement('div');
-                card.className = 'card h-100';
-                
-                const confidence = Math.round(prediction.confidence * 100);
-                const bgClass = confidence >= 70 ? 'bg-success' : 
-                                confidence >= 40 ? 'bg-warning' : 'bg-danger';
-                
-                card.innerHTML = `
-                    <div class="card-body p-2 text-center">
-                        <h5 class="mb-1">${prediction.word}</h5>
-                        <div class="progress mt-1 mb-1">
-                            <div class="progress-bar ${bgClass}" role="progressbar" 
-                                 style="width: ${confidence}%" 
-                                 aria-valuenow="${confidence}" aria-valuemin="0" aria-valuemax="100">
+            // Show all predictions
+            if (predictions.predictions && Array.isArray(predictions.predictions)) {
+                predictions.predictions.slice(0, 6).forEach(prediction => {
+                    const col = document.createElement('div');
+                    col.className = 'col-md-4 mb-2';
+                    
+                    const card = document.createElement('div');
+                    card.className = 'card h-100';
+                    
+                    const confidence = Math.round(prediction.confidence * 100);
+                    const bgClass = confidence >= 70 ? 'bg-success' : 
+                                    confidence >= 40 ? 'bg-warning' : 'bg-danger';
+                    
+                    card.innerHTML = `
+                        <div class="card-body p-2 text-center">
+                            <h5 class="mb-1">${prediction.word}</h5>
+                            <div class="progress mt-1 mb-1">
+                                <div class="progress-bar ${bgClass}" role="progressbar" 
+                                     style="width: ${confidence}%" 
+                                     aria-valuenow="${confidence}" aria-valuemin="0" aria-valuemax="100">
+                                </div>
                             </div>
+                            <small>${confidence}%</small>
                         </div>
-                        <small>${confidence}%</small>
-                    </div>
-                `;
-                
-                col.appendChild(card);
-                topPredictions.appendChild(col);
-            });
+                    `;
+                    
+                    col.appendChild(card);
+                    topPredictions.appendChild(col);
+                });
+            }
         }
         
-        function addToHistory(predictions) {
-            if (!predictions || predictions.length === 0) return;
+        function addToHistory(predictions, sampleCount) {
+            if (!predictions || !predictions.predicted_word) return;
             
-            const topPrediction = predictions[0];
             const target = targetWord.value.trim() || '-';
-            const confidence = Math.round(topPrediction.confidence * 100);
+            const confidence = Math.round(predictions.confidence * 100);
             
             // Create the row
             const row = document.createElement('tr');
             
             // Determine if prediction matches target (if target was provided)
-            const isCorrect = target !== '-' && topPrediction.word.toLowerCase() === target.toLowerCase();
+            const isCorrect = target !== '-' && predictions.predicted_word.toLowerCase() === target.toLowerCase();
             const statusClass = target !== '-' ? (isCorrect ? 'bg-success text-white' : 'bg-danger text-white') : '';
             const statusText = target !== '-' ? (isCorrect ? 'Correct' : 'Incorrect') : 'Unknown';
             
             row.innerHTML = `
                 <td>${new Date().toLocaleTimeString()}</td>
-                <td>${topPrediction.word}</td>
+                <td>${predictions.predicted_word}</td>
                 <td>
                     <div class="progress" style="height: 20px;">
                         <div class="progress-bar ${confidence >= 70 ? 'bg-success' : confidence >= 40 ? 'bg-warning' : 'bg-danger'}" role="progressbar" 
@@ -476,6 +643,7 @@
                 </td>
                 <td>${target}</td>
                 <td class="${statusClass}">${statusText}</td>
+                <td>${sampleCount}</td>
             `;
             
             // Add row to table
@@ -487,20 +655,10 @@
             }
         }
         
-        // Add event listeners for form inputs to update the UI
-        modelSelect.addEventListener('change', function() {
-            if (this.value) {
-                modelStatus.className = 'status-indicator bg-warning me-2';
-                const selectedOption = this.options[this.selectedIndex];
-                const accuracy = selectedOption.getAttribute('data-accuracy');
-                statusMessage.className = 'alert alert-info';
-                statusMessage.textContent = `Model "${selectedOption.text}" selected (${accuracy * 100}% accuracy). Ready to start prediction.`;
-            } else {
-                modelStatus.className = 'status-indicator bg-danger me-2';
-                statusMessage.className = 'alert alert-warning';
-                statusMessage.textContent = 'Please select a model to continue.';
-            }
-        });
+        // Initialize UI based on selected model (if any)
+        if (modelSelect.value) {
+            modelStatus.className = 'status-indicator bg-success me-2';
+        }
     });
 </script>
 

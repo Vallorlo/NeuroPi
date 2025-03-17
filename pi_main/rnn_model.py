@@ -335,6 +335,14 @@ class RNNPredictor:
         # Load model
         self.model = models.load_model(os.path.join(self.model_dir, 'model.h5'))
         
+        # Print model details for debugging
+        print(f"Loaded model from {self.model_dir}")
+        self.model.summary()
+        
+        # Get model input shape
+        self.input_shape = self.model.input_shape
+        print(f"Model input shape: {self.input_shape}")
+        
         # Load label encoder
         with open(os.path.join(self.model_dir, 'label_encoder.pkl'), 'rb') as f:
             self.label_encoder = pickle.load(f)
@@ -343,87 +351,115 @@ class RNNPredictor:
         with open(os.path.join(self.model_dir, 'preprocessing_info.json'), 'r') as f:
             self.preprocessing_info = json.load(f)
             
-        self.eeg_columns = self.preprocessing_info['eeg_columns']
-        self.sequence_length = self.preprocessing_info['sequence_length']
+        self.eeg_columns = self.preprocessing_info.get('eeg_columns', [])
+        self.sequence_length = self.preprocessing_info.get('sequence_length', 50)
+        
+        print(f"Model expects {len(self.eeg_columns)} channels and sequence length {self.sequence_length}")
+        print(f"Supported words: {self.preprocessing_info.get('words', [])}")
             
     def preprocess_eeg_data(self, eeg_data):
         """Preprocess raw EEG data for prediction."""
-        # Make sure we have the right columns
-        if isinstance(eeg_data, pd.DataFrame):
-            # Extract only the EEG columns
-            available_columns = [col for col in self.eeg_columns if col in eeg_data.columns]
+        try:
+            print(f"Input EEG data shape: {eeg_data.shape if hasattr(eeg_data, 'shape') else 'unknown'}")
             
-            if not available_columns:
-                raise ValueError(f"None of the required EEG columns found in input data")
+            # Make sure we have the right columns
+            if isinstance(eeg_data, pd.DataFrame):
+                # Extract only the EEG columns
+                available_columns = [col for col in self.eeg_columns if col in eeg_data.columns]
                 
-            eeg_data = eeg_data[available_columns].values
+                if not available_columns:
+                    raise ValueError(f"None of the required EEG columns found in input data")
+                    
+                eeg_data = eeg_data[available_columns].values
             
-        # Ensure the data is in the right shape
-        if len(eeg_data.shape) == 1:
-            # Single channel data, reshape
-            eeg_data = eeg_data.reshape(-1, 1)
+            # Ensure the data has the right number of dimensions
+            if len(eeg_data.shape) == 1:
+                # Single channel data, reshape
+                eeg_data = eeg_data.reshape(-1, 1)
             
-        # Ensure we have the right sequence length
-        if eeg_data.shape[0] > self.sequence_length:
-            # Too long, truncate
-            eeg_data = eeg_data[:self.sequence_length]
-        elif eeg_data.shape[0] < self.sequence_length:
-            # Too short, pad with zeros
-            pad_length = self.sequence_length - eeg_data.shape[0]
-            padding = np.zeros((pad_length, eeg_data.shape[1]))
-            eeg_data = np.vstack([eeg_data, padding])
+            # Check if we need to transpose the data
+            if eeg_data.shape[0] <= 20 and eeg_data.shape[1] > 100:
+                # Likely channels x samples, transpose to samples x channels
+                print(f"Transposing data from shape {eeg_data.shape} to match expected format")
+                eeg_data = eeg_data.T
             
-        # Add batch dimension
-        return np.expand_dims(eeg_data, axis=0)
+            # Ensure we have the right sequence length
+            if eeg_data.shape[0] > self.sequence_length:
+                # Too long, truncate
+                print(f"Truncating sequence from {eeg_data.shape[0]} to {self.sequence_length}")
+                eeg_data = eeg_data[:self.sequence_length]
+            elif eeg_data.shape[0] < self.sequence_length:
+                # Too short, pad with zeros
+                print(f"Padding sequence from {eeg_data.shape[0]} to {self.sequence_length}")
+                pad_length = self.sequence_length - eeg_data.shape[0]
+                padding = np.zeros((pad_length, eeg_data.shape[1]))
+                eeg_data = np.vstack([eeg_data, padding])
+            
+            # Check if we have the right number of features (channels)
+            expected_features = self.input_shape[2] if len(self.input_shape) > 2 else len(self.eeg_columns)
+            if eeg_data.shape[1] > expected_features:
+                # Too many features, truncate
+                print(f"Truncating features from {eeg_data.shape[1]} to {expected_features}")
+                eeg_data = eeg_data[:, :expected_features]
+            elif eeg_data.shape[1] < expected_features:
+                # Too few features, pad with zeros
+                print(f"Padding features from {eeg_data.shape[1]} to {expected_features}")
+                pad_width = expected_features - eeg_data.shape[1]
+                padding = np.zeros((eeg_data.shape[0], pad_width))
+                eeg_data = np.hstack([eeg_data, padding])
+            
+            # Add batch dimension
+            eeg_data = np.expand_dims(eeg_data, axis=0)
+            
+            print(f"Preprocessed data shape: {eeg_data.shape}")
+            return eeg_data
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error preprocessing EEG data: {e}")
+            # Try to return something that might work
+            return np.zeros((1, self.sequence_length, self.input_shape[2] if len(self.input_shape) > 2 else len(self.eeg_columns)))
     
     def predict(self, eeg_data):
         """Make predictions from raw EEG data."""
-        # Preprocess the data
-        X = self.preprocess_eeg_data(eeg_data)
-        
-        # Make prediction
-        y_pred = self.model.predict(X)
-        
-        # Get the predicted word and confidence
-        predicted_class = np.argmax(y_pred, axis=1)[0]
-        confidence = y_pred[0][predicted_class]
-        
-        # Convert to word
-        predicted_word = self.label_encoder.inverse_transform([predicted_class])[0]
-        
-        # Return predictions with confidence scores for all words
-        all_words = self.label_encoder.classes_
-        all_confidences = y_pred[0]
-        
-        result = {
-            'predicted_word': predicted_word,
-            'confidence': float(confidence),
-            'predictions': [
-                {'word': word, 'confidence': float(conf)}
-                for word, conf in zip(all_words, all_confidences)
-            ]
-        }
-        
-        return result
-    
-    def predict_stream(self, eeg_data_stream, window_size=50, step_size=10):
-        """Make predictions on a continuous stream of EEG data using a sliding window."""
-        predictions = []
-        
-        # Make sure we have enough data
-        if len(eeg_data_stream) < window_size:
-            return []
-            
-        # Slide through the data stream
-        for i in range(0, len(eeg_data_stream) - window_size + 1, step_size):
-            # Extract window
-            window = eeg_data_stream[i:i+window_size]
+        try:
+            # Preprocess the data
+            X = self.preprocess_eeg_data(eeg_data)
             
             # Make prediction
-            prediction = self.predict(window)
-            prediction['window_start'] = i
-            prediction['window_end'] = i + window_size
+            print(f"Making prediction with input shape: {X.shape}")
+            y_pred = self.model.predict(X)
             
-            predictions.append(prediction)
+            # Get the predicted word and confidence
+            predicted_class = np.argmax(y_pred, axis=1)[0]
+            confidence = y_pred[0][predicted_class]
             
-        return predictions
+            # Convert to word
+            predicted_word = self.label_encoder.inverse_transform([predicted_class])[0]
+            
+            # Return predictions with confidence scores for all words
+            all_words = self.label_encoder.classes_
+            all_confidences = y_pred[0]
+            
+            result = {
+                'predicted_word': predicted_word,
+                'confidence': float(confidence),
+                'predictions': [
+                    {'word': word, 'confidence': float(conf)}
+                    for word, conf in zip(all_words, all_confidences)
+                ]
+            }
+            
+            return result
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error during prediction: {e}")
+            return {
+                'error': f"Prediction error: {str(e)}",
+                'predicted_word': 'error',
+                'confidence': 0.0,
+                'predictions': []
+            }

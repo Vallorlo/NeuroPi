@@ -14,6 +14,13 @@
                         <p>{{ message }}</p>
                     </div>
                     
+                    <!-- Output Directory Alert -->
+                    <div class="alert alert-info">
+                        <h5><i class="bi bi-folder-fill me-2"></i>Output Directory</h5>
+                        <p>All processed files have been saved to: <code>Trials_data/{{ output_dir }}</code></p>
+                        <p class="mb-0">This directory contains the processed data for each participant and stage, along with visualizations and combined datasets.</p>
+                    </div>
+                    
                     <!-- Processing Stats -->
                     <div class="row mt-4">
                         <div class="col-md-6">
@@ -166,9 +173,14 @@
                         <a href="/processor" class="btn btn-primary">
                             <i class="bi bi-arrow-left"></i> Back to Processor
                         </a>
-                        <a href="/cleaner" class="btn btn-info">
-                            <i class="bi bi-gear"></i> Clean Processed Data
-                        </a>
+                        <div>
+                            <a href="/processor" class="btn btn-outline-secondary me-2">
+                                <i class="bi bi-plus-circle"></i> Process More Data
+                            </a>
+                            <a href="/cleaner" class="btn btn-info">
+                                <i class="bi bi-gear"></i> Clean Processed Data
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

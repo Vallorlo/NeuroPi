@@ -264,25 +264,72 @@ class CleaningForm(forms.Form):
         trials_data_path = os.path.join(settings.BASE_DIR, 'Trials_data')
         choices = [('', 'Select a file')]  # Add a default option
         
+        processed_datasets = []
+        combined_datasets = []
+        train_datasets = []
+        test_datasets = []
+        other_datasets = []
+        
         if os.path.exists(trials_data_path):
+            # First look for processed directories
+            for item in os.listdir(trials_data_path):
+                item_path = os.path.join(trials_data_path, item)
+                if os.path.isdir(item_path) and item.startswith('processed_'):
+                    # Check for combined dataset in this processed directory
+                    combined_file = os.path.join(item_path, 'combined_eeg_dataset.csv')
+                    if os.path.exists(combined_file):
+                        processed_datasets.append((
+                            combined_file, 
+                            f'📊 {item}/combined_eeg_dataset.csv'
+                        ))
+                    
+                    # Check for train/test datasets
+                    train_file = os.path.join(item_path, 'train_dataset.csv')
+                    if os.path.exists(train_file):
+                        processed_datasets.append((
+                            train_file, 
+                            f'🧠 {item}/train_dataset.csv'
+                        ))
+                    
+                    test_file = os.path.join(item_path, 'test_dataset.csv')
+                    if os.path.exists(test_file):
+                        processed_datasets.append((
+                            test_file, 
+                            f'🔍 {item}/test_dataset.csv'
+                        ))
+            
+            # Then look for loose CSV files in the root directory
             for filename in os.listdir(trials_data_path):
                 if filename.endswith('.csv'):
                     filepath = os.path.join(trials_data_path, filename)
-                    choices.append((filepath, filename))  # (value, label)
                     
-            # Also look for combined datasets from processor
-            if 'combined_eeg_dataset.csv' in os.listdir(trials_data_path):
-                filepath = os.path.join(trials_data_path, 'combined_eeg_dataset.csv')
-                choices.append((filepath, '📊 combined_eeg_dataset.csv'))
-                
-            # Add train/test datasets if they exist
-            if 'train_dataset.csv' in os.listdir(trials_data_path):
-                filepath = os.path.join(trials_data_path, 'train_dataset.csv')
-                choices.append((filepath, '🧠 train_dataset.csv'))
-                
-            if 'test_dataset.csv' in os.listdir(trials_data_path):
-                filepath = os.path.join(trials_data_path, 'test_dataset.csv')
-                choices.append((filepath, '🔍 test_dataset.csv'))
+                    # Categorize the file
+                    if 'combined' in filename.lower() or 'dataset' in filename.lower():
+                        combined_datasets.append((filepath, f'📊 {filename}'))
+                    elif 'train' in filename.lower():
+                        train_datasets.append((filepath, f'🧠 {filename}'))
+                    elif 'test' in filename.lower():
+                        test_datasets.append((filepath, f'🔍 {filename}'))
+                    else:
+                        other_datasets.append((filepath, filename))
+                        
+            # Also look inside cleaned directories for cleaned datasets
+            for item in os.listdir(trials_data_path):
+                item_path = os.path.join(trials_data_path, item)
+                if os.path.isdir(item_path) and item.startswith('cleaned_'):
+                    for file in os.listdir(item_path):
+                        if file.endswith('.csv'):
+                            filepath = os.path.join(item_path, file)
+                            if 'cleaned' in file.lower():
+                                # Add to top of the list
+                                choices.append((filepath, f'🧹 {item}/{file}'))
+        
+        # Add the datasets in order of importance
+        choices.extend(processed_datasets)
+        choices.extend(combined_datasets)
+        choices.extend(train_datasets)  
+        choices.extend(test_datasets)
+        choices.extend(other_datasets)
         
         return choices
 

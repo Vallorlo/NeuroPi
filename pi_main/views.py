@@ -275,7 +275,13 @@ def train_model_background(job_id):
     
     try:
         # Load dataset
-        dataset_path = os.path.join(settings.TRIAL_DIR, job.dataset_path)
+        dataset_path = job.dataset_path
+        
+        # Handle datasets in subdirectories (processed_*/file.csv format)
+        if '/' in dataset_path and not os.path.isabs(dataset_path):
+            dataset_path = os.path.join(settings.TRIAL_DIR, dataset_path)
+        else:
+            dataset_path = os.path.join(settings.TRIAL_DIR, dataset_path)
         
         # Create trainer with apply_filtering parameter
         trainer = RNNModelTrainer(
@@ -579,7 +585,11 @@ def dataset_words_api(request):
     try:
         # Get full path if relative
         if not os.path.isabs(dataset):
-            dataset_path = os.path.join(settings.TRIAL_DIR, dataset)
+            # Check if the dataset is in a subdirectory (processed_*/file.csv format)
+            if '/' in dataset:
+                dataset_path = os.path.join(settings.TRIAL_DIR, dataset)
+            else:
+                dataset_path = os.path.join(settings.TRIAL_DIR, dataset)
         else:
             dataset_path = dataset
             
@@ -589,8 +599,16 @@ def dataset_words_api(request):
         # Find word event columns
         word_event_columns = [col for col in df.columns if col.endswith('_event')]
         
-        # Extract words from column names
-        words = [col.replace('_event', '') for col in word_event_columns]
+        # If no event columns, check for 'word' column (present in combined datasets)
+        if not word_event_columns and 'word' in df.columns:
+            # Get unique words from the 'word' column
+            words = df['word'].unique().tolist()
+        else:
+            # Extract words from event column names
+            words = [col.replace('_event', '') for col in word_event_columns]
+        
+        # Sort words alphabetically
+        words.sort()
         
         return JsonResponse({
             'status': 'success',

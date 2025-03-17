@@ -28,12 +28,19 @@ class RNNModelTrainer:
     """Class for training RNN models on EEG data."""
     
     def __init__(self, dataset_path, model_name, word_list=None, epochs=50, batch_size=32, 
-                 learning_rate=0.001, validation_split=0.2, hidden_units=64, 
-                 dropout_rate=0.2, recurrent_dropout=0.2, apply_filtering=False):
+                learning_rate=0.001, validation_split=0.2, hidden_units=64, 
+                dropout_rate=0.2, recurrent_dropout=0.2, apply_filtering=False):
         # Path settings
         self.dataset_path = dataset_path
         self.model_name = model_name
         self.output_dir = os.path.join(settings.BASE_DIR, 'trained_models', model_name)
+        
+        # Handle datasets in subdirectories (processed_*/file.csv format)
+        if '/' in dataset_path and not os.path.isabs(dataset_path):
+            self.dataset_path = os.path.join(settings.TRIAL_DIR, dataset_path)
+        else:
+            # Use the original path, it will be resolved later
+            self.dataset_path = dataset_path
         
         # Data settings
         self.word_list = word_list.split(',') if isinstance(word_list, str) and word_list else word_list

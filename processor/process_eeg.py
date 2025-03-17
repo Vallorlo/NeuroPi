@@ -231,7 +231,6 @@ def read_timestamp_file(timestamp_file_path, padding=1):
         return []
 
 
-
 def add_word_event_to_eeg(eeg_file_path, speech_timestamps, word):
     """
     Adds a word-specific event column to the EEG data CSV file based on speech timestamps.
@@ -284,11 +283,7 @@ def get_stage_number(stage_dir):
     except Exception:
         return None
 
-
-# Update to process_eeg.py
-# Add these improvements to your existing process_eeg.py file
-
-def process_trial_data(root_dir, verbose=True, create_visualizations=True, 
+def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualizations=True, 
                       timestamp_padding=0.25, generate_dataset=False, 
                       selected_stages=None, selected_participants=None, 
                       selected_words=None, create_train_test=False, 
@@ -298,6 +293,7 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
 
     Parameters:
     root_dir (str): Root directory of trial data
+    output_dir (str): Directory to save processed output (if None, uses root_dir)
     verbose (bool): Whether to print verbose output
     create_visualizations (bool): Whether to create visualizations
     timestamp_padding (float): Time in seconds to add to each side of timestamps
@@ -313,6 +309,9 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
     Returns:
     dict: Statistics about the processing
     """
+    if output_dir is None:
+        output_dir = root_dir  # Default to root_dir if no output_dir specified
+    
     if selected_stages is None:
         selected_stages = []  # Default to empty list (no stages selected)
 
@@ -338,28 +337,43 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
         print(f"Error: Root directory {root_dir} does not exist.")
         return stats
 
-    # List trials (participant directories)
-    trials = [d for d in os.listdir(root_dir) if os.path.isdir(os.path.join(root_dir, d))]
+    # List trials (participant directories - only directories starting with 'trial_')
+    trials = [d for d in os.listdir(root_dir) 
+             if os.path.isdir(os.path.join(root_dir, d)) 
+             and d.startswith('trial_')]
     
     # Filter participants if specified
     if selected_participants:
-        trials = [d for d in trials if d in selected_participants]
+        # Convert selected_participants to include 'trial_' prefix if needed
+        processed_selected = []
+        for p in selected_participants:
+            if p.startswith('trial_'):
+                processed_selected.append(p)
+            else:
+                processed_selected.append(f'trial_{p}')
+        
+        trials = [d for d in trials if d in processed_selected or d.replace('trial_', '') in selected_participants]
 
     if not trials:
         print(f"No trial directories found in {root_dir}")
         return stats
 
     print(f"Found {len(trials)} trial directories")
-    print(f"Processing participants: {', '.join(trials)}")
+    print(f"Processing participants: {', '.join([t.replace('trial_', '') for t in trials])}")
+
+    # Create the visualization directory in the output directory
+    viz_dir = os.path.join(output_dir, 'visualizations')
+    os.makedirs(viz_dir, exist_ok=True)
 
     # Walk through directory structure
     for participant_dir in trials:
         participant_path = os.path.join(root_dir, participant_dir)
+        participant_name = participant_dir.replace('trial_', '')
 
         if verbose:
-            print(f"\nProcessing participant: {participant_dir}")
+            print(f"\nProcessing participant: {participant_name}")
 
-        stats['participants'].add(participant_dir)
+        stats['participants'].add(participant_name)
 
         # Get word directories
         words = [d for d in os.listdir(participant_path) if os.path.isdir(os.path.join(participant_path, d))]
@@ -369,7 +383,7 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
             words = [d for d in words if d.lower() in [w.lower() for w in selected_words]]
 
         if not words:
-            print(f"No word directories found for participant {participant_dir}")
+            print(f"No word directories found for participant {participant_name}")
             continue
 
         if verbose:
@@ -413,6 +427,12 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
                 if generate_dataset and selected_stages and stage_num not in selected_stages:
                     print(f"Skipping stage {stage_num} (not selected).")
                     continue
+
+                # Create output directories for this participant/word/stage
+                participant_output_dir = os.path.join(output_dir, participant_name)
+                word_output_dir = os.path.join(participant_output_dir, word)
+                stage_output_dir = os.path.join(word_output_dir, stage_dir)
+                os.makedirs(stage_output_dir, exist_ok=True)
 
                 # Find all EEG files in this stage
                 all_files = os.listdir(stage_path)
@@ -490,8 +510,8 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
                             stats['files_with_errors'].append(eeg_file)
                             continue
 
-                        # Save updated EEG data
-                        output_path = os.path.join(stage_path, f"processed_{eeg_file}")
+                        # Save updated EEG data to the stage output directory
+                        output_path = os.path.join(stage_output_dir, f"processed_{eeg_file}")
                         updated_eeg.to_csv(output_path, index=False)
                         print(f"Successfully processed {eeg_file}")
                         print(f"Saved processed data to {output_path}")
@@ -501,24 +521,25 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
 
                         # Create visualization if requested
                         if create_visualizations:
-                            viz_path = os.path.join(stage_path, f"viz_{word}_attempt{attempt_num}.png")
+                            # Save visualization to the visualization directory
+                            viz_path = os.path.join(viz_dir, f"{participant_name}_{word}_{stage_dir}_attempt{attempt_num}.png")
                             if visualize_eeg_data(updated_eeg, word, viz_path):
                                 stats['visualizations_created'] += 1
 
                         if generate_dataset:
                             try:
                                 # Define the fixed set of sensor columns
-                                sensor_cols = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+                                sensor_columns = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
                                 # Get all event columns
-                                event_cols = [col for col in updated_eeg.columns if col.endswith('_event')]
+                                event_columns = [col for col in updated_eeg.columns if col.endswith('_event')]
                                 # Build the list of relevant columns to keep
-                                relevant_cols = ['Timestamp'] + [col for col in sensor_cols if col in updated_eeg.columns] + event_cols
+                                relevant_cols = ['Timestamp'] + [col for col in sensor_columns if col in updated_eeg.columns] + event_columns
                                 
                                 # Create the subset DataFrame
                                 dataset_subset = updated_eeg[relevant_cols].copy()
                                 
                                 # Add metadata columns for better organization and filtering
-                                dataset_subset['participant_id'] = participant_dir
+                                dataset_subset['participant_id'] = participant_name
                                 dataset_subset['word'] = word
                                 dataset_subset['stage'] = stage_num
                                 dataset_subset['attempt'] = attempt_num
@@ -527,9 +548,9 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
                                 stats['dataset_rows'] += len(dataset_subset)
                                 
                                 # Update participant-word mapping for stratification
-                                if participant_dir not in participant_word_mapping:
-                                    participant_word_mapping[participant_dir] = set()
-                                participant_word_mapping[participant_dir].add(word)
+                                if participant_name not in participant_word_mapping:
+                                    participant_word_mapping[participant_name] = set()
+                                participant_word_mapping[participant_name].add(word)
                             except Exception as e:
                                 print(f"Error adding data to dataset: {e}")
                     except Exception as e:  # Catch any other exceptions during processing
@@ -548,8 +569,8 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
                  if combined_df[col].isnull().any(): # Check for any NaN values.
                        combined_df[col] = combined_df[col].fillna(False)
 
-            # Save combined dataset
-            dataset_path = os.path.join(root_dir, "combined_eeg_dataset.csv")
+            # Save combined dataset to the output directory
+            dataset_path = os.path.join(output_dir, "combined_eeg_dataset.csv")
             combined_df.to_csv(dataset_path, index=False)
             print(f"\nCombined dataset saved to {dataset_path}")
             
@@ -573,9 +594,9 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
                         stratify=stratify
                     )
                     
-                    # Save the train and test datasets
-                    train_path = os.path.join(root_dir, "train_dataset.csv")
-                    test_path = os.path.join(root_dir, "test_dataset.csv")
+                    # Save the train and test datasets to the output directory
+                    train_path = os.path.join(output_dir, "train_dataset.csv")
+                    test_path = os.path.join(output_dir, "test_dataset.csv")
                     
                     train_df.to_csv(train_path, index=False)
                     test_df.to_csv(test_path, index=False)
@@ -587,6 +608,8 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
                     stats['train_rows'] = len(train_df)
                     stats['test_rows'] = len(test_df)
                     stats['train_test_created'] = True
+                    stats['train_file'] = train_path
+                    stats['test_file'] = test_path
                     
                 except Exception as e:
                     print(f"Error creating train-test split: {e}")
@@ -600,5 +623,6 @@ def process_trial_data(root_dir, verbose=True, create_visualizations=True,
     stats['total_unique_words'] = len(stats['unique_words'])
     stats['participant_list'] = list(stats['participants'])
     stats['words_list'] = list(stats['unique_words'])
+    stats['output_dir'] = output_dir
 
     return stats

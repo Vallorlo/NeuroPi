@@ -93,6 +93,7 @@ def clean_data_view(request):
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_dir = os.path.join(settings.BASE_DIR, 'Trials_data', f'cleaned_{timestamp}')
                 os.makedirs(output_dir, exist_ok=True)
+                os.makedirs(output_dir, exist_ok=True)
                 
                 output_file_path = os.path.join(output_dir, output_file_name)
                 print(f"Output file path: {output_file_path}")  # Debug: Check output path
@@ -239,13 +240,14 @@ def clean_data_view(request):
                         
                         # Add file URLs for downloading
                         result['output_file_name'] = os.path.basename(output_file_path)
-                        result['output_file_url'] = f"/cleaner/download/{os.path.basename(output_file_path)}"
-                        
+                        result['output_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(output_file_path)}"
+
+                        # For any train/test files:
                         if result.get('train_file'):
-                            result['train_file_url'] = f"/cleaner/download/{os.path.basename(result['train_file'])}"
-                        
+                            result['train_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(result['train_file'])}"
+
                         if result.get('test_file'):
-                            result['test_file_url'] = f"/cleaner/download/{os.path.basename(result['test_file'])}"
+                            result['test_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(result['test_file'])}"
                         
                         # Fix plots URLs if they exist
                         if plots:
@@ -358,16 +360,28 @@ def download_file_view(request, filepath):
         # For security, validate the filepath is within the allowed directory
         base_dir = settings.BASE_DIR
         
-        # Check if the file exists in the Trials_data directory
-        trials_data_path = os.path.join(base_dir, 'Trials_data')
-        full_path = os.path.join(trials_data_path, filepath)
+        # Handle paths that might include subdirectories
+        path_parts = filepath.split('/')
+        
+        if len(path_parts) > 1:
+            # If the file is in a subdirectory
+            subdir = path_parts[0]
+            file_name = '/'.join(path_parts[1:])  # Join the rest back together
+            full_path = os.path.join(base_dir, 'Trials_data', subdir, file_name)
+        else:
+            # Direct file in Trials_data directory
+            full_path = os.path.join(base_dir, 'Trials_data', filepath)
         
         # If not found directly, search subdirectories
         if not os.path.exists(full_path):
-            for root, dirs, files in os.walk(trials_data_path):
-                if filepath in files:
-                    full_path = os.path.join(root, filepath)
-                    break
+            for root, dirs, files in os.walk(os.path.join(base_dir, 'Trials_data')):
+                for file in files:
+                    if file == path_parts[-1]:  # Match the filename (last part of the path)
+                        candidate_path = os.path.join(root, file)
+                        # Check if the path is valid
+                        if os.path.abspath(candidate_path).startswith(os.path.abspath(base_dir)):
+                            full_path = candidate_path
+                            break
         
         # Check if the file exists and is within the base directory
         if not os.path.exists(full_path):

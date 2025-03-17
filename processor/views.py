@@ -13,6 +13,7 @@ from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 import tempfile
 from .process_eeg import process_trial_data  # Import directly!
+import datetime
 
 
 def process_data_view(request):
@@ -35,12 +36,14 @@ def process_data_view(request):
     try:
         # Scan the trials directory to find available participants and words
         if os.path.exists(default_root_dir):
-            available_participants = [d for d in os.listdir(default_root_dir) 
-                                     if os.path.isdir(os.path.join(default_root_dir, d))]
+            # Only include actual participant directories (those starting with 'trial_')
+            available_participants = [d.replace('trial_', '') for d in os.listdir(default_root_dir) 
+                                     if os.path.isdir(os.path.join(default_root_dir, d)) 
+                                     and d.startswith('trial_')]
             
             # Get words from the first participant (assuming similar structure for all)
             if available_participants:
-                first_participant = os.path.join(default_root_dir, available_participants[0])
+                first_participant = os.path.join(default_root_dir, f'trial_{available_participants[0]}')
                 available_words = [d for d in os.listdir(first_participant)
                                    if os.path.isdir(os.path.join(first_participant, d))]
     except Exception as e:
@@ -55,7 +58,7 @@ def process_data_view(request):
             # Check if this is an AJAX request for participant words
             if request.headers.get('X-Requested-With') == 'XMLHttpRequest' and 'get_words' in request.POST:
                 participant = request.POST.get('participant')
-                participant_dir = os.path.join(default_root_dir, participant)
+                participant_dir = os.path.join(default_root_dir, f'trial_{participant}')
                 
                 if os.path.exists(participant_dir):
                     words = [d for d in os.listdir(participant_dir)
@@ -114,9 +117,16 @@ def process_data_view(request):
                         zip_ref.extractall(temp_dir)
                     root_dir = temp_dir  # Override with temp dir if zip is uploaded
 
+                # Create a timestamped output directory
+                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_dir_name = f'processed_{timestamp}'
+                output_dir = os.path.join(root_dir, output_dir_name)
+                os.makedirs(output_dir, exist_ok=True)
+
                 try:
                     stats = process_trial_data(
                         root_dir=root_dir,
+                        output_dir=output_dir,  # Pass the new output directory
                         verbose=verbose,
                         create_visualizations=create_visualizations,
                         generate_dataset=generate_dataset,
@@ -134,24 +144,24 @@ def process_data_view(request):
                     # If datasets were created, add links to download them
                     if generate_dataset:
                         dataset_links = []
-                        combined_dataset_path = os.path.join(root_dir, "combined_eeg_dataset.csv")
+                        combined_dataset_path = os.path.join(output_dir, "combined_eeg_dataset.csv")
                         if os.path.exists(combined_dataset_path):
                             dataset_links.append({
                                 'name': 'Combined Dataset',
                                 'path': combined_dataset_path,
-                                'filename': 'combined_eeg_dataset.csv',  # Add filename explicitly
+                                'filename': f'{output_dir_name}/combined_eeg_dataset.csv',  # Include subdirectory
                                 'size': f"{os.path.getsize(combined_dataset_path) / (1024*1024):.2f} MB"
                             })
                         
                         if create_train_test:
-                            train_path = os.path.join(root_dir, "train_dataset.csv")
-                            test_path = os.path.join(root_dir, "test_dataset.csv")
+                            train_path = os.path.join(output_dir, "train_dataset.csv")
+                            test_path = os.path.join(output_dir, "test_dataset.csv")
                             
                             if os.path.exists(train_path):
                                 dataset_links.append({
                                     'name': 'Training Dataset',
                                     'path': train_path,
-                                    'filename': 'train_dataset.csv',  # Add filename explicitly
+                                    'filename': f'{output_dir_name}/train_dataset.csv',  # Include subdirectory
                                     'size': f"{os.path.getsize(train_path) / (1024*1024):.2f} MB"
                                 })
                             
@@ -159,20 +169,17 @@ def process_data_view(request):
                                 dataset_links.append({
                                     'name': 'Testing Dataset',
                                     'path': test_path,
-                                    'filename': 'test_dataset.csv',  # Add filename explicitly
+                                    'filename': f'{output_dir_name}/test_dataset.csv',  # Include subdirectory
                                     'size': f"{os.path.getsize(test_path) / (1024*1024):.2f} MB"
                                 })
                         message += " Generated datasets are available for download below."
-                        
-                        # Extract just the filenames for our dataset links
-                        for link in dataset_links:
-                            link['filename'] = os.path.basename(link['path'])
                         
                         return render(request, 'processor/process_complete.html', {
                             'message': message,
                             'dataset_links': dataset_links,
                             'stats': stats,
-                            'output': output.getvalue()
+                            'output': output.getvalue(),
+                            'output_dir': output_dir_name
                         })
 
                 except Exception as e:
@@ -180,6 +187,34 @@ def process_data_view(request):
                     print(f"Processing error: {e}")
                     import traceback
                     traceback.print_exc()  # Print the full traceback for debugging
+
+                    # Return an error response with JavaScript to remove the overlay
+                    response_html = f"""
+                    <html>
+                    <head>
+                        <script>
+                            // Remove the processing overlay first
+                            function removeOverlay() {{
+                                const overlay = document.getElementById('processing-overlay');
+                                if (overlay) {{
+                                    overlay.remove();
+                                }}
+                            }}
+                            removeOverlay();
+                            
+                            // Then alert the user about the error
+                            alert('Error during processing: {str(e)}');
+                            
+                            // Redirect back to the form page
+                            window.location.href = window.location.href;
+                        </script>
+                    </head>
+                    <body>
+                        <p>Error processing request. Redirecting...</p>
+                    </body>
+                    </html>
+                    """
+                    return HttpResponse(response_html)
 
                 if zip_file:
                     try:
@@ -189,20 +224,57 @@ def process_data_view(request):
                     except OSError as e:
                          print(f"Error removing temp directory: {e}")
             else:
-                message = 'Form is not valid. Please check the inputs.'
-                print(f"Form errors: {form.errors}")
+                print("Form is NOT valid")  # Debug: Form invalid
+                message = "Invalid form inputs. Please check the error messages."
+                print(form.errors)  # Print Errors
+                
+                # Add JavaScript to remove the processing overlay for invalid form submissions
+                response_html = """
+                <html>
+                <head>
+                    <script>
+                        // Remove the processing overlay
+                        function removeOverlay() {
+                            const overlay = document.getElementById('processing-overlay');
+                            if (overlay) {
+                                overlay.remove();
+                            }
+                        }
+                        removeOverlay();
+                        
+                        // Redirect back to the form page
+                        window.location.href = window.location.href;
+                    </script>
+                </head>
+                <body>
+                    <p>Invalid form submission. Redirecting...</p>
+                </body>
+                </html>
+                """
+                return HttpResponse(response_html)
+                
         else:
             # Create form with custom choices for initial page load
             form = ProcessingForm()
             form.fields['selected_participants'].choices = participant_choices
             form.fields['selected_words'].choices = word_choices
 
+        # Check for existing processed data
+        processed_dirs = [d for d in os.listdir(default_root_dir) 
+                         if os.path.isdir(os.path.join(default_root_dir, d)) 
+                         and d.startswith('processed_')]
+        
+        has_processed_data = len(processed_dirs) > 0
+        latest_processed = max(processed_dirs, default=None) if processed_dirs else None
+
         return render(request, 'processor/process_data.html', {
             'form': form, 
             'message': message, 
             'output': output.getvalue(),
             'available_participants': available_participants,
-            'available_words': available_words
+            'available_words': available_words,
+            'has_processed_data': has_processed_data,
+            'latest_processed': latest_processed
         })
 
     finally: # Very important to restore sys.stdout
@@ -211,10 +283,32 @@ def process_data_view(request):
 
 def download_dataset(request, filename):
     """View to handle dataset downloads"""
-    file_path = os.path.join(settings.BASE_DIR, 'Trials_data', filename)
+    # Handle paths that might include subdirectories
+    path_parts = filename.split('/')
+    
+    if len(path_parts) > 1:
+        # If the file is in a subdirectory
+        subdir = path_parts[0]
+        file_name = path_parts[1]
+        file_path = os.path.join(settings.BASE_DIR, 'Trials_data', subdir, file_name)
+    else:
+        # Direct file in Trials_data
+        file_path = os.path.join(settings.BASE_DIR, 'Trials_data', filename)
+    
     if os.path.exists(file_path):
         with open(file_path, 'rb') as fh:
             response = HttpResponse(fh.read(), content_type='text/csv')
             response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
             return response
+    
+    # File not found, try searching
+    trials_data_path = os.path.join(settings.BASE_DIR, 'Trials_data')
+    for root, dirs, files in os.walk(trials_data_path):
+        if os.path.basename(filename) in files:
+            file_path = os.path.join(root, os.path.basename(filename))
+            with open(file_path, 'rb') as fh:
+                response = HttpResponse(fh.read(), content_type='text/csv')
+                response['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
+                return response
+    
     return HttpResponse("File not found", status=404)

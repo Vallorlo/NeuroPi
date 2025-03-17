@@ -63,7 +63,7 @@ class ProcessingForm(forms.Form):
     stage_4 = forms.BooleanField(required=False, label='Stage 4', initial=True)
     stage_5 = forms.BooleanField(required=False, label='Stage 5', initial=True)
     
-    # NEW: Train-Test Split Options
+    # Train-Test Split Options
     create_train_test_split = forms.BooleanField(
         required=False, 
         label='Create Train-Test Split', 
@@ -94,7 +94,7 @@ class ProcessingForm(forms.Form):
         help_text='Ensure word distribution is similar in both train and test sets'
     )
     
-    # NEW: Participant and Word Selection
+    # Participant and Word Selection
     selected_participants = forms.MultipleChoiceField(
         required=False,
         label='Select Participants',
@@ -110,6 +110,11 @@ class ProcessingForm(forms.Form):
         widget=forms.SelectMultiple(attrs={'class': 'form-control select2', 'size': '5'}),
         help_text='Leave empty to process all words'
     )
+    
+    def __init__(self, *args, **kwargs):
+        super(ProcessingForm, self).__init__(*args, **kwargs)
+        # We'll set choices in the view instead of here
+        # This prevents validation errors when the form is submitted
     
     def clean(self):
         cleaned_data = super().clean()

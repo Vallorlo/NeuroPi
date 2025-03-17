@@ -78,10 +78,41 @@ class ModelTrainingForm(forms.ModelForm):
         base_dir = settings.TRIAL_DIR
         
         if os.path.exists(base_dir):
-            # Look for CSV files in the base directory
+            # First, look for processed directories
+            for item in os.listdir(base_dir):
+                item_path = os.path.join(base_dir, item)
+                if os.path.isdir(item_path):
+                    # Check for processed directories
+                    if item.startswith('processed_'):
+                        # Look for combined and train/test datasets
+                        for file in os.listdir(item_path):
+                            if file.endswith('.csv'):
+                                rel_path = os.path.join(item, file)
+                                absolute_path = os.path.join(base_dir, rel_path)
+                                
+                                # Format display name with appropriate icons
+                                if 'combined' in file:
+                                    display_name = f"📊 {item}/{file}"
+                                elif 'train' in file:
+                                    display_name = f"🧠 {item}/{file}"
+                                elif 'test' in file:
+                                    display_name = f"🔍 {item}/{file}"
+                                else:
+                                    display_name = f"📁 {item}/{file}"
+                                
+                                choices.append((rel_path, display_name))
+                    
+                    # Check for cleaned directories
+                    elif item.startswith('cleaned_'):
+                        # Look for cleaned datasets
+                        for file in os.listdir(item_path):
+                            if file.endswith('.csv') and ('clean' in file.lower() or 'dataset' in file.lower()):
+                                rel_path = os.path.join(item, file)
+                                choices.append((rel_path, f"🧹 {item}/{file}"))
+            
+            # Then look for CSV files directly in the base directory
             for file in os.listdir(base_dir):
                 if file.endswith('.csv'):
-                    file_path = os.path.join(base_dir, file)
                     # Add special indicator for processed or combined datasets
                     prefix = ""
                     if 'clean' in file.lower() or 'processed' in file.lower():
@@ -90,17 +121,10 @@ class ModelTrainingForm(forms.ModelForm):
                         prefix = "📊 "
                     if 'train' in file.lower():
                         prefix = "🧠 "
-                        
+                    if 'test' in file.lower():
+                        prefix = "🔍 "
+                    
                     choices.append((file, f"{prefix}{file}"))
-            
-            # Also look for organized datasets in subfolders
-            for item in os.listdir(base_dir):
-                sub_dir = os.path.join(base_dir, item)
-                if os.path.isdir(sub_dir) and ('cleaned_' in item or 'processed_' in item):
-                    for file in os.listdir(sub_dir):
-                        if file.endswith('.csv'):
-                            rel_path = os.path.join(item, file)
-                            choices.append((rel_path, f"📁 {item}/{file}"))
         
         return choices
     

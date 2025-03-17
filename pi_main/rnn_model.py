@@ -13,6 +13,17 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tensorflow.keras.utils import to_categorical
 
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, classification_report, roc_curve, auc, precision_recall_curve
+from sklearn.preprocessing import LabelBinarizer
+import seaborn as sns
+import pandas as pd
+import numpy as np
+import os
+import io
+import base64
+            
+
 class RNNModelTrainer:
     """Class for training RNN models on EEG data."""
     
@@ -462,4 +473,355 @@ class RNNPredictor:
                 'predicted_word': 'error',
                 'confidence': 0.0,
                 'predictions': []
+            }
+        
+
+    def evaluate(self, test_dataset_path):
+        """
+        Evaluate the model on a test dataset and return comprehensive metrics.
+        
+        Parameters:
+        -----------
+        test_dataset_path : str
+            Path to the test dataset CSV file
+        
+        Returns:
+        --------
+        dict
+            Dictionary containing evaluation metrics and visualizations
+        """
+        try:
+            print(f"Evaluating model on: {test_dataset_path}")
+            
+            # Modified path construction logic to use settings.TRIAL_DIR
+            if not os.path.isabs(test_dataset_path):
+                from django.conf import settings
+                # Directly use the TRIAL_DIR setting to ensure we look in the right place
+                full_path = os.path.join(settings.TRIAL_DIR, test_dataset_path)
+            else:
+                full_path = test_dataset_path
+
+            print(f"Looking for test dataset at: {full_path}")
+
+
+            # Load the test dataset
+            df = pd.read_csv(full_path)
+            print(f"Test dataset loaded with shape: {df.shape}")
+            
+            # Find event columns
+            event_columns = [col for col in df.columns if col.endswith('_event')]
+            if not event_columns:
+                raise ValueError("No event columns found in the test dataset")
+            
+            # Create a mapping from event column to word name
+            word_to_event = {col.replace('_event', ''): col for col in event_columns}
+            words = list(word_to_event.keys())
+            
+            # Verify these words exist in our label encoder
+            for word in words:
+                if word not in self.label_encoder.classes_:
+                    print(f"Warning: Word '{word}' not found in trained model vocabulary.")
+            
+            # Filter to only include words that the model knows
+            known_words = [w for w in words if w in self.label_encoder.classes_]
+            if not known_words:
+                raise ValueError("None of the words in the test dataset match the model's vocabulary")
+            
+            # Extract EEG data and labels
+            eeg_columns = self.preprocessing_info.get('eeg_columns', [])
+            available_columns = [col for col in eeg_columns if col in df.columns]
+            
+            if not available_columns:
+                raise ValueError("None of the required EEG channels found in test dataset")
+            
+            # Initialize results
+            true_labels = []
+            predicted_labels = []
+            prediction_scores = []
+            
+            # Process the data in sliding windows
+            window_size = self.sequence_length
+            step_size = window_size // 2  # 50% overlap
+            
+            print(f"Processing with window size: {window_size}, step size: {step_size}")
+            
+            # Find segments where any event is True
+            df['any_event'] = False
+            for event_col in event_columns:
+                df['any_event'] = df['any_event'] | df[event_col]
+            
+            # Extract event segments
+            event_segments = []
+            current_segment = []
+            in_segment = False
+            
+            for i, row in df.iterrows():
+                if row['any_event'] and not in_segment:
+                    # Start of new segment
+                    in_segment = True
+                    current_segment = [i]
+                elif row['any_event'] and in_segment:
+                    # Continue segment
+                    current_segment.append(i)
+                elif not row['any_event'] and in_segment:
+                    # End of segment
+                    if len(current_segment) >= 5:  # Only keep segments with at least 5 samples
+                        event_segments.append(current_segment)
+                    in_segment = False
+                    current_segment = []
+            
+            # Add last segment if still active
+            if in_segment and len(current_segment) >= 5:
+                event_segments.append(current_segment)
+            
+            print(f"Found {len(event_segments)} event segments")
+            
+            # Process each segment
+            for segment_indices in event_segments:
+                if len(segment_indices) < window_size:
+                    # Pad small segments
+                    start_idx = segment_indices[0]
+                    end_idx = segment_indices[-1]
+                    padding_before = (window_size - len(segment_indices)) // 2
+                    padding_after = window_size - len(segment_indices) - padding_before
+                    
+                    start_idx = max(0, start_idx - padding_before)
+                    end_idx = min(len(df) - 1, end_idx + padding_after)
+                    segment_indices = list(range(start_idx, end_idx + 1))
+                
+                # Determine the dominant event in this segment
+                segment_df = df.loc[segment_indices]
+                event_counts = {}
+                for event_col in event_columns:
+                    event_counts[event_col] = segment_df[event_col].sum()
+                
+                if not any(event_counts.values()):
+                    continue  # Skip if no events
+                
+                # Get the dominant event
+                dominant_event = max(event_counts, key=event_counts.get)
+                true_word = dominant_event.replace('_event', '')
+                
+                # Skip if word not in model vocabulary
+                if true_word not in self.label_encoder.classes_:
+                    continue
+                
+                # For windows that are too large, use sliding window approach
+                if len(segment_indices) > window_size:
+                    for start_idx in range(0, len(segment_indices) - window_size + 1, step_size):
+                        window_indices = segment_indices[start_idx:start_idx + window_size]
+                        segment_eeg = df.loc[window_indices, available_columns].values
+                        
+                        # Make prediction
+                        if len(segment_eeg) == window_size:
+                            # Preprocess and predict
+                            X = self.preprocess_eeg_data(segment_eeg)
+                            scores = self.model.predict(X)[0]
+                            predicted_idx = np.argmax(scores)
+                            predicted_word = self.label_encoder.inverse_transform([predicted_idx])[0]
+                            
+                            # Store results
+                            true_labels.append(true_word)
+                            predicted_labels.append(predicted_word)
+                            prediction_scores.append(scores)
+                else:
+                    # For smaller segments, use the entire segment
+                    segment_eeg = df.loc[segment_indices, available_columns].values
+                    
+                    # Ensure we have the right sequence length
+                    if len(segment_eeg) < window_size:
+                        # Pad with zeros
+                        padding = np.zeros((window_size - len(segment_eeg), len(available_columns)))
+                        segment_eeg = np.vstack([segment_eeg, padding])
+                    elif len(segment_eeg) > window_size:
+                        # Truncate
+                        segment_eeg = segment_eeg[:window_size]
+                    
+                    # Make prediction
+                    X = self.preprocess_eeg_data(segment_eeg)
+                    scores = self.model.predict(X)[0]
+                    predicted_idx = np.argmax(scores)
+                    predicted_word = self.label_encoder.inverse_transform([predicted_idx])[0]
+                    
+                    # Store results
+                    true_labels.append(true_word)
+                    predicted_labels.append(predicted_word)
+                    prediction_scores.append(scores)
+            
+            # Check if we have any valid predictions
+            if not true_labels or not predicted_labels:
+                raise ValueError("No valid predictions could be made on this dataset")
+            
+            print(f"Made {len(true_labels)} predictions on test data")
+            
+            # Calculate accuracy
+            accuracy = np.mean([1 if t == p else 0 for t, p in zip(true_labels, predicted_labels)])
+            
+            # Generate class indices for one-hot encoding
+            classes = self.label_encoder.classes_
+            label_binarizer = LabelBinarizer().fit(classes)
+            
+            # Convert string labels to indices
+            y_true_indices = [np.where(classes == label)[0][0] for label in true_labels]
+            y_pred_indices = [np.where(classes == label)[0][0] for label in predicted_labels]
+            
+            # One-hot encode for ROC curves
+            y_true_onehot = label_binarizer.transform(true_labels)
+            
+            # Create confusion matrix
+            cm = confusion_matrix(true_labels, predicted_labels, labels=classes)
+            
+            # Generate charts
+            charts = {}
+            
+            # 1. Confusion Matrix
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=classes, yticklabels=classes)
+            plt.xlabel('Predicted')
+            plt.ylabel('True')
+            plt.title('Confusion Matrix')
+            
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            plt.close()
+            confusion_matrix_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+            charts['confusion_matrix'] = confusion_matrix_b64
+            
+            # 2. ROC Curves (one-vs-rest)
+            plt.figure(figsize=(10, 8))
+            
+            # Convert prediction scores to numpy array
+            y_score = np.array(prediction_scores)
+            
+            # Compute ROC curve and ROC area for each class
+            fpr = dict()
+            tpr = dict()
+            roc_auc = dict()
+            
+            for i, class_name in enumerate(classes):
+                fpr[i], tpr[i], _ = roc_curve(y_true_onehot[:, i], y_score[:, i])
+                roc_auc[i] = auc(fpr[i], tpr[i])
+                plt.plot(fpr[i], tpr[i], lw=2, 
+                        label=f'{class_name} (AUC = {roc_auc[i]:.2f})')
+            
+            plt.plot([0, 1], [0, 1], 'k--', lw=2)
+            plt.xlim([0.0, 1.0])
+            plt.ylim([0.0, 1.05])
+            plt.xlabel('False Positive Rate')
+            plt.ylabel('True Positive Rate')
+            plt.title('Receiver Operating Characteristic (ROC) Curves')
+            plt.legend(loc="lower right")
+            
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            plt.close()
+            roc_curves_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+            charts['roc_curves'] = roc_curves_b64
+            
+            # 3. Precision-Recall Curves
+            plt.figure(figsize=(10, 8))
+            
+            # Compute Precision-Recall curve for each class
+            precision = dict()
+            recall = dict()
+            pr_auc = dict()
+            
+            for i, class_name in enumerate(classes):
+                precision[i], recall[i], _ = precision_recall_curve(y_true_onehot[:, i], y_score[:, i])
+                # Calculate AUC for PR curve
+                pr_auc[i] = auc(recall[i], precision[i])
+                plt.plot(recall[i], precision[i], lw=2,
+                        label=f'{class_name} (AUC = {pr_auc[i]:.2f})')
+            
+            plt.xlim([0.0, 1.0])
+            plt.ylim([0.0, 1.05])
+            plt.xlabel('Recall')
+            plt.ylabel('Precision')
+            plt.title('Precision-Recall Curves')
+            plt.legend(loc="lower left")
+            
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            plt.close()
+            pr_curves_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+            charts['pr_curves'] = pr_curves_b64
+            
+            # 4. Class Distribution
+            plt.figure(figsize=(10, 6))
+            class_counts = {}
+            for label in true_labels:
+                if label in class_counts:
+                    class_counts[label] += 1
+                else:
+                    class_counts[label] = 1
+            
+            labels = list(class_counts.keys())
+            counts = [class_counts[label] for label in labels]
+            
+            sns.barplot(x=labels, y=counts)
+            plt.title('Class Distribution in Test Data')
+            plt.xlabel('Word')
+            plt.ylabel('Count')
+            plt.xticks(rotation=45)
+            
+            buf = io.BytesIO()
+            plt.savefig(buf, format='png')
+            plt.close()
+            class_dist_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+            charts['class_distribution'] = class_dist_b64
+            
+            # Classification report
+            report = classification_report(true_labels, predicted_labels, output_dict=True)
+            
+            # Gather all metrics
+            metrics = {
+                'accuracy': accuracy,
+                'confusion_matrix': cm.tolist(),
+                'classification_report': report,
+                'roc_auc': {str(k): v for k, v in roc_auc.items()},
+                'pr_auc': {str(k): v for k, v in pr_auc.items()},
+                'class_distribution': class_counts,
+                'true_labels': true_labels,
+                'predicted_labels': predicted_labels,
+                'classes': classes.tolist()
+            }
+            
+            # Save evaluation results
+            output_dir = os.path.join(self.model_dir, 'evaluation')
+            os.makedirs(output_dir, exist_ok=True)
+            
+            timestamp = pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')
+            eval_file = os.path.join(output_dir, f'evaluation_{timestamp}.json')
+            
+            # Convert numpy arrays to lists for JSON serialization
+            serializable_metrics = {
+                'accuracy': float(metrics['accuracy']),
+                'confusion_matrix': metrics['confusion_matrix'],
+                'classification_report': metrics['classification_report'],
+                'roc_auc': metrics['roc_auc'],
+                'pr_auc': metrics['pr_auc'],
+                'class_distribution': metrics['class_distribution'],
+                'classes': metrics['classes'],
+                'dataset_path': test_dataset_path,
+                'timestamp': timestamp
+            }
+            
+            with open(eval_file, 'w') as f:
+                import json
+                json.dump(serializable_metrics, f)
+            
+            return {
+                'metrics': metrics,
+                'charts': charts,
+                'success': True,
+                'eval_file': eval_file
+            }
+            
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            print(f"Error during model evaluation: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
             }

@@ -1,5 +1,5 @@
 from django import template
-
+import os
 register = template.Library()
 
 @register.filter
@@ -17,9 +17,20 @@ def mul(value, arg):
     
 
 @register.filter
+def basename(value):
+    """Get the basename of a path."""
+    return os.path.basename(value)
+
+@register.filter
 def sub(value, arg):
     """Subtract the argument from the value"""
     try:
         return float(value) - float(arg)
     except (ValueError, TypeError):
         return None
+    
+
+@register.filter
+def get_item(dictionary, key):
+    """Get an item from a dictionary with the given key."""
+    return dictionary.get(key)

@@ -14,6 +14,11 @@ urlpatterns = [
     path('delete-model/<uuid:model_id>/', views.delete_model, name='delete_model'),
     path('delete-job/<uuid:job_id>/', views.delete_job, name='delete_job'),
     path('cancel-training/<uuid:job_id>/', views.cancel_training, name='cancel_training'),
+    path('models/<uuid:model_id>/evaluate/', views.model_evaluate, name='model_evaluate'),
+    path('evaluations/<uuid:evaluation_id>/', views.evaluation_detail, name='evaluation_detail'),
+    path('evaluations/<uuid:evaluation_id>/delete/', views.delete_evaluation, name='delete_evaluation'),
+    
+
     
     # API endpoints
     path('api/start-training/', views.start_training_api, name='start_training_api'),

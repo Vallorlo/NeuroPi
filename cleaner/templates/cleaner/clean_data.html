@@ -373,7 +373,7 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // Form element references
+
         const form = document.getElementById('cleaningForm');
         const applyBandpass = document.getElementById('{{ form.apply_bandpass.id_for_label }}');
         const applyHighpass = document.getElementById('{{ form.apply_highpass.id_for_label }}');
@@ -384,7 +384,6 @@
         const createTrainTest = document.getElementById('{{ form.create_train_test_split.id_for_label }}');
         const extractFeatures = document.getElementById('{{ form.extract_features.id_for_label }}');
         
-        // Settings section references
         const bandpassSettings = document.querySelector('.bandpass-settings');
         const highpassSettings = document.querySelector('.highpass-settings');
         const lowpassSettings = document.querySelector('.lowpass-settings');
@@ -392,8 +391,7 @@
         const icaSettings = document.querySelector('.ica-settings');
         const outlierSettings = document.querySelector('.outlier-settings');
         const trainTestSettings = document.querySelector('.train-test-settings');
-        
-        // Toggle visibility based on checkbox state
+
         function toggleVisibility() {
             bandpassSettings.style.display = applyBandpass.checked ? 'block' : 'none';
             highpassSettings.style.display = applyHighpass.checked ? 'block' : 'none';
@@ -403,7 +401,6 @@
             outlierSettings.style.display = removeOutliers.checked ? 'block' : 'none';
             trainTestSettings.style.display = createTrainTest.checked ? 'block' : 'none';
             
-            // Disable conflicting filter options
             if (applyBandpass.checked) {
                 applyHighpass.disabled = true;
                 applyLowpass.disabled = true;
@@ -419,7 +416,6 @@
             }
         }
         
-        // Add event listeners
         applyBandpass.addEventListener('change', toggleVisibility);
         applyHighpass.addEventListener('change', toggleVisibility);
         applyLowpass.addEventListener('change', toggleVisibility);
@@ -428,12 +424,9 @@
         removeOutliers.addEventListener('change', toggleVisibility);
         createTrainTest.addEventListener('change', toggleVisibility);
         
-        // Initialize visibility states
         toggleVisibility();
         
-        // Form submission handling
         form.addEventListener('submit', function(e) {
-            // Validate form
             let isValid = true;
             
             // Check filter conflicts

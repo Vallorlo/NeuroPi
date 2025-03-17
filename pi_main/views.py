@@ -11,7 +11,7 @@ import pandas as pd
 from datetime import datetime
 import traceback
 import threading
-from .models import EEGModel, TrainingJob, Prediction
+from .models import EEGModel, TrainingJob, Prediction, ModelEvaluation
 from .forms import ModelTrainingForm, PredictionForm
 from .rnn_model import RNNModelTrainer, RNNPredictor
 # Add this to pi_main/views.py
@@ -23,6 +23,8 @@ import traceback
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+import base64
+from django.contrib import messages
 
 # Global predictor instance to maintain EEG connection across requests
 _eeg_predictor = LiveEEGPredictor()
@@ -669,6 +671,184 @@ def delete_job(request, job_id):
         # If an error occurs, redirect to dashboard with error message
         print(f"Error deleting job: {e}")
         return redirect('pi_main:model_dashboard')
+
+def model_evaluate(request, model_id):
+    """View for evaluating a model on a test dataset."""
+    model = get_object_or_404(EEGModel, id=model_id)
+    
+    # Get available test datasets
+    test_datasets = get_test_datasets()
+    
+    # Check if we're processing an evaluation
+    if request.method == 'POST':
+        test_dataset = request.POST.get('test_dataset')
+        if not test_dataset:
+            # If no dataset selected, redirect with error
+            messages.error(request, "Please select a test dataset")
+            return redirect('pi_main:model_evaluate', model_id=model_id)
+        
+        try:
+            # Load the model
+            predictor = RNNPredictor(model_path=model.model_path)
+            
+            # Evaluate the model
+            results = predictor.evaluate(test_dataset)
+            
+            if not results.get('success', False):
+                error_message = results.get('error', 'Unknown error during evaluation')
+                messages.error(request, f"Evaluation failed: {error_message}")
+                return redirect('pi_main:model_evaluate', model_id=model_id)
+            
+            # Save the evaluation results to the model
+            evaluation = ModelEvaluation(
+                model=model,
+                dataset_path=test_dataset,
+                accuracy=results['metrics']['accuracy'],
+                eval_data=json.dumps(results['metrics'])
+            )
+            evaluation.save()
+            
+            # Redirect to the evaluation detail view
+            return redirect('pi_main:evaluation_detail', evaluation_id=evaluation.id)
+            
+        except Exception as e:
+            traceback.print_exc()
+            messages.error(request, f"Error during evaluation: {str(e)}")
+            return redirect('pi_main:model_evaluate', model_id=model_id)
+    
+    # Get previous evaluations for this model
+    evaluations = ModelEvaluation.objects.filter(model=model).order_by('-created_at')
+    
+    context = {
+        'model': model,
+        'test_datasets': test_datasets,
+        'evaluations': evaluations
+    }
+    
+    return render(request, 'pi_main/model_evaluate.html', context)
+
+def evaluation_detail(request, evaluation_id):
+    """View details of a specific model evaluation."""
+    evaluation = get_object_or_404(ModelEvaluation, id=evaluation_id)
+    
+    try:
+        # Parse evaluation data
+        eval_data = json.loads(evaluation.eval_data)
+        
+        # Get charts from the evaluation files
+        charts = {}
+        eval_dir = os.path.join(settings.BASE_DIR, evaluation.model.model_path, 'evaluation')
+        
+        # Look for evaluation files matching this evaluation
+        chart_files = {}
+        for filename in os.listdir(eval_dir):
+            if filename.startswith('evaluation_') and filename.endswith('.json'):
+                try:
+                    with open(os.path.join(eval_dir, filename), 'r') as f:
+                        file_data = json.load(f)
+                    
+                    # Check if this is the right evaluation
+                    if file_data.get('dataset_path') == evaluation.dataset_path:
+                        # Get PNG files with matching timestamp
+                        timestamp = filename.replace('evaluation_', '').replace('.json', '')
+                        
+                        for img_file in os.listdir(eval_dir):
+                            if img_file.startswith(f'chart_{timestamp}_'):
+                                chart_type = img_file.replace(f'chart_{timestamp}_', '').replace('.png', '')
+                                chart_files[chart_type] = os.path.join(eval_dir, img_file)
+                except:
+                    continue
+        
+        # If we found chart files, use them
+        for chart_type, file_path in chart_files.items():
+            with open(file_path, 'rb') as f:
+                chart_data = base64.b64encode(f.read()).decode('utf-8')
+                charts[chart_type] = chart_data
+        
+        # If no chart files found, regenerate them
+        if not charts:
+            # Load the model and dataset
+            predictor = RNNPredictor(model_path=evaluation.model.model_path)
+            results = predictor.evaluate(evaluation.dataset_path)
+            
+            if results.get('success', False):
+                charts = results['charts']
+    except Exception as e:
+        traceback.print_exc()
+        messages.error(request, f"Error loading evaluation details: {str(e)}")
+        charts = {}
+        eval_data = {}
+    
+    context = {
+        'evaluation': evaluation,
+        'charts': charts,
+        'metrics': eval_data,
+        'model': evaluation.model
+    }
+    
+    return render(request, 'pi_main/evaluation_detail.html', context)
+
+def delete_evaluation(request, evaluation_id):
+    """Delete a model evaluation."""
+    if request.method != 'POST':
+        return redirect('pi_main:model_list')
+    
+    try:
+        evaluation = get_object_or_404(ModelEvaluation, id=evaluation_id)
+        model_id = evaluation.model.id
+        evaluation.delete()
+        
+        return redirect('pi_main:model_evaluate', model_id=model_id)
+        
+    except Exception as e:
+        print(f"Error deleting evaluation: {e}")
+        return redirect('pi_main:model_list')
+
+def get_test_datasets():
+    """Get list of available test datasets."""
+    test_datasets = []
+    base_dir = settings.TRIAL_DIR
+    
+    if os.path.exists(base_dir):
+        # Look for test datasets
+        for file in os.listdir(base_dir):
+            if file.endswith('.csv') and ('test' in file.lower() or 'eval' in file.lower()):
+                file_path = os.path.join(base_dir, file)
+                file_size = os.path.getsize(file_path) / (1024 * 1024)  # Size in MB
+                
+                # Get modification date
+                mod_time = os.path.getmtime(file_path)
+                mod_date = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d')
+                
+                test_datasets.append({
+                    'name': file,
+                    'path': file,
+                    'size': f'{file_size:.2f} MB',
+                    'date': mod_date
+                })
+        
+        # Also look in subfolders
+        for item in os.listdir(base_dir):
+            sub_dir = os.path.join(base_dir, item)
+            if os.path.isdir(sub_dir):
+                for file in os.listdir(sub_dir):
+                    if file.endswith('.csv') and ('test' in file.lower() or 'eval' in file.lower()):
+                        file_path = os.path.join(sub_dir, file)
+                        rel_path = os.path.join(item, file)
+                        file_size = os.path.getsize(file_path) / (1024 * 1024)  # Size in MB
+                        
+                        # Get modification date
+                        mod_time = os.path.getmtime(file_path)
+                        mod_date = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d')
+                        
+                        test_datasets.append({
+                            'name': f'{item}/{file}',
+                            'path': rel_path,
+                            'size': f'{file_size:.2f} MB',
+                            'date': mod_date
+                        })
+    
+    return sorted(test_datasets, key=lambda x: x['date'], reverse=True)
 
 # Helper functions
 def get_available_datasets():

@@ -1,6 +1,8 @@
 # pi_main/models.py
 from django.db import models
 import uuid
+import os
+
 
 class TrainingJob(models.Model):
     """Model for tracking neural network training jobs."""
@@ -123,3 +125,28 @@ class Prediction(models.Model):
     def confidence_percent(self):
         """Return confidence as a percentage."""
         return f"{self.confidence * 100:.2f}%"
+    
+
+class ModelEvaluation(models.Model):
+    """Model for storing model evaluation results."""
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    model = models.ForeignKey(EEGModel, on_delete=models.CASCADE, related_name='evaluations')
+    
+    # Evaluation parameters
+    dataset_path = models.CharField(max_length=255)
+    
+    # Performance metrics
+    accuracy = models.FloatField(default=0.0)
+    eval_data = models.TextField(blank=True)  # Stores serialized evaluation data
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Evaluation of {self.model.name} on {os.path.basename(self.dataset_path)}"
+    
+    @property
+    def accuracy_percent(self):
+        """Return accuracy as a percentage."""
+        return f"{self.accuracy * 100:.2f}%"

@@ -1,4 +1,3 @@
-# cleaner/views.py
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
@@ -352,7 +351,6 @@ def clean_data_view(request):
         sys.stdout = old_stdout
         
     return render(request, 'cleaner/clean_data.html', context)
-
 
 def download_file_view(request, filepath):
     """View for downloading files."""

@@ -1,0 +1,220 @@
+{% extends "layout.html" %}
+{% load custom_filters %}
+
+{% block title %}
+    Evaluation Results: {{ model.name }}
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row">
+        <div class="col-lg-10 offset-lg-1">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h1 class="mb-0">Evaluation Results</h1>
+                    <a href="{% url 'eeg_transformer:model_evaluate' evaluation.model.id %}" class="btn btn-light">
+                        <i class="bi bi-arrow-left"></i> Back to Evaluations
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">Evaluation Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Model Name:</strong></span>
+                                            <span>{{ evaluation.model.name }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Dataset:</strong></span>
+                                            <span>{{ evaluation.dataset_path|basename }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Evaluation Date:</strong></span>
+                                            <span>{{ evaluation.created_at|date:"F j, Y, g:i a" }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Overall Accuracy:</strong></span>
+                                            <div>
+                                                <div class="progress" style="width: 150px; height: 15px;">
+                                                    <div class="progress-bar {% if evaluation.accuracy >= 0.7 %}bg-success{% elif evaluation.accuracy >= 0.4 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                        role="progressbar" 
+                                                        style="width: {{ evaluation.accuracy|floatformat:2|mul:100 }}%;" 
+                                                        aria-valuenow="{{ evaluation.accuracy|floatformat:2|mul:100 }}" 
+                                                        aria-valuemin="0" 
+                                                        aria-valuemax="100">
+                                                    </div>
+                                                </div>
+                                                <small>{{ evaluation.accuracy|floatformat:2|mul:100 }}%</small>
+                                            </div>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">Performance Summary</h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if metrics.classification_report %}
+                                        <table class="table table-sm table-bordered">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th>Word</th>
+                                                    <th>Precision</th>
+                                                    <th>Recall</th>
+                                                    <th>F1-Score</th>
+                                                    <th>Support</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for class, values in metrics.classification_report.items %}
+                                                    {% if class != "accuracy" and class != "macro avg" and class != "weighted avg" %}
+                                                        <tr>
+                                                            <td>{{ class }}</td>
+                                                            <td>{{ values.precision|floatformat:2 }}</td>
+                                                            <td>{{ values.recall|floatformat:2 }}</td>
+                                                            <td>{{ values.f1-score|floatformat:2 }}</td>
+                                                            <td>{{ values.support }}</td>
+                                                        </tr>
+                                                    {% endif %}
+                                                {% endfor %}
+                                                {% if metrics.classification_report.macro avg %}
+                                                    <tr class="table-secondary">
+                                                        <td><strong>Macro Avg</strong></td>
+                                                        <td>{{ metrics.classification_report.macro avg.precision|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.macro avg.recall|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.macro avg.f1-score|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.macro avg.support }}</td>
+                                                    </tr>
+                                                {% endif %}
+                                                {% if metrics.classification_report.weighted avg %}
+                                                    <tr class="table-info">
+                                                        <td><strong>Weighted Avg</strong></td>
+                                                        <td>{{ metrics.classification_report.weighted avg.precision|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.weighted avg.recall|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.weighted avg.f1-score|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.weighted avg.support }}</td>
+                                                    </tr>
+                                                {% endif %}
+                                            </tbody>
+                                        </table>
+                                    {% else %}
+                                        <div class="alert alert-warning">
+                                            <i class="bi bi-exclamation-triangle"></i> Detailed metrics not available.
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            {% if charts.confusion_matrix %}
+                                <div class="card mb-4">
+                                    <div class="card-header bg-warning text-dark">
+                                        <h5 class="mb-0">Confusion Matrix</h5>
+                                    </div>
+                                    <div class="card-body text-center">
+                                        <img src="data:image/png;base64,{{ charts.confusion_matrix }}" alt="Confusion Matrix" class="img-fluid">
+                                    </div>
+                                </div>
+                            {% endif %}
+                            
+                            {% if charts.class_distribution %}
+                                <div class="card">
+                                    <div class="card-header bg-info text-white">
+                                        <h5 class="mb-0">Class Distribution</h5>
+                                    </div>
+                                    <div class="card-body text-center">
+                                        <img src="data:image/png;base64,{{ charts.class_distribution }}" alt="Class Distribution" class="img-fluid">
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="col-md-6">
+                            {% if charts.roc_curves %}
+                                <div class="card mb-4">
+                                    <div class="card-header bg-success text-white">
+                                        <h5 class="mb-0">ROC Curves</h5>
+                                    </div>
+                                    <div class="card-body text-center">
+                                        <img src="data:image/png;base64,{{ charts.roc_curves }}" alt="ROC Curves" class="img-fluid">
+                                    </div>
+                                </div>
+                            {% endif %}
+                            
+                            {% if charts.pr_curves %}
+                                <div class="card">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5 class="mb-0">Precision-Recall Curves</h5>
+                                    </div>
+                                    <div class="card-body text-center">
+                                        <img src="data:image/png;base64,{{ charts.pr_curves }}" alt="Precision-Recall Curves" class="img-fluid">
+                                    </div>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    
+                    {% if metrics.true_labels and metrics.predicted_labels %}
+                        <div class="card mb-4">
+                            <div class="card-header bg-secondary text-white">
+                                <h5 class="mb-0">Prediction Results</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                                    <table class="table table-sm table-hover">
+                                        <thead class="sticky-top bg-light">
+                                            <tr>
+                                                <th>#</th>
+                                                <th>True Word</th>
+                                                <th>Predicted Word</th>
+                                                <th>Result</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for true, pred in metrics.true_labels|zip:metrics.predicted_labels %}
+                                                <tr class="{% if true == pred %}table-success{% else %}table-danger{% endif %}">
+                                                    <td>{{ forloop.counter }}</td>
+                                                    <td>{{ true }}</td>
+                                                    <td>{{ pred }}</td>
+                                                    <td>
+                                                        {% if true == pred %}
+                                                            <i class="bi bi-check-circle-fill text-success"></i> Correct
+                                                        {% else %}
+                                                            <i class="bi bi-x-circle-fill text-danger"></i> Incorrect
+                                                        {% endif %}
+                                                    </td>
+                                                </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'eeg_transformer:model_evaluate' evaluation.model.id %}" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-left"></i> Back to Evaluations
+                        </a>
+                        <a href="{% url 'eeg_transformer:live_prediction' %}?model={{ evaluation.model.id }}" class="btn btn-success">
+                            <i class="bi bi-lightning-charge"></i> Use Model for Prediction
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

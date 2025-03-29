@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'processor',
     'cleaner', 
     'pi_main',
+    'eeg_transformer.apps.EegTransformerConfig',  
 ]
 
 MIDDLEWARE = [

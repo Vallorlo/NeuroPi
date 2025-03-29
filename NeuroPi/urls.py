@@ -21,11 +21,13 @@ from . import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', views.homepage ), #for the main site - #page to be called, #a function that is called when a reuest is sent to that page 
-    path('about/', views.about ), #an about section
-    path('trials/', include('trials.urls')),# look inside the trials app, then look inside the urls file inside.
+    path('', views.homepage ), 
+    path('about/', views.about ), 
+    path('trials/', include('trials.urls')),
     path('plot/', include('plot.urls')),
-    path('processor/', include('processor.urls')),  # Include processor app's URLs
+    path('processor/', include('processor.urls')), 
     path('cleaner/', include('cleaner.urls')),
-    path('pi_main/', include('pi_main.urls', namespace='pi_main')),  # Include pi_main app's URLs with namespace
+    path('pi_main/', include('pi_main.urls', namespace='pi_main')),  
+    path('eeg_transformer/', include('eeg_transformer.urls', namespace='eeg_transformer')),  
+
 ]

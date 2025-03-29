@@ -1,0 +1,385 @@
+{% extends "layout.html" %}
+{% load custom_filters %}
+{% block title %}
+    CNN-Transformer Model: {{ model.name }}
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row">
+        <div class="col-lg-10 offset-lg-1">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h1 class="mb-0">Model: {{ model.name }}</h1>
+                    <span class="badge bg-light text-dark">
+                        {{ model.accuracy|floatformat:2|mul:100 }}% Accuracy
+                    </span>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">Model Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Model Name:</strong></span>
+                                            <span>{{ model.name }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Status:</strong></span>
+                                            <span class="badge bg-{% if model.status == 'active' %}success{% else %}secondary{% endif %}">
+                                                {{ model.get_status_display }}
+                                            </span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Created:</strong></span>
+                                            <span>{{ model.created_at|date:"F j, Y, g:i a" }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Last Updated:</strong></span>
+                                            <span>{{ model.updated_at|date:"F j, Y, g:i a" }}</span>
+                                        </li>
+                                        <li class="list-group-item">
+                                            <span><strong>Description:</strong></span>
+                                            <p class="mt-2">{{ model.description|default:"No description provided." }}</p>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">Performance Metrics</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-4">
+                                        <h6>Accuracy</h6>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-success" 
+                                                 role="progressbar" 
+                                                 style="width: {{ model.accuracy|floatformat:2|mul:100 }}%;" 
+                                                 aria-valuenow="{{ model.accuracy|floatformat:2|mul:100 }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                                {{ model.accuracy|floatformat:2|mul:100 }}%
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="mb-4">
+                                        <h6>Loss</h6>
+                                        <div class="progress" style="height: 20px;">
+                                            <div class="progress-bar bg-info" 
+                                                 role="progressbar" 
+                                                 style="width: {{ 100|sub:model.loss|floatformat:2|mul:100 }}%;" 
+                                                 aria-valuenow="{{ 100|sub:model.loss|floatformat:2|mul:100 }}" 
+                                                 aria-valuemin="0" 
+                                                 aria-valuemax="100">
+                                                {{ model.loss|floatformat:4 }}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div id="trainingChart" style="height: 250px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-4">
+                                <div class="card-header bg-warning text-dark">
+                                    <h5 class="mb-0">Architecture Details</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Convolutional Filters:</strong></span>
+                                            <span>{{ model.conv_filters }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Kernel Size:</strong></span>
+                                            <span>{{ model.conv_kernel_size }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Transformer Layers:</strong></span>
+                                            <span>{{ model.transformer_layers }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Attention Heads:</strong></span>
+                                            <span>{{ model.transformer_heads }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Embedding Dimension:</strong></span>
+                                            <span>{{ model.transformer_dim }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Dropout Rate:</strong></span>
+                                            <span>{{ model.dropout_rate|floatformat:2 }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Bandpass Filtering:</strong></span>
+                                            <span>{{ model.apply_filtering|yesno:"Applied,Not applied" }}</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card mb-4">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">Training Parameters</h5>
+                                </div>
+                                <div class="card-body">
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Dataset:</strong></span>
+                                            <span>{{ model.dataset_path }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Epochs:</strong></span>
+                                            <span>{{ model.epochs }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Batch Size:</strong></span>
+                                            <span>{{ model.batch_size }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Learning Rate:</strong></span>
+                                            <span>{{ model.learning_rate }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Validation Split:</strong></span>
+                                            <span>{{ model.validation_split|floatformat:2|mul:100 }}%</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">Actions</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="d-grid gap-2">
+                                        <a href="{% url 'eeg_transformer:live_prediction' %}?model={{ model.id }}" class="btn btn-success">
+                                            <i class="bi bi-lightning-charge"></i> Use for Live Prediction
+                                        </a>
+                                        <a href="{% url 'eeg_transformer:model_evaluate' model.id %}" class="btn btn-info">
+                                            <i class="bi bi-bar-chart"></i> Evaluate Model
+                                        </a>
+                                        <button type="button" class="btn btn-outline-primary" id="toggleStatusBtn">
+                                            {% if model.status == 'active' %}
+                                                <i class="bi bi-archive"></i> Archive Model
+                                            {% else %}
+                                                <i class="bi bi-check2-circle"></i> Activate Model
+                                            {% endif %}
+                                        </button>
+                                        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                                            <i class="bi bi-trash"></i> Delete Model
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-secondary text-white">
+                                    <h5 class="mb-0">Words Supported</h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if model.word_list %}
+                                        <div class="d-flex flex-wrap">
+                                            {% for word in model.word_list|split:"," %}
+                                                <span class="badge bg-primary me-2 mb-2">{{ word }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    {% else %}
+                                        <div class="alert alert-info">
+                                            <i class="bi bi-info-circle"></i> All words in the dataset were used for training.
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'eeg_transformer:model_list' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Models
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteModalLabel">Delete Model</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this model? This action cannot be undone.</p>
+                <p><strong>Model Name:</strong> {{ model.name }}</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form method="post" action="{% url 'eeg_transformer:delete_model' model.id %}">
+                    {% csrf_token %}
+                    <button type="submit" class="btn btn-danger">Delete Model</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize the training history chart if element exists
+        const chartElement = document.getElementById('trainingChart');
+        if (chartElement) {
+            fetch(`/eeg_transformer/api/training-history/?model_id={{ model.id }}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.history) {
+                        const ctx = chartElement.getContext('2d');
+                        new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: Array.from({length: data.history.accuracy.length}, (_, i) => i + 1),
+                                datasets: [
+                                    {
+                                        label: 'Accuracy',
+                                        data: data.history.accuracy,
+                                        borderColor: 'rgba(40, 167, 69, 1)',
+                                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                        tension: 0.1,
+                                        yAxisID: 'y'
+                                    },
+                                    {
+                                        label: 'Validation Accuracy',
+                                        data: data.history.val_accuracy,
+                                        borderColor: 'rgba(0, 123, 255, 1)',
+                                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                                        tension: 0.1,
+                                        yAxisID: 'y'
+                                    },
+                                    {
+                                        label: 'Loss',
+                                        data: data.history.loss,
+                                        borderColor: 'rgba(220, 53, 69, 1)',
+                                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                        tension: 0.1,
+                                        yAxisID: 'y1'
+                                    },
+                                    {
+                                        label: 'Validation Loss',
+                                        data: data.history.val_loss,
+                                        borderColor: 'rgba(255, 193, 7, 1)',
+                                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                                        tension: 0.1,
+                                        yAxisID: 'y1'
+                                    }
+                                ]
+                            },
+                            options: {
+                                responsive: true,
+                                scales: {
+                                    x: {
+                                        title: {
+                                            display: true,
+                                            text: 'Epoch'
+                                        }
+                                    },
+                                    y: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'left',
+                                        title: {
+                                            display: true,
+                                            text: 'Accuracy'
+                                        },
+                                        min: 0,
+                                        max: 1
+                                    },
+                                    y1: {
+                                        type: 'linear',
+                                        display: true,
+                                        position: 'right',
+                                        title: {
+                                            display: true,
+                                            text: 'Loss'
+                                        },
+                                        grid: {
+                                            drawOnChartArea: false
+                                        }
+                                    }
+                                },
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: 'Training History'
+                                    }
+                                }
+                            }
+                        });
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading training history:', error);
+                    chartElement.innerHTML = '<div class="alert alert-warning">Could not load training history.</div>';
+                });
+        }
+        
+        // Toggle status button
+        const toggleStatusBtn = document.getElementById('toggleStatusBtn');
+        if (toggleStatusBtn) {
+            toggleStatusBtn.addEventListener('click', function() {
+                const newStatus = '{{ model.status }}' === 'active' ? 'archived' : 'active';
+                
+                fetch(`/eeg_transformer/api/toggle-model-status/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: JSON.stringify({
+                        model_id: '{{ model.id }}',
+                        status: newStatus
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        window.location.reload();
+                    } else {
+                        alert('Error: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error toggling model status:', error);
+                    alert('An error occurred. Please try again.');
+                });
+            });
+        }
+    });
+</script>
+{% endblock extra_js %}

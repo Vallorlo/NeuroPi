@@ -111,6 +111,42 @@ class ProcessingForm(forms.Form):
         help_text='Leave empty to process all words'
     )
     
+    prepare_for_transformer = forms.BooleanField(
+        required=False, 
+        label='Prepare for CNN-Transformer', 
+        initial=False,
+        help_text='Structure data specifically for CNN-Transformer model training',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    segment_duration = forms.FloatField(
+        required=False, 
+        label='Segment Duration (seconds)', 
+        initial=0.5,
+        min_value=0.1, 
+        max_value=2.0,
+        help_text='Duration of each data segment in seconds',
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'})
+    )
+
+    window_overlap = forms.FloatField(
+        required=False, 
+        label='Window Overlap (%)', 
+        initial=50,
+        min_value=0, 
+        max_value=90,
+        help_text='Percentage of overlap between consecutive windows',
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '10'})
+    )
+
+    create_labels_column = forms.BooleanField(
+        required=False, 
+        label='Create Word Labels Column', 
+        initial=True,
+        help_text='Create a single "word" column instead of multiple event columns',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
     def __init__(self, *args, **kwargs):
         super(ProcessingForm, self).__init__(*args, **kwargs)
         # We'll set choices in the view instead of here
@@ -140,3 +176,5 @@ class ProcessingForm(forms.Form):
                 self.add_error('test_size', "Test size must be between 0.1 and 0.5")
                 
         return cleaned_data
+    
+    

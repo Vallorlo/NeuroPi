@@ -232,6 +232,41 @@ class CleaningForm(forms.Form):
         max_value=10.0,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.5'})
     )
+    prepare_for_transformer = forms.BooleanField(
+        required=False, 
+        label='Optimize for CNN-Transformer', 
+        initial=False,
+        help_text='Apply preprocessing specifically for CNN-Transformer model',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    use_structured_format = forms.BooleanField(
+        required=False, 
+        label='Use Structured Format', 
+        initial=True,
+        help_text='Create a structured format with clear word labels (recommended)',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+
+    sequence_length = forms.IntegerField(
+        required=False, 
+        label='Sequence Length', 
+        initial=40,
+        min_value=10, 
+        max_value=100,
+        help_text='Length of sequence in samples for CNN-Transformer (typically 30-60)',
+        widget=forms.NumberInput(attrs={'class': 'form-control'})
+    )
+
+    min_segment_length = forms.IntegerField(
+        required=False, 
+        label='Minimum Segment Length', 
+        initial=20,
+        min_value=5, 
+        max_value=50,
+        help_text='Minimum length of a valid segment in samples',
+        widget=forms.NumberInput(attrs={'class': 'form-control'})
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -266,6 +301,7 @@ class CleaningForm(forms.Form):
         
         processed_datasets = []
         combined_datasets = []
+        transformer_datasets = []
         train_datasets = []
         test_datasets = []
         other_datasets = []
@@ -275,6 +311,31 @@ class CleaningForm(forms.Form):
             for item in os.listdir(trials_data_path):
                 item_path = os.path.join(trials_data_path, item)
                 if os.path.isdir(item_path) and item.startswith('processed_'):
+
+                    transformer_file = os.path.join(item_path, 'transformer_dataset.csv')
+                    if os.path.exists(transformer_file):
+                        transformer_datasets.append((
+                            transformer_file, 
+                            f'🤖 {item}/transformer_dataset.csv'
+                        ))
+                    
+                    # Check for transformer train dataset
+                    transformer_train_file = os.path.join(item_path, 'transformer_train_dataset.csv')
+                    if os.path.exists(transformer_train_file):
+                        transformer_datasets.append((
+                            transformer_train_file, 
+                            f'🤖 {item}/transformer_train_dataset.csv'
+                        ))
+                    
+                    # Check for transformer test dataset
+                    transformer_test_file = os.path.join(item_path, 'transformer_test_dataset.csv')
+                    if os.path.exists(transformer_test_file):
+                        transformer_datasets.append((
+                            transformer_test_file, 
+                            f'🤖 {item}/transformer_test_dataset.csv'
+                        ))
+
+
                     # Check for combined dataset in this processed directory
                     combined_file = os.path.join(item_path, 'combined_eeg_dataset.csv')
                     if os.path.exists(combined_file):
@@ -298,13 +359,19 @@ class CleaningForm(forms.Form):
                             f'🔍 {item}/test_dataset.csv'
                         ))
             
-            # Then look for loose CSV files in the root directory
+
+
+
+                # Then look for loose CSV files in the root directory
             for filename in os.listdir(trials_data_path):
                 if filename.endswith('.csv'):
                     filepath = os.path.join(trials_data_path, filename)
                     
                     # Categorize the file
-                    if 'combined' in filename.lower() or 'dataset' in filename.lower():
+                    if 'transformer' in filename.lower():
+                        # Add transformer datasets to their own category
+                        transformer_datasets.append((filepath, f'🤖 {filename}'))
+                    elif 'combined' in filename.lower() or 'dataset' in filename.lower():
                         combined_datasets.append((filepath, f'📊 {filename}'))
                     elif 'train' in filename.lower():
                         train_datasets.append((filepath, f'🧠 {filename}'))
@@ -325,6 +392,7 @@ class CleaningForm(forms.Form):
                                 choices.append((filepath, f'🧹 {item}/{file}'))
         
         # Add the datasets in order of importance
+        choices.extend(transformer_datasets)
         choices.extend(processed_datasets)
         choices.extend(combined_datasets)
         choices.extend(train_datasets)  
@@ -400,5 +468,7 @@ class CleaningForm(forms.Form):
                 self.add_error('outlier_threshold', "Outlier threshold is required when removing outliers")
             elif outlier_threshold < 1.0:
                 self.add_error('outlier_threshold', "Outlier threshold must be at least 1.0")
+
+        
 
         return cleaned_data

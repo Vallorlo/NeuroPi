@@ -283,11 +283,17 @@ def get_stage_number(stage_dir):
     except Exception:
         return None
 
+
+
+
+
 def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualizations=True, 
                       timestamp_padding=0.25, generate_dataset=False, 
                       selected_stages=None, selected_participants=None, 
                       selected_words=None, create_train_test=False, 
-                      test_size=0.2, random_state=42, stratify_by_word=True):
+                      test_size=0.2, random_state=42, stratify_by_word=True,
+                      prepare_for_transformer=False, segment_duration=0.5,
+                      window_overlap=50, create_labels_column=True):
     """
     Processes all trial data in the given directory structure.
 
@@ -305,6 +311,10 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
     test_size (float): Proportion of data to use for testing (0.0 to 1.0)
     random_state (int): Random seed for train-test split
     stratify_by_word (bool): Whether to stratify train-test split by word
+    prepare_for_transformer (bool): Whether to prepare data specifically for CNN-Transformer
+    segment_duration (float): Duration of each segment in seconds (for transformer preparation)
+    window_overlap (float): Percentage of overlap between consecutive windows (for transformer preparation)
+    create_labels_column (bool): Create a single "word" column instead of multiple event columns (for transformer preparation)
 
     Returns:
     dict: Statistics about the processing
@@ -557,6 +567,8 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                         print(f"An unexpected error occurred while processing {eeg_file}: {e}")
                         stats['files_with_errors'].append(eeg_file)
 
+    # Dataset creation and transformer data preparation
+    dataset_links = []
     if generate_dataset and all_processed_data:
         try:
             # Concatenate all dataframes
@@ -573,6 +585,47 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
             dataset_path = os.path.join(output_dir, "combined_eeg_dataset.csv")
             combined_df.to_csv(dataset_path, index=False)
             print(f"\nCombined dataset saved to {dataset_path}")
+            
+            # Add to dataset links
+            dataset_links.append({
+                'name': 'Combined Dataset',
+                'path': dataset_path,
+                'filename': f'{os.path.basename(output_dir)}/combined_eeg_dataset.csv',
+                'size': f"{os.path.getsize(dataset_path) / (1024*1024):.2f} MB"
+            })
+            
+            # Create CNN-Transformer specific dataset if requested
+            if prepare_for_transformer:
+                try:
+                    print("\nPreparing CNN-Transformer optimized dataset...")
+                    
+                    # Create segments for transformer
+                    transformer_df = create_transformer_segments(
+                        combined_df,
+                        segment_duration=segment_duration,
+                        overlap_percentage=window_overlap,
+                        create_labels_column=create_labels_column
+                    )
+                    
+                    if transformer_df is not None:
+                        # Save transformer dataset
+                        transformer_path = os.path.join(output_dir, "transformer_dataset.csv")
+                        transformer_df.to_csv(transformer_path, index=False)
+                        print(f"CNN-Transformer optimized dataset saved to {transformer_path}")
+                        
+                        stats['transformer_dataset_created'] = True
+                        stats['transformer_dataset_rows'] = len(transformer_df)
+                        
+                        # Add to dataset links
+                        dataset_links.append({
+                            'name': 'CNN-Transformer Dataset',
+                            'path': transformer_path,
+                            'filename': f'{os.path.basename(output_dir)}/transformer_dataset.csv',
+                            'size': f"{os.path.getsize(transformer_path) / (1024*1024):.2f} MB"
+                        })
+                except Exception as e:
+                    print(f"Error creating CNN-Transformer dataset: {e}")
+                    stats['transformer_error'] = str(e)
             
             # Create train-test split if requested
             if create_train_test and len(combined_df) > 0:
@@ -604,12 +657,74 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                     print(f"Train dataset saved to {train_path} ({len(train_df)} rows)")
                     print(f"Test dataset saved to {test_path} ({len(test_df)} rows)")
                     
+                    # Add to dataset links
+                    dataset_links.append({
+                        'name': 'Training Dataset',
+                        'path': train_path,
+                        'filename': f'{os.path.basename(output_dir)}/train_dataset.csv',
+                        'size': f"{os.path.getsize(train_path) / (1024*1024):.2f} MB"
+                    })
+                    
+                    dataset_links.append({
+                        'name': 'Testing Dataset',
+                        'path': test_path,
+                        'filename': f'{os.path.basename(output_dir)}/test_dataset.csv',
+                        'size': f"{os.path.getsize(test_path) / (1024*1024):.2f} MB"
+                    })
+                    
                     # Update stats
                     stats['train_rows'] = len(train_df)
                     stats['test_rows'] = len(test_df)
                     stats['train_test_created'] = True
                     stats['train_file'] = train_path
                     stats['test_file'] = test_path
+                    
+                    # If we're also creating transformer datasets, create train/test splits for those too
+                    if prepare_for_transformer and 'transformer_dataset_created' in stats and stats['transformer_dataset_created']:
+                        transformer_df = pd.read_csv(transformer_path)
+                        
+                        # Determine stratification for transformer data
+                        if stratify_by_word and 'word_label' in transformer_df.columns:
+                            transformer_stratify = transformer_df['word_label']
+                        else:
+                            transformer_stratify = None
+                        
+                        # Create the split
+                        transformer_train, transformer_test = train_test_split(
+                            transformer_df,
+                            test_size=test_size,
+                            random_state=random_state,
+                            stratify=transformer_stratify
+                        )
+                        
+                        # Save the train and test datasets
+                        transformer_train_path = os.path.join(output_dir, "transformer_train_dataset.csv")
+                        transformer_test_path = os.path.join(output_dir, "transformer_test_dataset.csv")
+                        
+                        transformer_train.to_csv(transformer_train_path, index=False)
+                        transformer_test.to_csv(transformer_test_path, index=False)
+                        
+                        print(f"CNN-Transformer train dataset saved to {transformer_train_path} ({len(transformer_train)} rows)")
+                        print(f"CNN-Transformer test dataset saved to {transformer_test_path} ({len(transformer_test)} rows)")
+                        
+                        # Add to dataset links
+                        dataset_links.append({
+                            'name': 'CNN-Transformer Train Dataset',
+                            'path': transformer_train_path,
+                            'filename': f'{os.path.basename(output_dir)}/transformer_train_dataset.csv',
+                            'size': f"{os.path.getsize(transformer_train_path) / (1024*1024):.2f} MB"
+                        })
+                        
+                        dataset_links.append({
+                            'name': 'CNN-Transformer Test Dataset',
+                            'path': transformer_test_path,
+                            'filename': f'{os.path.basename(output_dir)}/transformer_test_dataset.csv',
+                            'size': f"{os.path.getsize(transformer_test_path) / (1024*1024):.2f} MB"
+                        })
+                        
+                        # Update stats
+                        stats['transformer_train_rows'] = len(transformer_train)
+                        stats['transformer_test_rows'] = len(transformer_test)
                     
                 except Exception as e:
                     print(f"Error creating train-test split: {e}")
@@ -624,5 +739,164 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
     stats['participant_list'] = list(stats['participants'])
     stats['words_list'] = list(stats['unique_words'])
     stats['output_dir'] = output_dir
+    stats['dataset_links'] = dataset_links
 
     return stats
+
+
+def create_transformer_segments(combined_df, segment_duration=0.5, overlap_percentage=50, sampling_rate=128, create_labels_column=True):
+    """
+    Create fixed-length segments from the EEG data, optimized for CNN-Transformer model training.
+    
+    Parameters:
+    combined_df (DataFrame): Combined EEG dataset
+    segment_duration (float): Duration of each segment in seconds
+    overlap_percentage (float): Percentage of overlap between segments (0-100)
+    sampling_rate (int): Sampling rate of the EEG data
+    create_labels_column (bool): Whether to create a single "word" column instead of multiple event columns
+    
+    Returns:
+    DataFrame: Processed data with segments suitable for CNN-Transformer
+    """
+    print(f"Creating transformer segments with duration={segment_duration}s, overlap={overlap_percentage}%")
+    
+    # Calculate segment length in samples
+    segment_length = int(segment_duration * sampling_rate)
+    
+    # Calculate step size based on overlap
+    step_size = int(segment_length * (1 - overlap_percentage / 100))
+    if step_size < 1:
+        step_size = 1  # Ensure at least one sample step
+    
+    print(f"Segment length: {segment_length} samples, Step size: {step_size} samples")
+    
+    # Find event columns
+    event_columns = [col for col in combined_df.columns if col.endswith('_event')]
+    if not event_columns:
+        print("No event columns found in the data")
+        return None
+    
+    # Get sensor columns (excluding metadata and events)
+    sensor_columns = [col for col in combined_df.columns 
+                     if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt'] 
+                     and not col.endswith('_event')]
+    
+    # Initialize lists to store segments and labels
+    segments = []
+    labels = []
+    participant_ids = []
+    segment_info = []
+    
+    # Process data for each word event type
+    for event_column in event_columns:
+        word = event_column.replace('_event', '')
+        print(f"Processing segments for word: {word}")
+        
+        # Find all rows where the event is True
+        event_rows = combined_df[combined_df[event_column] == True]
+        event_indices = event_rows.index.tolist()
+        
+        if not event_indices:
+            print(f"No events found for word: {word}")
+            continue
+        
+        print(f"Found {len(event_indices)} events for word: {word}")
+        
+        # Group consecutive indices to find continuous segments
+        grouped_indices = []
+        current_group = []
+        
+        for i, idx in enumerate(event_indices):
+            if i > 0 and idx > event_indices[i-1] + 1:
+                # Gap found, start a new group
+                if current_group:
+                    grouped_indices.append(current_group)
+                current_group = [idx]
+            else:
+                current_group.append(idx)
+        
+        # Add the last group
+        if current_group:
+            grouped_indices.append(current_group)
+            
+        print(f"Identified {len(grouped_indices)} continuous segments for word: {word}")
+        
+        # Extract segments from each continuous event
+        for group in grouped_indices:
+            if len(group) < segment_length / 2:
+                # Skip very short segments
+                continue
+                
+            # Find the center of the segment
+            center_idx = group[len(group)//2]
+            
+            # Create overlapping windows around center
+            start_indices = list(range(
+                max(0, center_idx - segment_length),
+                min(len(combined_df) - segment_length, center_idx + segment_length),
+                step_size
+            ))
+            
+            # If no valid start indices, use the center as the only start
+            if not start_indices:
+                start_indices = [max(0, center_idx - segment_length//2)]
+                
+            for start_idx in start_indices:
+                end_idx = start_idx + segment_length
+                
+                # Skip if end index exceeds dataframe length
+                if end_idx >= len(combined_df):
+                    continue
+                    
+                # Extract the segment
+                segment_data = combined_df.iloc[start_idx:end_idx]
+                
+                # Only include if this segment contains at least one event
+                if not segment_data[event_column].any():
+                    continue
+                
+                # Store sensor data and label
+                segment_values = segment_data[sensor_columns].values
+                segments.append(segment_values)
+                labels.append(word)
+                
+                # Store metadata
+                participant = segment_data['participant_id'].iloc[0] if 'participant_id' in segment_data.columns else "unknown"
+                participant_ids.append(participant)
+                
+                segment_info.append({
+                    'start_index': start_idx,
+                    'end_index': end_idx,
+                    'start_time': segment_data['Timestamp'].iloc[0] if 'Timestamp' in segment_data.columns else 0,
+                    'end_time': segment_data['Timestamp'].iloc[-1] if 'Timestamp' in segment_data.columns else 0,
+                    'word': word,
+                    'participant_id': participant
+                })
+    
+    if not segments:
+        print("No valid segments extracted. Check that events are properly marked in the data.")
+        return None
+    
+    print(f"Created {len(segments)} segments across {len(set(labels))} word classes")
+    
+    # Create a new DataFrame with the processed data
+    result_df = pd.DataFrame(segment_info)
+    
+    # Add each segment as a separate column
+    for i, segment in enumerate(segments):
+        flat_segment = segment.flatten()  # Flatten 2D array to 1D
+        for j, value in enumerate(flat_segment):
+            col_name = f"time{j//len(sensor_columns)}_ch{j%len(sensor_columns)}"
+            result_df.at[i, col_name] = value
+    
+    # Add word labels column
+    result_df['word_label'] = labels
+    result_df['participant_id'] = participant_ids
+    
+    # If requested, create binary columns for each word
+    if not create_labels_column:
+        for word in set(labels):
+            result_df[f"{word}_event"] = (result_df['word_label'] == word)
+    
+    print(f"Final dataframe shape: {result_df.shape}")
+    return result_df

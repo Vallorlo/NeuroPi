@@ -68,17 +68,21 @@ def clean_data_view(request):
                 ica_method = form.cleaned_data['ica_method']
                 random_seed = form.cleaned_data['random_seed']
                 
-                # Additional options
                 generate_plots = form.cleaned_data.get('generate_plots', False)
                 extract_features = form.cleaned_data.get('extract_features', False)
                 regions_of_interest = form.cleaned_data.get('regions_of_interest', ['all'])
                 
-                # New options
+
                 create_train_test_split = form.cleaned_data.get('create_train_test_split', False)
                 test_size = form.cleaned_data.get('test_size', 0.2)
                 random_state = form.cleaned_data.get('random_state', 42)
                 stratify_by_word = form.cleaned_data.get('stratify_by_word', True)
                 
+                prepare_for_transformer = form.cleaned_data.get('prepare_for_transformer', False)
+                use_structured_format = form.cleaned_data.get('use_structured_format', True)
+                sequence_length = form.cleaned_data.get('sequence_length', 40)
+                min_segment_length = form.cleaned_data.get('min_segment_length', 20)
+
                 include_channels = form.cleaned_data.get('include_channels', None)
                 compute_band_powers = form.cleaned_data.get('compute_band_powers', False)
                 normalize_data = form.cleaned_data.get('normalize_data', False)
@@ -131,7 +135,11 @@ def clean_data_view(request):
                         compute_band_powers=compute_band_powers,
                         normalize_data=normalize_data,
                         remove_outliers=remove_outliers,
-                        outlier_threshold=outlier_threshold
+                        outlier_threshold=outlier_threshold,
+                        prepare_for_transformer=prepare_for_transformer,
+                        sequence_length=sequence_length,
+                        min_segment_length=min_segment_length,
+                        use_structured_format=use_structured_format
                     )
                     
                     print(f"clean_eeg_data returned: {result}")  # Debug: Check return value
@@ -196,6 +204,28 @@ def clean_data_view(request):
                             with zipfile.ZipFile(zip_filename, 'a') as zipf:
                                 zipf.write(result['test_file'], os.path.basename(result['test_file']))
                         
+                        if result.get('transformer_dataset'):
+                            transformer_file = result.get('transformer_file')
+                            if transformer_file and os.path.exists(transformer_file):
+                                with zipfile.ZipFile(zip_filename, 'a') as zipf:
+                                    zipf.write(transformer_file, os.path.basename(transformer_file))
+                                    
+                                # Add to download links
+                                result['transformer_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(transformer_file)}"
+                            
+                            # Add train/test files if they exist
+                            if result.get('transformer_train_file') and os.path.exists(result.get('transformer_train_file')):
+                                with zipfile.ZipFile(zip_filename, 'a') as zipf:
+                                    zipf.write(result['transformer_train_file'], os.path.basename(result['transformer_train_file']))
+                                    
+                                result['transformer_train_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(result['transformer_train_file'])}"
+                                
+                            if result.get('transformer_test_file') and os.path.exists(result.get('transformer_test_file')):
+                                with zipfile.ZipFile(zip_filename, 'a') as zipf:
+                                    zipf.write(result['transformer_test_file'], os.path.basename(result['transformer_test_file']))
+                                    
+                                result['transformer_test_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(result['transformer_test_file'])}"
+
                         # Prepare data for the clean_complete.html template
                         # Read a sample of the cleaned data for preview
                         data_preview = []

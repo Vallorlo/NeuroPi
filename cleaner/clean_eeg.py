@@ -252,6 +252,167 @@ def extract_speech_features(data, fs=128, event_data=None):
         print(f"Error extracting speech features: {e}")
         return None
 
+def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, use_structured_format=True):
+    """
+    Further process cleaned data to prepare segments optimized for CNN-Transformer model.
+    
+    Parameters:
+    df (DataFrame): Cleaned EEG data
+    sequence_length (int): Target sequence length for the model
+    min_segment_length (int): Minimum length of a valid segment
+    use_structured_format (bool): Whether to use a structured format with word labels
+    
+    Returns:
+    DataFrame: Processed data ready for CNN-Transformer training
+    """
+    print(f"Preparing CNN-Transformer segments with length={sequence_length}, min_length={min_segment_length}")
+    
+    # Find event columns
+    event_columns = [col for col in df.columns if col.endswith('_event')]
+    if not event_columns:
+        print("No event columns found in the data")
+        return None
+    
+    # Get sensor columns
+    sensor_columns = [col for col in df.columns 
+                     if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt'] 
+                     and not col.endswith('_event')]
+    
+    # Initialize lists to store segments and labels
+    segments = []
+    labels = []
+    segment_info = []
+    
+    # Process each word event
+    for event_column in event_columns:
+        word = event_column.replace('_event', '')
+        print(f"Processing segments for word: {word}")
+        
+        # Get all continuous segments of True values for this event
+        in_segment = False
+        current_segment = []
+        all_segments = []
+        
+        for i, val in enumerate(df[event_column]):
+            if val and not in_segment:
+                # Start of a new segment
+                in_segment = True
+                current_segment = [i]
+            elif val and in_segment:
+                # Continue the segment
+                current_segment.append(i)
+            elif not val and in_segment:
+                # End of segment
+                if len(current_segment) >= min_segment_length:
+                    all_segments.append(current_segment)
+                in_segment = False
+                current_segment = []
+        
+        # Add the last segment if still active
+        if in_segment and len(current_segment) >= min_segment_length:
+            all_segments.append(current_segment)
+            
+        print(f"Found {len(all_segments)} segments for {word}")
+        
+        # Process each segment
+        for segment_indices in all_segments:
+            # Calculate padding needed
+            if len(segment_indices) < sequence_length:
+                # Need to pad
+                pad_before = (sequence_length - len(segment_indices)) // 2
+                pad_after = sequence_length - len(segment_indices) - pad_before
+                
+                # Ensure padding stays within dataframe bounds
+                start_idx = max(0, segment_indices[0] - pad_before)
+                end_idx = min(len(df) - 1, segment_indices[-1] + pad_after)
+                
+                # If still too short, adjust the segment's start and end
+                if end_idx - start_idx + 1 < sequence_length:
+                    # Prioritize including the actual segment
+                    center = (segment_indices[0] + segment_indices[-1]) // 2
+                    start_idx = max(0, center - sequence_length // 2)
+                    end_idx = min(len(df) - 1, start_idx + sequence_length - 1)
+            else:
+                # Segment is longer than needed, take a central portion
+                center = len(segment_indices) // 2
+                start_idx = segment_indices[center - sequence_length // 2]
+                end_idx = segment_indices[center + sequence_length // 2 - 1]
+            
+            # Extract the segment data
+            segment_data = df.iloc[start_idx:end_idx+1]
+            
+            # Skip if we couldn't get enough data
+            if len(segment_data) < sequence_length:
+                continue
+                
+            # If we need exactly sequence_length samples, trim or pad
+            if len(segment_data) > sequence_length:
+                segment_data = segment_data.iloc[:sequence_length]
+            elif len(segment_data) < sequence_length:
+                # This shouldn't happen with the above logic, but just in case
+                # Pad with the last row repeated
+                pad_rows = pd.concat([segment_data.iloc[[-1]]] * (sequence_length - len(segment_data)))
+                segment_data = pd.concat([segment_data, pad_rows])
+            
+            # Store the segment
+            if use_structured_format:
+                # Restructure the data for easier CNN-Transformer processing
+                # Store metadata
+                meta = {
+                    'start_index': start_idx,
+                    'end_index': end_idx,
+                    'word': word,
+                    'participant_id': segment_data['participant_id'].iloc[0] if 'participant_id' in segment_data.columns else None,
+                    'sequence_length': len(segment_data)
+                }
+                segment_info.append(meta)
+                
+                # Store the sensor data and label
+                segments.append(segment_data[sensor_columns].values)
+                labels.append(word)
+            else:
+                # Just add the segment to the original dataframe
+                segment_data['segment_id'] = len(segments)
+                segment_data['word_label'] = word
+                segments.append(segment_data)
+    
+    if not segments:
+        print("No valid segments could be extracted")
+        return None
+    
+    if use_structured_format:
+        # Create a structured format with flat segment data
+        result_df = pd.DataFrame(segment_info)
+        result_df['word_label'] = labels
+        
+        # Add segment data as columns
+        for i, segment in enumerate(segments):
+            # Check shape to ensure consistency
+            if segment.shape[0] != sequence_length:
+                print(f"Warning: Segment {i} has incorrect length: {segment.shape[0]}")
+                continue
+                
+            # Flatten and add as columns
+            flattened = segment.flatten()
+            for j, val in enumerate(flattened):
+                channel_idx = j % len(sensor_columns)
+                time_idx = j // len(sensor_columns)
+                col_name = f"time{time_idx}_ch{channel_idx}"
+                result_df.at[i, col_name] = val
+                
+        # Add one-hot encoded columns for each word
+        for word in set(labels):
+            result_df[f"{word}_event"] = (result_df['word_label'] == word)
+            
+        print(f"Created structured dataset with {len(result_df)} segments")
+        return result_df
+    else:
+        # Concatenate all segment dataframes
+        result_df = pd.concat(segments, ignore_index=True)
+        print(f"Created dataset with {len(result_df)} rows")
+        return result_df
+
+
 def clean_eeg_data(input_file, output_file,
                    apply_bandpass=False, lowcut=None, highcut=None, fs=128, bandpass_order=5,
                    apply_highpass=False, highpass_cutoff=None, highpass_order=5,
@@ -262,7 +423,8 @@ def clean_eeg_data(input_file, output_file,
                    check_signal_quality=True, auto_scale=True,
                    create_train_test_split=False, test_size=0.2, random_state=42, stratify_by_word=True,
                    include_channels=None, compute_band_powers=False, normalize_data=False,
-                   remove_outliers=False, outlier_threshold=3.0):
+                   remove_outliers=False, outlier_threshold=3.0,
+                   prepare_for_transformer=False, sequence_length=40, min_segment_length=20, use_structured_format=True):
     """
     Cleans EEG data optimized for speech detection, applying appropriate filters and ICA.
     Also supports train-test splitting and additional preprocessing options.
@@ -331,6 +493,14 @@ def clean_eeg_data(input_file, output_file,
         Whether to remove outliers
     outlier_threshold : float
         Threshold for outlier removal in standard deviations
+    prepare_for_transformer : bool
+        Whether to prepare data specifically for CNN-Transformer
+    sequence_length : int
+        Target sequence length for CNN-Transformer (in samples)
+    min_segment_length : int
+        Minimum length of a valid segment for CNN-Transformer
+    use_structured_format : bool
+        Whether to use a structured format with word labels for CNN-Transformer
         
     Returns:
     --------
@@ -355,7 +525,7 @@ def clean_eeg_data(input_file, output_file,
         has_metadata = all(col in df.columns for col in metadata_columns)
         
         if has_metadata:
-            print("Detected metadata columns from processor. These will be removed for RNN training.")
+            print("Detected metadata columns from processor. These will be preserved for reference.")
         
         # Identify columns for EEG data and event markers
         sensor_columns = [col for col in df.columns if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt'] 
@@ -365,25 +535,48 @@ def clean_eeg_data(input_file, output_file,
         print(f"Sensor columns: {sensor_columns}")
         print(f"Event columns: {event_columns}")
         
+        # Check if this is already a structured transformer dataset
+        is_structured_transformer = any(col.startswith('time') and 'ch' in col for col in df.columns)
+        if is_structured_transformer and 'word_label' in df.columns:
+            print("Detected structured CNN-Transformer format. Adjusting processing accordingly.")
+            # For structured transformer data, we'll handle differently
+            # Keep all columns, just apply filtering if needed
+            sensor_columns = [col for col in df.columns if col.startswith('time') and 'ch' in col]
+        
         # Filter channels if specified
-        if include_channels:
+        if include_channels and not is_structured_transformer:
             print(f"Filtering to include only specified channels: {include_channels}")
             sensor_columns = [col for col in sensor_columns if col in include_channels]
             if not sensor_columns:
                 return {'status': 'error', 'message': "No matching channels found. Please check channel names."}
         
-        # Keep only essential columns for neural network training: Timestamp, sensors, events
-        columns_to_keep = ['Timestamp'] + sensor_columns + event_columns
-        df_filtered = df[columns_to_keep].copy()
+        # Keep essential columns for neural network training
+        if is_structured_transformer:
+            # For transformer format, keep all columns
+            columns_to_keep = df.columns.tolist()
+            df_filtered = df.copy()
+        else:
+            # For standard format, select relevant columns
+            columns_to_keep = ['Timestamp'] + sensor_columns + event_columns
+            if has_metadata:
+                columns_to_keep += metadata_columns
+            df_filtered = df[columns_to_keep].copy()
+            
         print(f"Filtered dataframe shape: {df_filtered.shape}")
         
         # Extract EEG data into a format suitable for processing (channels x samples)
-        data = df_filtered[sensor_columns].values.T
-        print(f"Data shape (for processing): {data.shape}")
+        if is_structured_transformer:
+            # Special handling for structured transformer data
+            # Here we'd need to reshape data for processing if needed
+            data = None  # We'll handle this data differently
+        else:
+            # Standard format - extract sensor data for processing
+            data = df_filtered[sensor_columns].values.T
+            print(f"Data shape (for processing): {data.shape}")
 
         # Signal quality check
         signal_stats = {}
-        if check_signal_quality:
+        if check_signal_quality and data is not None:
             print("Checking signal quality...")
             # Calculate basic statistics
             signal_stats['min'] = np.min(data)
@@ -424,7 +617,8 @@ def clean_eeg_data(input_file, output_file,
                 print(f"WARNING: {warning}")
 
         # Save original data for comparison
-        original_data = data.copy()
+        if data is not None:
+            original_data = data.copy()
         
         # Extract event data if available
         event_data = None
@@ -439,104 +633,182 @@ def clean_eeg_data(input_file, output_file,
             if all(count == 0 for count in event_counts.values()):
                 print("WARNING: No True values found in any event column!")
 
-        # Apply filters based on parameters
-        # Default speech detection filters if no specific filtering is requested
-        if not (apply_bandpass or apply_highpass or apply_lowpass):
-            print("No specific filtering requested. Applying default speech detection filters.")
-            # Apply default speech detection filters: 4-50 Hz bandpass
-            for i in range(data.shape[0]):
-                data[i] = butter_bandpass_filter(data[i], 4, 50, fs, order=5)
-            print("Default speech detection bandpass filter applied: 4-50 Hz")
-        else:
-            # Apply requested filters
-            if apply_highpass:
-                print("Applying highpass...")
-                if highpass_cutoff is None:
-                    highpass_cutoff = 4.0  # Default for speech detection
+        # Apply filters based on parameters - only for standard data format
+        if data is not None:
+            # Default speech detection filters if no specific filtering is requested
+            if not (apply_bandpass or apply_highpass or apply_lowpass):
+                print("No specific filtering requested. Applying default speech detection filters.")
+                # Apply default speech detection filters: 4-50 Hz bandpass
                 for i in range(data.shape[0]):
-                    data[i] = butter_highpass_filter(data[i], highpass_cutoff, fs, order=highpass_order)
-                print(f"Highpass filter applied: > {highpass_cutoff} Hz")
-
-            if apply_lowpass:
-                print("Applying lowpass...")
-                if lowpass_cutoff is None:
-                    lowpass_cutoff = 50.0  # Default for speech detection
-                for i in range(data.shape[0]):
-                    data[i] = butter_lowpass_filter(data[i], lowpass_cutoff, fs, order=lowpass_order)
-                print(f"Lowpass filter applied: < {lowpass_cutoff} Hz")
-
-            if apply_bandpass:
-                print("Applying bandpass...")
-                if lowcut is None or highcut is None:
-                    lowcut = 4.0
-                    highcut = 50.0
-                    print("Using default bandpass range for speech detection: 4-50 Hz")
-                for i in range(data.shape[0]):
-                    data[i] = butter_bandpass_filter(data[i], lowcut, highcut, fs, order=bandpass_order)
-                print(f"Bandpass filter applied: {lowcut}-{highcut} Hz")
-
-        # Apply notch filter to remove power line noise
-        if apply_notch:
-            print("Applying notch filter...")
-            if notch_freq is None:
-                notch_freq = 50.0  # Default for most countries (use 60 Hz for US)
-            for i in range(data.shape[0]):
-                data[i] = notch_filter(data[i], notch_freq, notch_quality, fs)
-            print(f"Notch filter applied: {notch_freq} Hz")
-
-        # Apply ICA for artifact removal only if signal quality is good enough
-        if apply_ica:
-            if signal_stats.get('std', 0) < 0.5 and not auto_scale:
-                print("WARNING: Signal standard deviation is very low. Skipping ICA to prevent numerical instability.")
+                    data[i] = butter_bandpass_filter(data[i], 4, 50, fs, order=5)
+                print("Default speech detection bandpass filter applied: 4-50 Hz")
             else:
-                print("Applying ICA for artifact removal...")
-                data = apply_mne_ica(data, method=ica_method, random_state=random_seed, fs=fs)
-                print("ICA artifact removal completed")
-        
-        # Remove outliers if requested
-        if remove_outliers:
-            print(f"Removing outliers (threshold: {outlier_threshold} standard deviations)...")
-            # Calculate mean and std for each channel
-            means = np.mean(data, axis=1, keepdims=True)
-            stds = np.std(data, axis=1, keepdims=True)
+                # Apply requested filters
+                if apply_highpass:
+                    print("Applying highpass...")
+                    if highpass_cutoff is None:
+                        highpass_cutoff = 4.0  # Default for speech detection
+                    for i in range(data.shape[0]):
+                        data[i] = butter_highpass_filter(data[i], highpass_cutoff, fs, order=highpass_order)
+                    print(f"Highpass filter applied: > {highpass_cutoff} Hz")
+
+                if apply_lowpass:
+                    print("Applying lowpass...")
+                    if lowpass_cutoff is None:
+                        lowpass_cutoff = 50.0  # Default for speech detection
+                    for i in range(data.shape[0]):
+                        data[i] = butter_lowpass_filter(data[i], lowpass_cutoff, fs, order=lowpass_order)
+                    print(f"Lowpass filter applied: < {lowpass_cutoff} Hz")
+
+                if apply_bandpass:
+                    print("Applying bandpass...")
+                    if lowcut is None or highcut is None:
+                        lowcut = 4.0
+                        highcut = 50.0
+                        print("Using default bandpass range for speech detection: 4-50 Hz")
+                    for i in range(data.shape[0]):
+                        data[i] = butter_bandpass_filter(data[i], lowcut, highcut, fs, order=bandpass_order)
+                    print(f"Bandpass filter applied: {lowcut}-{highcut} Hz")
+
+            # Apply notch filter to remove power line noise
+            if apply_notch:
+                print("Applying notch filter...")
+                if notch_freq is None:
+                    notch_freq = 50.0  # Default for most countries (use 60 Hz for US)
+                for i in range(data.shape[0]):
+                    data[i] = notch_filter(data[i], notch_freq, notch_quality, fs)
+                print(f"Notch filter applied: {notch_freq} Hz")
+
+            # Apply ICA for artifact removal only if signal quality is good enough
+            if apply_ica:
+                if signal_stats.get('std', 0) < 0.5 and not auto_scale:
+                    print("WARNING: Signal standard deviation is very low. Skipping ICA to prevent numerical instability.")
+                else:
+                    print("Applying ICA for artifact removal...")
+                    data = apply_mne_ica(data, method=ica_method, random_state=random_seed, fs=fs)
+                    print("ICA artifact removal completed")
             
-            # Find outliers
-            z_scores = np.abs((data - means) / stds)
-            outlier_mask = z_scores > outlier_threshold
+            # Remove outliers if requested
+            if remove_outliers:
+                print(f"Removing outliers (threshold: {outlier_threshold} standard deviations)...")
+                # Calculate mean and std for each channel
+                means = np.mean(data, axis=1, keepdims=True)
+                stds = np.std(data, axis=1, keepdims=True)
+                
+                # Find outliers
+                z_scores = np.abs((data - means) / stds)
+                outlier_mask = z_scores > outlier_threshold
+                
+                # Replace outliers with channel mean
+                data_cleaned = data.copy()
+                for i in range(data.shape[0]):
+                    channel_outliers = outlier_mask[i]
+                    if np.any(channel_outliers):
+                        # Replace with interpolation or mean
+                        data_cleaned[i, channel_outliers] = means[i, 0]
+                        print(f"Channel {sensor_columns[i]}: {np.sum(channel_outliers)} outliers removed")
+                
+                data = data_cleaned
+                print("Outlier removal completed")
+                
+            # Normalize data if requested
+            if normalize_data:
+                print("Normalizing data (z-score)...")
+                # Calculate mean and std for each channel
+                means = np.mean(data, axis=1, keepdims=True)
+                stds = np.std(data, axis=1, keepdims=True)
+                
+                # Z-score normalization
+                data = (data - means) / stds
+                print("Data normalized")
+
+            # Update the dataframe with processed data
+            df_filtered[sensor_columns] = data.T
+            print(f"Data shape after processing: {df_filtered[sensor_columns].values.shape}")
+                
+        # For structured transformer data, we need to handle filtering differently
+        elif is_structured_transformer and (apply_bandpass or apply_highpass or apply_lowpass or apply_notch or normalize_data):
+            print("Processing structured CNN-Transformer data...")
+            # Get time and channel information
+            time_indices = sorted(set(int(col.split('_')[0].replace('time', '')) for col in sensor_columns))
+            channel_indices = sorted(set(int(col.split('ch')[1]) for col in sensor_columns))
             
-            # Replace outliers with channel mean
-            data_cleaned = data.copy()
-            for i in range(data.shape[0]):
-                channel_outliers = outlier_mask[i]
-                if np.any(channel_outliers):
-                    # Replace with interpolation or mean
-                    data_cleaned[i, channel_outliers] = means[i, 0]
-                    print(f"Channel {sensor_columns[i]}: {np.sum(channel_outliers)} outliers removed")
+            seq_length = len(time_indices)
+            n_channels = len(channel_indices)
+            print(f"Detected {seq_length} time points x {n_channels} channels structure")
             
-            data = data_cleaned
-            print("Outlier removal completed")
-            
-        # Normalize data if requested
-        if normalize_data:
-            print("Normalizing data (z-score)...")
-            # Calculate mean and std for each channel
-            means = np.mean(data, axis=1, keepdims=True)
-            stds = np.std(data, axis=1, keepdims=True)
-            
-            # Z-score normalization
-            data = (data - means) / stds
-            print("Data normalized")
+            # Process each row (sample) separately
+            for idx in range(len(df_filtered)):
+                # Reshape the flat data back to (time, channels)
+                sample_data = np.zeros((seq_length, n_channels))
+                for t in time_indices:
+                    for c in channel_indices:
+                        col_name = f"time{t}_ch{c}"
+                        if col_name in df_filtered.columns:
+                            sample_data[t, c] = df_filtered.at[idx, col_name]
+                
+                # Apply filters to the reshaped data
+                if apply_bandpass:
+                    # For bandpass, we need to transpose to (channels, time)
+                    sample_data_t = sample_data.T
+                    if lowcut is None or highcut is None:
+                        lowcut = 4.0
+                        highcut = 50.0
+                    for c in range(sample_data_t.shape[0]):
+                        sample_data_t[c] = butter_bandpass_filter(sample_data_t[c], lowcut, highcut, fs, order=bandpass_order)
+                    sample_data = sample_data_t.T
+                elif apply_highpass:
+                    sample_data_t = sample_data.T
+                    if highpass_cutoff is None:
+                        highpass_cutoff = 4.0
+                    for c in range(sample_data_t.shape[0]):
+                        sample_data_t[c] = butter_highpass_filter(sample_data_t[c], highpass_cutoff, fs, order=highpass_order)
+                    sample_data = sample_data_t.T
+                elif apply_lowpass:
+                    sample_data_t = sample_data.T
+                    if lowpass_cutoff is None:
+                        lowpass_cutoff = 50.0
+                    for c in range(sample_data_t.shape[0]):
+                        sample_data_t[c] = butter_lowpass_filter(sample_data_t[c], lowpass_cutoff, fs, order=lowpass_order)
+                    sample_data = sample_data_t.T
+                
+                if apply_notch:
+                    sample_data_t = sample_data.T
+                    if notch_freq is None:
+                        notch_freq = 50.0
+                    for c in range(sample_data_t.shape[0]):
+                        sample_data_t[c] = notch_filter(sample_data_t[c], notch_freq, notch_quality, fs)
+                    sample_data = sample_data_t.T
+                
+                if normalize_data:
+                    # Normalize each channel separately
+                    sample_data_t = sample_data.T
+                    for c in range(sample_data_t.shape[0]):
+                        channel_mean = np.mean(sample_data_t[c])
+                        channel_std = np.std(sample_data_t[c])
+                        if channel_std > 0:
+                            sample_data_t[c] = (sample_data_t[c] - channel_mean) / channel_std
+                    sample_data = sample_data_t.T
+                
+                # Flatten back to update the dataframe
+                for t in time_indices:
+                    for c in channel_indices:
+                        col_name = f"time{t}_ch{c}"
+                        if col_name in df_filtered.columns:
+                            df_filtered.at[idx, col_name] = sample_data[t, c]
+                
+            print(f"Processed {len(df_filtered)} structured transformer samples")
 
         # Generate diagnostic plots if requested
         plot_info = None
-        if generate_plots:
+        if generate_plots and data is not None:
             print("Generating diagnostic plots...")
             plot_info = generate_diagnostic_plots(data, fs, output_dir=diag_dir)
             print(f"Diagnostic plots saved to: {diag_dir}")
 
         # Compute frequency band powers if requested
         band_powers_df = None
-        if compute_band_powers:
+        if compute_band_powers and data is not None:
             print("Computing frequency band powers...")
             # Define frequency bands of interest
             bands = {
@@ -571,7 +843,7 @@ def clean_eeg_data(input_file, output_file,
 
         # Extract speech-related features if requested
         feature_info = None
-        if extract_features:
+        if extract_features and data is not None:
             print("Extracting speech-related features...")
             feature_info = extract_speech_features(data, fs, event_data=event_data)
             
@@ -581,42 +853,70 @@ def clean_eeg_data(input_file, output_file,
                 np.savez(feature_file, **feature_info)
                 print(f"Speech features saved to: {feature_file}")
 
-        # Write cleaned data back to the dataframe
-        df_filtered[sensor_columns] = data.T
-        print(f"Data shape after processing: {df_filtered[sensor_columns].values.shape}")
-
         # Save the cleaned data
         df_filtered.to_csv(output_file, index=False)
         print(f"Cleaned data saved to: {output_file}")
         
+        # Prepare CNN-Transformer specific segments if requested
+        transformer_df = None
+        transformer_output = None
+        if prepare_for_transformer and not is_structured_transformer:
+            print("Performing additional CNN-Transformer specific processing...")
+            
+            transformer_df = prepare_transformer_segments(
+                df_filtered, 
+                sequence_length=sequence_length,
+                min_segment_length=min_segment_length,
+                use_structured_format=use_structured_format
+            )
+            
+            if transformer_df is not None:
+                # Save transformer-specific dataset
+                transformer_output = os.path.join(os.path.dirname(output_file), 'transformer_dataset.csv')
+                transformer_df.to_csv(transformer_output, index=False)
+                
+                print(f"CNN-Transformer dataset saved with {len(transformer_df)} segments")
+            else:
+                print("Failed to create CNN-Transformer dataset")
+        
         # Create train-test split if requested
         train_file = None
         test_file = None
-        if create_train_test_split:
+        transformer_train_file = None
+        transformer_test_file = None
+        
+        if create_train_test_split and len(df_filtered) > 0:
             print("Creating train-test split...")
             try:
                 from sklearn.model_selection import train_test_split as sklearn_train_test_split
                 
-                # Determine stratification
+                # Determine stratification for standard dataset
                 stratify = None
-                if stratify_by_word and event_columns:
-                    # Assign a label based on which event column has the most True values
-                    event_counts = {}
-                    for event_col in event_columns:
-                        event_counts[event_col] = df_filtered[event_col].sum()
-                    
-                    # Create a "dominant_event" column based on the most frequent event
-                    if any(event_counts.values()):  # Only if we have True values
-                        df_filtered['dominant_event'] = 'none'
-                        for i, row in df_filtered.iterrows():
-                            for event_col in event_columns:
-                                if row[event_col]:
-                                    df_filtered.at[i, 'dominant_event'] = event_col.replace('_event', '')
-                                    break
+                if stratify_by_word:
+                    if 'word' in df_filtered.columns:
+                        # Use the word column directly if available
+                        stratify = df_filtered['word']
+                    elif 'word_label' in df_filtered.columns:
+                        # Use word_label if available (transformer format)
+                        stratify = df_filtered['word_label']
+                    elif event_columns:
+                        # Assign a label based on which event column has the most True values
+                        event_counts = {}
+                        for event_col in event_columns:
+                            event_counts[event_col] = df_filtered[event_col].sum()
                         
-                        stratify = df_filtered['dominant_event']
+                        # Create a "dominant_event" column based on the most frequent event
+                        if any(event_counts.values()):  # Only if we have True values
+                            df_filtered['dominant_event'] = 'none'
+                            for i, row in df_filtered.iterrows():
+                                for event_col in event_columns:
+                                    if row[event_col]:
+                                        df_filtered.at[i, 'dominant_event'] = event_col.replace('_event', '')
+                                        break
+                            
+                            stratify = df_filtered['dominant_event']
                 
-                # Create the split
+                # Create the standard split
                 train_df, test_df = sklearn_train_test_split(
                     df_filtered, 
                     test_size=test_size,
@@ -638,10 +938,40 @@ def clean_eeg_data(input_file, output_file,
                 
                 print(f"Train dataset saved to: {train_file} ({len(train_df)} rows)")
                 print(f"Test dataset saved to: {test_file} ({len(test_df)} rows)")
+                
+                # If we also generated a transformer dataset, create a split for that too
+                if transformer_df is not None and len(transformer_df) > 0:
+                    print("Creating train-test split for CNN-Transformer dataset...")
+                    
+                    # Determine stratification for transformer dataset
+                    transformer_stratify = None
+                    if stratify_by_word and 'word_label' in transformer_df.columns:
+                        transformer_stratify = transformer_df['word_label']
+                    
+                    # Create split
+                    transformer_train, transformer_test = sklearn_train_test_split(
+                        transformer_df,
+                        test_size=test_size,
+                        random_state=random_state,
+                        stratify=transformer_stratify
+                    )
+                    
+                    # Save train and test datasets
+                    transformer_train_file = os.path.join(os.path.dirname(output_file), 'transformer_train_dataset.csv')
+                    transformer_test_file = os.path.join(os.path.dirname(output_file), 'transformer_test_dataset.csv')
+                    
+                    transformer_train.to_csv(transformer_train_file, index=False)
+                    transformer_test.to_csv(transformer_test_file, index=False)
+                    
+                    print(f"CNN-Transformer train dataset saved to: {transformer_train_file} ({len(transformer_train)} rows)")
+                    print(f"CNN-Transformer test dataset saved to: {transformer_test_file} ({len(transformer_test)} rows)")
+                
             except Exception as e:
                 print(f"Error creating train-test split: {e}")
                 train_file = None
                 test_file = None
+                transformer_train_file = None
+                transformer_test_file = None
                 
         # Return success message and additional information
         result = {
@@ -655,9 +985,17 @@ def clean_eeg_data(input_file, output_file,
             'test_file': test_file,
             'signal_stats': signal_stats,
             'channels_processed': sensor_columns,
-            'total_samples': data.shape[1],
+            'total_samples': data.shape[1] if data is not None else len(df_filtered),
             'event_types': event_columns
         }
+        
+        # Add transformer-specific results
+        if transformer_df is not None:
+            result['transformer_dataset'] = True
+            result['transformer_file'] = transformer_output
+            result['transformer_rows'] = len(transformer_df)
+            result['transformer_train_file'] = transformer_train_file
+            result['transformer_test_file'] = transformer_test_file
         
         # Add warnings to result if any
         if signal_stats.get('warnings', []):

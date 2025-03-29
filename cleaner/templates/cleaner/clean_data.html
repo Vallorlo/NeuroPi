@@ -161,7 +161,63 @@
                                     </div>
                                 </div>
                             </div>
-                            
+                            <div class="card mt-4 shadow">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">CNN-Transformer Optimization</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle me-2"></i> 
+                                        These options optimize the data specifically for CNN-Transformer models, creating a structured format that improves training performance.
+                                    </div>
+                                    
+                                    <div class="form-check mb-3">
+                                        {{ form.prepare_for_transformer }}
+                                        <label class="form-check-label" for="{{ form.prepare_for_transformer.id_for_label }}">
+                                            {{ form.prepare_for_transformer.label }}
+                                        </label>
+                                        <small class="form-text text-muted d-block">{{ form.prepare_for_transformer.help_text }}</small>
+                                    </div>
+                                    
+                                    <div id="transformerOptions" class="ms-4">
+                                        <div class="form-check mb-3">
+                                            {{ form.use_structured_format }}
+                                            <label class="form-check-label" for="{{ form.use_structured_format.id_for_label }}">
+                                                {{ form.use_structured_format.label }}
+                                            </label>
+                                            <small class="form-text text-muted d-block">{{ form.use_structured_format.help_text }}</small>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.sequence_length.id_for_label }}" class="form-label">{{ form.sequence_length.label }}</label>
+                                                    {{ form.sequence_length }}
+                                                    <small class="form-text text-muted d-block">{{ form.sequence_length.help_text }}</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.min_segment_length.id_for_label }}" class="form-label">{{ form.min_segment_length.label }}</label>
+                                                    {{ form.min_segment_length }}
+                                                    <small class="form-text text-muted d-block">{{ form.min_segment_length.help_text }}</small>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="alert alert-warning">
+                                            <i class="bi bi-exclamation-triangle me-2"></i>
+                                            <strong>Note:</strong> When using CNN-Transformer optimization, it's recommended to also:
+                                            <ul>
+                                                <li>Apply bandpass filtering (4-50Hz)</li>
+                                                <li>Enable normalization</li>
+                                                <li>Consider applying ICA for artifact removal</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- Artifact Removal Section -->
                             <div class="accordion-item">
                                 <h2 class="accordion-header" id="headingArtifacts">
@@ -476,6 +532,24 @@
                 }
                 sessionStorage.removeItem('showProcessingOverlay');
             }
+        });
+
+
+        document.addEventListener('DOMContentLoaded', function() {
+            // Show/hide transformer options based on checkbox
+            const prepareTransformerCheckbox = document.getElementById('{{ form.prepare_for_transformer.id_for_label }}');
+            const transformerOptions = document.getElementById('transformerOptions');
+            
+            function updateTransformerOptions() {
+                if (prepareTransformerCheckbox.checked) {
+                    transformerOptions.style.display = 'block';
+                } else {
+                    transformerOptions.style.display = 'none';
+                }
+            }
+            
+            prepareTransformerCheckbox.addEventListener('change', updateTransformerOptions);
+            updateTransformerOptions(); // Initialize on page load
         });
     });
 </script>

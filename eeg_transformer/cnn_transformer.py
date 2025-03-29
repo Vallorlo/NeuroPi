@@ -135,9 +135,9 @@ class CNNTransformerTrainer:
         self.eeg_columns = []
         self.word_event_columns = []
         self.sequence_length = 50  # Default, will be adjusted based on data
-        
+            
     def preprocess_data(self):
-        """Load and preprocess the EEG dataset, preserving 2D structure (time x channels)."""
+        """Load and preprocess the EEG dataset for CNN-Transformer model training."""
         print(f"Loading dataset from {self.dataset_path}")
         
         # Get full path if relative
@@ -150,31 +150,201 @@ class CNNTransformerTrainer:
         df = pd.read_csv(full_path)
         print(f"Dataset loaded with shape: {df.shape}")
         
+        # Check if this is a structured transformer dataset (new format)
+        is_structured = any(col.startswith('time') and 'ch' in col for col in df.columns)
+        
+        if is_structured:
+            return self._preprocess_structured_data(df)
+        else:
+            return self._preprocess_standard_data(df)
+        
+    def _preprocess_structured_data(self, df):
+        """
+        Process a pre-structured dataset prepared specifically for CNN-Transformer.
+        This format should have:
+        - word_label column with the class label
+        - timeX_chY columns with flattened segment data
+        """
+        print("Processing structured transformer dataset format")
+        
+        # Check for essential columns
+        if 'word_label' not in df.columns:
+            raise ValueError("Dataset missing 'word_label' column")
+        
+        # Get time-channel columns
+        time_ch_columns = [col for col in df.columns if col.startswith('time') and 'ch' in col]
+        if not time_ch_columns:
+            raise ValueError("Dataset missing time-channel data columns")
+        
+        # Extract unique time and channel indices
+        time_indices = sorted(set(int(col.split('_')[0].replace('time', '')) for col in time_ch_columns))
+        channel_indices = sorted(set(int(col.split('ch')[1]) for col in time_ch_columns))
+        
+        sequence_length = len(time_indices)
+        num_channels = len(channel_indices)
+        
+        print(f"Detected format: {sequence_length} time points × {num_channels} channels")
+        
+        # Get word labels
+        word_labels = df['word_label'].tolist()
+        unique_words = set(word_labels)
+        print(f"Found {len(unique_words)} unique words: {unique_words}")
+        
+        if self.word_list:
+            # Filter to only include specified words
+            valid_indices = [i for i, label in enumerate(word_labels) if label in self.word_list]
+            if not valid_indices:
+                raise ValueError(f"No samples found for specified words: {self.word_list}")
+            
+            # Create new filtered lists
+            word_labels = [word_labels[i] for i in valid_indices]
+            df = df.iloc[valid_indices].reset_index(drop=True)
+            print(f"Filtered to {len(df)} samples for words: {self.word_list}")
+        
+        # Reshape the data into 3D format (samples, time, channels)
+        X = np.zeros((len(df), sequence_length, num_channels))
+        
+        for i in range(len(df)):
+            for t in time_indices:
+                for c in channel_indices:
+                    col_name = f"time{t}_ch{c}"
+                    if col_name in df.columns:
+                        X[i, t, c] = df.iloc[i][col_name]
+        
+        print(f"Reshaped data to {X.shape}")
+        
+        # Apply bandpass filter if requested
+        if self.apply_filtering:
+            print("Applying bandpass filter to all sequences")
+            for i in range(len(X)):
+                # Transpose to (channels, time) for filtering
+                data = X[i].T  
+                X[i] = self._apply_bandpass_filter(data).T  # Transpose back to (time, channels)
+        
+        # Encode the word labels
+        self.label_encoder = LabelEncoder()
+        y_encoded = self.label_encoder.fit_transform(word_labels)
+        y_categorical = to_categorical(y_encoded)
+        
+        print(f"Final data shape: X={X.shape}, y={y_categorical.shape}")
+        
+        # Save the label encoder
+        with open(os.path.join(self.output_dir, 'label_encoder.pkl'), 'wb') as f:
+            pickle.dump(self.label_encoder, f)
+            
+        # Get and save EEG column names for later reference
+        self.eeg_columns = [f'channel_{i}' for i in range(num_channels)]
+        self.sequence_length = sequence_length
+        
+        # Save preprocessing info
+        preprocessing_info = {
+            'eeg_columns': self.eeg_columns,
+            'word_event_columns': [f"{word}_event" for word in self.label_encoder.classes_],
+            'sequence_length': self.sequence_length,
+            'words': self.label_encoder.classes_.tolist(),
+            'num_channels': num_channels,
+            'is_structured': True
+        }
+        
+        with open(os.path.join(self.output_dir, 'preprocessing_info.json'), 'w') as f:
+            json.dump(preprocessing_info, f)
+            
+        return X, y_categorical
+
+    def _preprocess_standard_data(self, df):
+        """
+        Process standard EEG data format (original method).
+        This attempts to extract segments from continuous event markers.
+        """
+        print("Processing standard EEG data format (attempting to extract segments)")
+        
         # Identify EEG channels and event columns
         self.eeg_columns = [col for col in df.columns if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt'] 
-                           and not col.endswith('_event')]
+                        and not col.endswith('_event')]
         
-        # Find word event columns
+        # Alternative: Use word_label column if it exists
+        if 'word_label' in df.columns:
+            print("Found 'word_label' column, using it for labels")
+            unique_words = df['word_label'].unique()
+            
+            # Filter words if requested
+            if self.word_list:
+                unique_words = [w for w in unique_words if w in self.word_list]
+                if not unique_words:
+                    raise ValueError(f"No matching words found in word_label column")
+                    
+            # Create segments for each word
+            X_segments = []
+            word_labels = []
+            
+            for word in unique_words:
+                word_data = df[df['word_label'] == word]
+                print(f"Found {len(word_data)} samples for word: {word}")
+                
+                if len(word_data) < 10:  # Skip words with too few samples
+                    print(f"Too few samples for {word}, skipping")
+                    continue
+                    
+                # Get the EEG data
+                eeg_data = word_data[self.eeg_columns].values
+                
+                # Use a sliding window approach
+                window_size = 40  # Default window size
+                
+                for i in range(0, len(eeg_data) - window_size, 10):  # Step by 10 samples
+                    segment = eeg_data[i:i+window_size]
+                    X_segments.append(segment)
+                    word_labels.append(word)
+                    
+            if not X_segments:
+                raise ValueError("No segments could be extracted from word_label data")
+                    
+            # Convert to numpy arrays
+            X = np.array(X_segments)
+            
+            # Encode labels
+            self.label_encoder = LabelEncoder()
+            y_encoded = self.label_encoder.fit_transform(word_labels)
+            y_categorical = to_categorical(y_encoded)
+            
+            print(f"Extracted {len(X)} segments with shape {X.shape}")
+            self.sequence_length = X.shape[1]
+            
+            # Save preprocessing info
+            preprocessing_info = {
+                'eeg_columns': self.eeg_columns,
+                'word_event_columns': [],
+                'sequence_length': self.sequence_length,
+                'words': self.label_encoder.classes_.tolist(),
+                'num_channels': len(self.eeg_columns),
+                'is_structured': False
+            }
+            
+            with open(os.path.join(self.output_dir, 'preprocessing_info.json'), 'w') as f:
+                json.dump(preprocessing_info, f)
+            
+            return X, y_categorical
+        
+        # Find word event columns - original method
         self.word_event_columns = [col for col in df.columns if col.endswith('_event')]
         print(f"Found {len(self.word_event_columns)} word event columns: {self.word_event_columns}")
         
         # If word_list is provided, filter the event columns
         if self.word_list:
             self.word_event_columns = [col for col in self.word_event_columns 
-                                      if col.replace('_event', '') in self.word_list]
+                                    if col.replace('_event', '') in self.word_list]
             print(f"Filtered to {len(self.word_event_columns)} word event columns based on word_list: {self.word_event_columns}")
         
         # If no word events found, raise error
         if not self.word_event_columns:
             raise ValueError("No word event columns found in the dataset")
         
-        # Check if there are any True values in the event columns
         event_counts = {col: df[col].sum() for col in self.word_event_columns}
         print(f"Event counts: {event_counts}")
         
         if all(count == 0 for count in event_counts.values()):
             raise ValueError("No events (True values) found in any event column")
-            
+                
         # Extract word labels and EEG segments
         word_labels = []
         segments = []
@@ -192,7 +362,8 @@ class CNNTransformerTrainer:
                 print(f"No True events found for {word}, skipping...")
                 continue
                 
-            # Find continuous segments of True events
+            # Find continuous segments of True values for more reliable extraction
+            # This is a key improvement over the original logic
             segments_indices = []
             current_segment = []
             
@@ -206,30 +377,50 @@ class CNNTransformerTrainer:
                         segments_indices.append(current_segment)
                     current_segment = [idx]
             
-            # Add the last segment if it's not empty
+            # Add the last segment if it's long enough
             if current_segment and len(current_segment) >= 5:
                 segments_indices.append(current_segment)
             
-            # Extract EEG data for each segment
+            print(f"Identified {len(segments_indices)} continuous segments for {word}")
+            
+            # Process each segment to create training examples
             for segment_idxs in segments_indices:
-                # Take a window around the segment to have context
-                window_size = 40  # Adjust as needed
-                start_idx = max(0, segment_idxs[0] - window_size // 4)
-                end_idx = min(len(df) - 1, segment_idxs[-1] + window_size // 4)
-                
-                # Ensure the sequence is long enough
-                if end_idx - start_idx < 20:  # Need at least 20 samples
-                    print(f"Sequence too short ({end_idx - start_idx} samples), skipping")
+                if len(segment_idxs) < 10:  # Skip very short segments
                     continue
                     
+                # Use the middle of the segment as the center
+                center_idx = segment_idxs[len(segment_idxs) // 2]
+                
+                # Define sequence length based on data availability
+                self.sequence_length = min(50, len(segment_idxs) * 2)
+                
+                # Extract window around center (full segment plus context)
+                start_idx = max(0, center_idx - self.sequence_length // 2)
+                end_idx = min(len(df) - 1, start_idx + self.sequence_length - 1)
+                
+                # If we can't get enough samples from this window, adjust
+                if end_idx - start_idx + 1 < self.sequence_length:
+                    # Shift window to get required samples
+                    if start_idx == 0:
+                        # We're at the beginning, extend the end
+                        end_idx = min(len(df) - 1, self.sequence_length - 1)
+                    else:
+                        # We're at the end, move start earlier
+                        start_idx = max(0, len(df) - self.sequence_length)
+                
                 # Get the EEG data for this window
-                # Critically, we keep the 2D structure (time x channels)
                 sequence_data = df.loc[start_idx:end_idx, self.eeg_columns].values
                 
+                # Skip if we still couldn't get enough samples
+                if sequence_data.shape[0] < 20:  # Need at least 20 samples
+                    print(f"Sequence too short ({sequence_data.shape[0]} samples), skipping")
+                    continue
+                    
                 # Apply bandpass filter if requested
                 if self.apply_filtering:
                     print("Applying bandpass filter to sequence")
-                    sequence_data = self._apply_bandpass_filter(sequence_data)
+                    filtered_data = self._apply_bandpass_filter(sequence_data.T).T
+                    sequence_data = filtered_data
                     
                 # Add to our training data
                 segments.append(sequence_data)
@@ -241,7 +432,7 @@ class CNNTransformerTrainer:
         if not segments:
             raise ValueError("No valid EEG segments extracted. Check that your data contains events marked as True.")
         
-        # Find the shortest segment length for consistent sizing
+        # Find the minimum segment length for consistent sizing
         min_seq_length = min(len(seq) for seq in segments)
         print(f"Minimum sequence length: {min_seq_length}")
         
@@ -289,14 +480,15 @@ class CNNTransformerTrainer:
             'word_event_columns': self.word_event_columns,
             'sequence_length': self.sequence_length,
             'words': self.label_encoder.classes_.tolist(),
-            'num_channels': len(self.eeg_columns)
+            'num_channels': len(self.eeg_columns),
+            'is_structured': False
         }
         
         with open(os.path.join(self.output_dir, 'preprocessing_info.json'), 'w') as f:
             json.dump(preprocessing_info, f)
             
         return X, y_categorical
-    
+
     def _apply_bandpass_filter(self, eeg_data, lowcut=4.0, highcut=50.0, fs=128.0, order=5):
         """Apply a bandpass filter to EEG data with safety checks for short sequences.
         
@@ -330,7 +522,7 @@ class CNNTransformerTrainer:
         return filtered_data
     
     def build_model(self, input_shape, num_classes):
-        """Build and compile the CNN-Transformer model.
+        """Build and compile the CNN-Transformer model with improved architecture.
         
         Parameters:
         input_shape (tuple): Shape of input data (time_points, channels)
@@ -341,23 +533,24 @@ class CNNTransformerTrainer:
         # Input layer
         inputs = layers.Input(shape=input_shape)
         
+        # Add batch normalization at the input to stabilize training
+        x = layers.BatchNormalization()(inputs)
+        
         # Reshape for 1D convolution along time axis
         # From (batch, time, channels) to (batch, time, channels, 1)
-        x = layers.Reshape((time_steps, num_channels, 1))(inputs)
+        x = layers.Reshape((time_steps, num_channels, 1))(x)
         
-        # Apply 1D convolutions along time dimension for each channel
-        # This extracts temporal features while preserving channel information
+        # Layer 1: Apply 1D convolutions along time dimension
         x = layers.Conv2D(
             filters=self.conv_filters, 
             kernel_size=(self.conv_kernel_size, 1),  # Convolve only in time dimension
             padding='same',
             activation='relu'
         )(x)
-        
-        # Add batch normalization
         x = layers.BatchNormalization()(x)
+        x = layers.MaxPooling2D(pool_size=(2, 1))(x)  # Pool only in time dimension
         
-        # Apply a second convolution
+        # Layer 2: Apply a second convolution with more filters
         x = layers.Conv2D(
             filters=self.conv_filters * 2,
             kernel_size=(self.conv_kernel_size, 1),
@@ -365,16 +558,22 @@ class CNNTransformerTrainer:
             activation='relu'
         )(x)
         x = layers.BatchNormalization()(x)
+        x = layers.MaxPooling2D(pool_size=(2, 1))(x)  # Pool only in time dimension
+        
+        # Get the new time dimension after pooling
+        pooled_time_steps = time_steps // 4  # After two pooling layers with size 2
         
         # Reshape to (batch, time, features) for transformer
         # Collapse the channel and filter dimensions
-        x = layers.Reshape((time_steps, num_channels * self.conv_filters * 2))(x)
+        new_feature_dim = num_channels * self.conv_filters * 2
+        x = layers.Reshape((pooled_time_steps, new_feature_dim))(x)
         
-        # Project to transformer dimension
-        x = layers.Dense(self.transformer_dim)(x)
+        # Additional dense layer to project to transformer dimension
+        x = layers.Dense(self.transformer_dim, activation='relu')(x)
+        x = layers.Dropout(self.dropout_rate)(x)
         
         # Add positional encoding
-        x = PositionalEncoding(time_steps, self.transformer_dim)(x)
+        x = PositionalEncoding(pooled_time_steps, self.transformer_dim)(x)
         
         # Apply transformer blocks
         for _ in range(self.transformer_layers):
@@ -385,12 +584,26 @@ class CNNTransformerTrainer:
                 self.dropout_rate
             )(x)
         
-        # Global average pooling
-        x = layers.GlobalAveragePooling1D()(x)
+        # Add attention pooling to focus on most important parts of the sequence
+        # This is a key improvement over simple averaging
+        attention = layers.Dense(1, activation='tanh')(x)
+        attention = layers.Flatten()(attention)
+        attention_weights = layers.Activation('softmax')(attention)
         
-        # Final dense layers
-        x = layers.Dense(self.transformer_dim, activation='relu')(x)
+        # Apply attention weights
+        context = layers.Dot(axes=1)([x, layers.Reshape((pooled_time_steps, 1))(attention_weights)])
+        context = layers.Flatten()(context)
+        
+        # Add a skip connection from before transformer to after attention
+        # to preserve low-level features
+        pre_transformer_features = layers.GlobalAveragePooling1D()(x)
+        combined_features = layers.Concatenate()([context, pre_transformer_features])
+        
+        # Final classification layers
+        x = layers.Dense(self.transformer_dim, activation='relu')(combined_features)
         x = layers.Dropout(self.dropout_rate)(x)
+        x = layers.Dense(self.transformer_dim // 2, activation='relu')(x)
+        x = layers.Dropout(self.dropout_rate / 2)(x)  # Less dropout in final layers
         outputs = layers.Dense(num_classes, activation='softmax')(x)
         
         # Create and compile model
@@ -402,7 +615,7 @@ class CNNTransformerTrainer:
         )
         
         return model
-    
+        
     def train(self):
         """Train the CNN-Transformer model on the preprocessed EEG data."""
         # Check for GPU availability

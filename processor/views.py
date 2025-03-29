@@ -1,4 +1,3 @@
-# processor/views.py
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from .forms import ProcessingForm
@@ -12,7 +11,7 @@ import pandas as pd
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 import tempfile
-from .process_eeg import process_trial_data  # Import directly!
+from .process_eeg import process_trial_data  
 import datetime
 
 
@@ -91,6 +90,12 @@ def process_data_view(request):
                 # Participant and word filters
                 selected_participants = form.cleaned_data['selected_participants']
                 selected_words = form.cleaned_data['selected_words']
+                
+                prepare_for_transformer = form.cleaned_data.get('prepare_for_transformer', False)
+                segment_duration = form.cleaned_data.get('segment_duration', 0.5)
+                window_overlap = form.cleaned_data.get('window_overlap', 50)
+                create_labels_column = form.cleaned_data.get('create_labels_column', True)
+
 
                 # Get selected stages
                 selected_stages = []
@@ -126,7 +131,7 @@ def process_data_view(request):
                 try:
                     stats = process_trial_data(
                         root_dir=root_dir,
-                        output_dir=output_dir,  # Pass the new output directory
+                        output_dir=output_dir,
                         verbose=verbose,
                         create_visualizations=create_visualizations,
                         generate_dataset=generate_dataset,
@@ -137,8 +142,13 @@ def process_data_view(request):
                         create_train_test=create_train_test,
                         test_size=test_size,
                         random_state=random_state,
-                        stratify_by_word=stratify_by_word
-                    )
+                        stratify_by_word=stratify_by_word,
+                        # Add these new parameters
+                        prepare_for_transformer=prepare_for_transformer,
+                        segment_duration=segment_duration,
+                        window_overlap=window_overlap,
+                        create_labels_column=create_labels_column
+                        )           
                     message = "Processing complete!"
                     
                     # If datasets were created, add links to download them

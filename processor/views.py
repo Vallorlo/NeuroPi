@@ -90,12 +90,6 @@ def process_data_view(request):
                 # Participant and word filters
                 selected_participants = form.cleaned_data['selected_participants']
                 selected_words = form.cleaned_data['selected_words']
-                
-                prepare_for_transformer = form.cleaned_data.get('prepare_for_transformer', False)
-                segment_duration = form.cleaned_data.get('segment_duration', 0.5)
-                window_overlap = form.cleaned_data.get('window_overlap', 50)
-                create_labels_column = form.cleaned_data.get('create_labels_column', True)
-
 
                 # Get selected stages
                 selected_stages = []
@@ -143,11 +137,8 @@ def process_data_view(request):
                         test_size=test_size,
                         random_state=random_state,
                         stratify_by_word=stratify_by_word,
-                        # Add these new parameters
-                        prepare_for_transformer=prepare_for_transformer,
-                        segment_duration=segment_duration,
-                        window_overlap=window_overlap,
-                        create_labels_column=create_labels_column
+                        # Disable transformer-specific preparation (moved to cleaner)
+                        prepare_for_transformer=False
                         )           
                     message = "Processing complete!"
                     

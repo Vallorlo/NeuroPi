@@ -1,141 +1,200 @@
 {% extends "layout.html" %}
+
+{% block title %}
+    Process EEG Data
+{% endblock title %}
+
 {% block content %}
 <div class="container mt-5 mb-5">
-    <h1 class="mb-4">EEG Data Processor</h1>
-    
-    {% if has_processed_data %}
-        <div class="alert alert-info" role="alert">
-            <div class="d-flex align-items-center">
-                <i class="bi bi-info-circle-fill me-2 fs-4"></i>
-                <div>
-                    <strong>Previously processed data available</strong>
-                    <p class="mb-0">Found processed data from {{ latest_processed }}. You can proceed with processing more data or use the existing processed files.</p>
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">EEG Data Processor</h2>
                 </div>
-            </div>
-            <div class="mt-2">
-                <a href="/processor/download/{{ latest_processed }}/combined_eeg_dataset.csv" class="btn btn-sm btn-outline-primary">
-                    <i class="bi bi-download"></i> Download Latest Dataset
-                </a>
-                <a href="/cleaner" class="btn btn-sm btn-outline-success">
-                    <i class="bi bi-arrow-right"></i> Continue to Data Cleaner
-                </a>
-            </div>
-        </div>
-    {% endif %}
-    
-    {% if message %}
-        <div class="alert alert-info" role="alert">
-            {{ message }}
-        </div>
-    {% endif %}
-    
-    <div class="card shadow">
-        <div class="card-header bg-primary text-white">
-            <h5 class="card-title mb-0">Process EEG Data</h5>
-        </div>
-        <div class="card-body">
-            <form method="post" enctype="multipart/form-data" id="processingForm">
-                {% csrf_token %}
-                
-                <div class="row">
-                    <div class="col-lg-6">
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <h5 class="alert-heading"><i class="bi bi-info-circle-fill me-2"></i>About the EEG Processor</h5>
+                        <p>This tool processes raw EEG data files by analyzing audio recordings or timestamp files to identify speech events. It then marks these events in the EEG data and creates a labeled dataset for analysis and machine learning.</p>
+                        <p class="mb-0"><strong>New!</strong> The processor now creates a <code>word_label</code> column that contains the spoken word during speech events and "sil" (silence) during non-speech periods, making the data more suitable for machine learning tasks.</p>
+                    </div>
+                    
+                    {% if message %}
+                    <div class="alert alert-warning">
+                        {{ message }}
+                    </div>
+                    {% endif %}
+                    
+                    <form method="post" enctype="multipart/form-data" id="processingForm">
+                        {% csrf_token %}
+                        
+                        <!-- Start of accordion -->
                         <div class="accordion" id="processingAccordion">
                             <!-- Basic Options Section -->
                             <div class="accordion-item">
                                 <h2 class="accordion-header" id="headingBasic">
                                     <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseBasic" aria-expanded="true" aria-controls="collapseBasic">
-                                        Basic Processing Options
+                                        Basic Options
                                     </button>
                                 </h2>
-                                <div id="collapseBasic" class="accordion-collapse collapse show" aria-labelledby="headingBasic">
+                                <div id="collapseBasic" class="accordion-collapse collapse show" aria-labelledby="headingBasic" data-bs-parent="#processingAccordion">
                                     <div class="accordion-body">
-                                        <div class="form-check mb-3">
-                                            {{ form.verbose }}
-                                            <label class="form-check-label" for="{{ form.verbose.id_for_label }}">
-                                                {{ form.verbose.label }}
-                                            </label>
-                                            <small class="form-text text-muted d-block">{{ form.verbose.help_text }}</small>
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <div class="form-check form-switch mb-3">
+                                                    {{ form.verbose }}
+                                                    <label class="form-check-label" for="{{ form.verbose.id_for_label }}">
+                                                        {{ form.verbose.label }}
+                                                    </label>
+                                                    <div class="form-text">{{ form.verbose.help_text }}</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="form-check form-switch mb-3">
+                                                    {{ form.create_visualizations }}
+                                                    <label class="form-check-label" for="{{ form.create_visualizations.id_for_label }}">
+                                                        {{ form.create_visualizations.label }}
+                                                    </label>
+                                                    <div class="form-text">{{ form.create_visualizations.help_text }}</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="form-check form-switch mb-3">
+                                                    {{ form.generate_dataset }}
+                                                    <label class="form-check-label" for="{{ form.generate_dataset.id_for_label }}">
+                                                        {{ form.generate_dataset.label }}
+                                                    </label>
+                                                    <div class="form-text">{{ form.generate_dataset.help_text }}</div>
+                                                </div>
+                                            </div>
                                         </div>
                                         
-                                        <div class="form-check mb-3">
-                                            {{ form.create_visualizations }}
-                                            <label class="form-check-label" for="{{ form.create_visualizations.id_for_label }}">
-                                                {{ form.create_visualizations.label }}
-                                            </label>
-                                            <small class="form-text text-muted d-block">{{ form.create_visualizations.help_text }}</small>
-                                        </div>
-                                        
-                                        <div class="form-check mb-3">
-                                            {{ form.generate_dataset }}
-                                            <label class="form-check-label" for="{{ form.generate_dataset.id_for_label }}">
-                                                {{ form.generate_dataset.label }}
-                                            </label>
-                                            <small class="form-text text-muted d-block">{{ form.generate_dataset.help_text }}</small>
-                                        </div>
-                                        
-                                        <div class="mb-3">
-                                            <label for="{{ form.zip_file.id_for_label }}" class="form-label">{{ form.zip_file.label }}</label>
-                                            {{ form.zip_file }}
-                                            <small class="form-text text-muted d-block">{{ form.zip_file.help_text }}</small>
+                                        <div class="row mt-3">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.zip_file.id_for_label }}" class="form-label">{{ form.zip_file.label }}</label>
+                                                    {{ form.zip_file }}
+                                                    <div class="form-text">{{ form.zip_file.help_text }}</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="alert alert-light border">
+                                                    <h6><i class="bi bi-folder-fill me-2"></i>Directory Structure</h6>
+                                                    <code>trial_[participant]/[word]/stage[1-5]/eeg_data_attempt_[n].csv</code>
+                                                    <div class="small text-muted mt-1">The processor will analyze this structure and process all matching files.</div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                             
-                            <!-- Stages Section -->
+                            <!-- Speech Detection Section -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingSpeech">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSpeech" aria-expanded="false" aria-controls="collapseSpeech">
+                                        Speech Detection Settings
+                                    </button>
+                                </h2>
+                                <div id="collapseSpeech" class="accordion-collapse collapse" aria-labelledby="headingSpeech" data-bs-parent="#processingAccordion">
+                                    <div class="accordion-body">
+                                        <div class="row">
+                                            <div class="col-md-4">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.silence_thresh.id_for_label }}" class="form-label">{{ form.silence_thresh.label }}</label>
+                                                    {{ form.silence_thresh }}
+                                                    <div class="form-text">{{ form.silence_thresh.help_text }}</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.min_silence.id_for_label }}" class="form-label">{{ form.min_silence.label }}</label>
+                                                    {{ form.min_silence }}
+                                                    <div class="form-text">{{ form.min_silence.help_text }}</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-4">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.timestamp_padding.id_for_label }}" class="form-label">{{ form.timestamp_padding.label }}</label>
+                                                    {{ form.timestamp_padding }}
+                                                    <div class="form-text">{{ form.timestamp_padding.help_text }}</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="card bg-light mt-3">
+                                            <div class="card-body">
+                                                <h6 class="card-title"><i class="bi bi-info-circle me-2"></i>About Speech Detection</h6>
+                                                <p class="small mb-0">
+                                                    For stages with speech (1 and 4), audio files are analyzed to detect speech segments. 
+                                                    For non-speech stages (2, 3, and 5), timestamp files are used to mark events. 
+                                                    The processor will now create a <code>word_label</code> column in the data where each row is labeled with either the word (during speech) or "sil" (during silence).
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Stage Selection Section -->
                             <div class="accordion-item">
                                 <h2 class="accordion-header" id="headingStages">
                                     <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseStages" aria-expanded="false" aria-controls="collapseStages">
                                         Stage Selection
                                     </button>
                                 </h2>
-                                <div id="collapseStages" class="accordion-collapse collapse" aria-labelledby="headingStages">
+                                <div id="collapseStages" class="accordion-collapse collapse" aria-labelledby="headingStages" data-bs-parent="#processingAccordion">
                                     <div class="accordion-body">
-                                        <div class="alert alert-info mb-3">
-                                            <small>Select which stages to include in the combined dataset. At least one stage must be selected if generating a dataset.</small>
+                                        <div class="alert alert-info">
+                                            <p>Select which stages to include in the combined dataset. These will be used if "Generate Combined Dataset" is checked.</p>
                                         </div>
                                         
                                         <div class="row">
-                                            <div class="col-md-4">
-                                                <div class="form-check mb-2">
+                                            <div class="col-md-4 mb-3">
+                                                <div class="form-check">
                                                     {{ form.stage_1 }}
                                                     <label class="form-check-label" for="{{ form.stage_1.id_for_label }}">
-                                                        {{ form.stage_1.label }}
+                                                        <strong>Stage 1:</strong> Vocal
                                                     </label>
+                                                    <div class="form-text">Subject speaks the word out loud</div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
-                                                <div class="form-check mb-2">
+                                            <div class="col-md-4 mb-3">
+                                                <div class="form-check">
                                                     {{ form.stage_2 }}
                                                     <label class="form-check-label" for="{{ form.stage_2.id_for_label }}">
-                                                        {{ form.stage_2.label }}
+                                                        <strong>Stage 2:</strong> Non-vocal
                                                     </label>
+                                                    <div class="form-text">Subject thinks about saying the word</div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
-                                                <div class="form-check mb-2">
+                                            <div class="col-md-4 mb-3">
+                                                <div class="form-check">
                                                     {{ form.stage_3 }}
                                                     <label class="form-check-label" for="{{ form.stage_3.id_for_label }}">
-                                                        {{ form.stage_3.label }}
+                                                        <strong>Stage 3:</strong> Motor
                                                     </label>
+                                                    <div class="form-text">Subject performs an action without speaking</div>
                                                 </div>
                                             </div>
                                         </div>
                                         <div class="row">
-                                            <div class="col-md-4">
-                                                <div class="form-check mb-2">
+                                            <div class="col-md-4 mb-3">
+                                                <div class="form-check">
                                                     {{ form.stage_4 }}
                                                     <label class="form-check-label" for="{{ form.stage_4.id_for_label }}">
-                                                        {{ form.stage_4.label }}
+                                                        <strong>Stage 4:</strong> Motor + Vocal
                                                     </label>
+                                                    <div class="form-text">Subject performs an action while speaking</div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
-                                                <div class="form-check mb-2">
+                                            <div class="col-md-4 mb-3">
+                                                <div class="form-check">
                                                     {{ form.stage_5 }}
                                                     <label class="form-check-label" for="{{ form.stage_5.id_for_label }}">
-                                                        {{ form.stage_5.label }}
+                                                        <strong>Stage 5:</strong> Motor + Non-vocal
                                                     </label>
+                                                    <div class="form-text">Subject performs an action while thinking about the word</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -143,69 +202,40 @@
                                 </div>
                             </div>
                             
-                            <!-- Audio Parameters Section -->
-                            <div class="accordion-item">
-                                <h2 class="accordion-header" id="headingAudio">
-                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAudio" aria-expanded="false" aria-controls="collapseAudio">
-                                        Audio Processing Parameters
-                                    </button>
-                                </h2>
-                                <div id="collapseAudio" class="accordion-collapse collapse" aria-labelledby="headingAudio">
-                                    <div class="accordion-body">
-                                        <div class="mb-3">
-                                            <label for="{{ form.silence_thresh.id_for_label }}" class="form-label">{{ form.silence_thresh.label }}</label>
-                                            {{ form.silence_thresh }}
-                                            <small class="form-text text-muted d-block">{{ form.silence_thresh.help_text }}</small>
-                                        </div>
-                                        
-                                        <div class="mb-3">
-                                            <label for="{{ form.min_silence.id_for_label }}" class="form-label">{{ form.min_silence.label }}</label>
-                                            {{ form.min_silence }}
-                                            <small class="form-text text-muted d-block">{{ form.min_silence.help_text }}</small>
-                                        </div>
-                                        
-                                        <div class="mb-3">
-                                            <label for="{{ form.timestamp_padding.id_for_label }}" class="form-label">{{ form.timestamp_padding.label }}</label>
-                                            {{ form.timestamp_padding }}
-                                            <small class="form-text text-muted d-block">{{ form.timestamp_padding.help_text }}</small>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="col-lg-6">
-                        <div class="accordion" id="datasetAccordion">
                             <!-- Data Filtering Section -->
                             <div class="accordion-item">
-                                <h2 class="accordion-header" id="headingFilters">
-                                    <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFilters" aria-expanded="true" aria-controls="collapseFilters">
-                                        Data Filtering
+                                <h2 class="accordion-header" id="headingFilter">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFilter" aria-expanded="false" aria-controls="collapseFilter">
+                                        Participant & Word Filtering
                                     </button>
                                 </h2>
-                                <div id="collapseFilters" class="accordion-collapse collapse show" aria-labelledby="headingFilters">
+                                <div id="collapseFilter" class="accordion-collapse collapse" aria-labelledby="headingFilter" data-bs-parent="#processingAccordion">
                                     <div class="accordion-body">
-                                        <div class="mb-3">
-                                            <label for="{{ form.selected_participants.id_for_label }}" class="form-label">{{ form.selected_participants.label }}</label>
-                                            {{ form.selected_participants }}
-                                            <small class="form-text text-muted d-block">{{ form.selected_participants.help_text }}</small>
-                                            {% if form.selected_participants.errors %}
-                                                <div class="alert alert-danger mt-1">
-                                                    {{ form.selected_participants.errors }}
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.selected_participants.id_for_label }}" class="form-label">{{ form.selected_participants.label }}</label>
+                                                    {{ form.selected_participants }}
+                                                    <div class="form-text">{{ form.selected_participants.help_text }}</div>
                                                 </div>
-                                            {% endif %}
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.selected_words.id_for_label }}" class="form-label">{{ form.selected_words.label }}</label>
+                                                    {{ form.selected_words }}
+                                                    <div class="form-text">{{ form.selected_words.help_text }}</div>
+                                                </div>
+                                            </div>
                                         </div>
                                         
-                                        <div class="mb-3">
-                                            <label for="{{ form.selected_words.id_for_label }}" class="form-label">{{ form.selected_words.label }}</label>
-                                            {{ form.selected_words }}
-                                            <small class="form-text text-muted d-block">{{ form.selected_words.help_text }}</small>
-                                            {% if form.selected_words.errors %}
-                                                <div class="alert alert-danger mt-1">
-                                                    {{ form.selected_words.errors }}
-                                                </div>
-                                            {% endif %}
+                                        <div class="alert alert-light border">
+                                            <p class="mb-0">
+                                                <i class="bi bi-filter me-2"></i> 
+                                                <strong>Available Participants:</strong> {{ available_participants|join:", " }}
+                                                <br>
+                                                <i class="bi bi-filter me-2"></i> 
+                                                <strong>Available Words:</strong> {{ available_words|join:", " }}
+                                            </p>
                                         </div>
                                     </div>
                                 </div>
@@ -213,128 +243,140 @@
                             
                             <!-- Train-Test Split Section -->
                             <div class="accordion-item">
-                                <h2 class="accordion-header" id="headingSplit">
-                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseSplit" aria-expanded="false" aria-controls="collapseSplit">
-                                        Train-Test Split
+                                <h2 class="accordion-header" id="headingTrainTest">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTrainTest" aria-expanded="false" aria-controls="collapseTrainTest">
+                                        Train-Test Split Options
                                     </button>
                                 </h2>
-                                <div id="collapseSplit" class="accordion-collapse collapse" aria-labelledby="headingSplit">
+                                <div id="collapseTrainTest" class="accordion-collapse collapse" aria-labelledby="headingTrainTest" data-bs-parent="#processingAccordion">
                                     <div class="accordion-body">
-                                        <div class="alert alert-info mb-3">
-                                            <small>Split the combined dataset into training and testing sets for machine learning.</small>
+                                        <div class="alert alert-info">
+                                            <p><strong>Note:</strong> Train-test split requires "Generate Combined Dataset" to be enabled.</p>
                                         </div>
                                         
-                                        <div class="form-check mb-3">
-                                            {{ form.create_train_test_split }}
-                                            <label class="form-check-label" for="{{ form.create_train_test_split.id_for_label }}">
-                                                {{ form.create_train_test_split.label }}
-                                            </label>
-                                            <small class="form-text text-muted d-block">{{ form.create_train_test_split.help_text }}</small>
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check form-switch mb-3">
+                                                    {{ form.create_train_test_split }}
+                                                    <label class="form-check-label" for="{{ form.create_train_test_split.id_for_label }}">
+                                                        {{ form.create_train_test_split.label }}
+                                                    </label>
+                                                    <div class="form-text">{{ form.create_train_test_split.help_text }}</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check form-switch mb-3">
+                                                    {{ form.stratify_by_word }}
+                                                    <label class="form-check-label" for="{{ form.stratify_by_word.id_for_label }}">
+                                                        {{ form.stratify_by_word.label }}
+                                                    </label>
+                                                    <div class="form-text">{{ form.stratify_by_word.help_text }}</div>
+                                                </div>
+                                            </div>
                                         </div>
                                         
-                                        <div class="train-test-options">
-                                            <div class="mb-3">
-                                                <label for="{{ form.test_size.id_for_label }}" class="form-label">{{ form.test_size.label }}</label>
-                                                {{ form.test_size }}
-                                                <small class="form-text text-muted d-block">{{ form.test_size.help_text }}</small>
+                                        <div class="row mt-2">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.test_size.id_for_label }}" class="form-label">{{ form.test_size.label }}</label>
+                                                    {{ form.test_size }}
+                                                    <div class="form-text">{{ form.test_size.help_text }}</div>
+                                                </div>
                                             </div>
-                                            
-                                            <div class="mb-3">
-                                                <label for="{{ form.random_state.id_for_label }}" class="form-label">{{ form.random_state.label }}</label>
-                                                {{ form.random_state }}
-                                                <small class="form-text text-muted d-block">{{ form.random_state.help_text }}</small>
-                                            </div>
-                                            
-                                            <div class="form-check mb-3">
-                                                {{ form.stratify_by_word }}
-                                                <label class="form-check-label" for="{{ form.stratify_by_word.id_for_label }}">
-                                                    {{ form.stratify_by_word.label }}
-                                                </label>
-                                                <small class="form-text text-muted d-block">{{ form.stratify_by_word.help_text }}</small>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.random_state.id_for_label }}" class="form-label">{{ form.random_state.label }}</label>
+                                                    {{ form.random_state }}
+                                                    <div class="form-text">{{ form.random_state.help_text }}</div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
+                        </div>
+                        <!-- End of accordion -->
                         
-                            <div class="accordion-item">
-                                <h2 class="accordion-header" id="headingTransformer">
-                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTransformer" aria-expanded="false" aria-controls="collapseTransformer">
-                                        CNN-Transformer Options
-                                    </button>
-                                </h2>
-                                <div id="collapseTransformer" class="accordion-collapse collapse" aria-labelledby="headingTransformer">
-                                    <div class="accordion-body">
-                                        <div class="alert alert-info mb-3">
-                                            <small>Configure options for preparing data specifically for CNN-Transformer models</small>
-                                        </div>
-                                        
-                                        <div class="form-check mb-3">
-                                            {{ form.prepare_for_transformer }}
-                                            <label class="form-check-label" for="{{ form.prepare_for_transformer.id_for_label }}">
-                                                {{ form.prepare_for_transformer.label }}
-                                            </label>
-                                            <small class="form-text text-muted d-block">{{ form.prepare_for_transformer.help_text }}</small>
-                                        </div>
-                                        
-                                        <div class="transformer-options">
-                                            <div class="mb-3">
-                                                <label for="{{ form.segment_duration.id_for_label }}" class="form-label">{{ form.segment_duration.label }}</label>
-                                                {{ form.segment_duration }}
-                                                <small class="form-text text-muted d-block">{{ form.segment_duration.help_text }}</small>
-                                            </div>
-                                            
-                                            <div class="mb-3">
-                                                <label for="{{ form.window_overlap.id_for_label }}" class="form-label">{{ form.window_overlap.label }}</label>
-                                                {{ form.window_overlap }}
-                                                <small class="form-text text-muted d-block">{{ form.window_overlap.help_text }}</small>
-                                            </div>
-                                            
-                                            <div class="form-check mb-3">
-                                                {{ form.create_labels_column }}
-                                                <label class="form-check-label" for="{{ form.create_labels_column.id_for_label }}">
-                                                    {{ form.create_labels_column.label }}
-                                                </label>
-                                                <small class="form-text text-muted d-block">{{ form.create_labels_column.help_text }}</small>
-                                            </div>
+                        <!-- Feature highlighting the word labeling approach -->
+                        <div class="card mt-4 mb-4 border-primary">
+                            <div class="card-header bg-primary text-white">
+                                <h5 class="mb-0"><i class="bi bi-tag-fill me-2"></i>New Word Labeling Approach</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row">
+                                    <div class="col-md-7">
+                                        <p>The processor now creates a <code>word_label</code> column that contains:</p>
+                                        <ul>
+                                            <li>The <strong>actual word</strong> (e.g., "hello") during speech events</li>
+                                            <li>The label <strong>"sil"</strong> (silence) during non-speech periods</li>
+                                        </ul>
+                                        <p>This format makes the data more suitable for machine learning tasks by providing explicit word labels for every time point.</p>
+                                        <p class="mb-0"><strong>Note:</strong> The traditional binary event columns (e.g., <code>hello_event</code>) are still created for backward compatibility.</p>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <div class="table-responsive">
+                                            <table class="table table-sm table-bordered">
+                                                <thead class="table-light">
+                                                    <tr>
+                                                        <th>Time</th>
+                                                        <th>word_label</th>
+                                                        <th>hello_event</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr>
+                                                        <td>0.125</td>
+                                                        <td class="text-muted">sil</td>
+                                                        <td><span class="badge bg-secondary">False</span></td>
+                                                    </tr>
+                                                    <tr class="table-info">
+                                                        <td>0.250</td>
+                                                        <td class="fw-bold">hello</td>
+                                                        <td><span class="badge bg-success">True</span></td>
+                                                    </tr>
+                                                    <tr>
+                                                        <td>0.375</td>
+                                                        <td class="text-muted">sil</td>
+                                                        <td><span class="badge bg-secondary">False</span></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            
+                        </div>
                         
+                        <!-- Submit Button -->
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg" id="submitButton">
+                                <i class="bi bi-play-circle me-2"></i>Start Processing
+                            </button>
+                        </div>
+                    </form>
+                    
+                    {% if has_processed_data %}
+                    <div class="card mt-4">
+                        <div class="card-header bg-success text-white">
+                            <h5 class="mb-0">Previously Processed Data</h5>
+                        </div>
+                        <div class="card-body">
+                            <p>You have previously processed data available. The latest processed directory is: <strong>{{ latest_processed }}</strong></p>
+                            <div class="d-flex">
+                                <a href="/plot" class="btn btn-outline-primary me-2">
+                                    <i class="bi bi-graph-up"></i> Visualize Data
+                                </a>
+                                <a href="/cleaner" class="btn btn-outline-success">
+                                    <i class="bi bi-gear"></i> Clean Data
+                                </a>
+                            </div>
                         </div>
                     </div>
+                    {% endif %}
                 </div>
-                
-                {% if form.errors %}
-                <div class="alert alert-danger mt-4">
-                    <h5><i class="bi bi-exclamation-triangle"></i> Form Errors</h5>
-                    {{ form.errors }}
-                </div>
-                {% endif %}
-                
-                <div class="row mt-4">
-                    <div class="col-12 d-flex justify-content-center">
-                        <button type="submit" class="btn btn-primary btn-lg" id="processButton">
-                            <i class="bi bi-cpu"></i> Process Data
-                        </button>
-                    </div>
-                </div>
-            </form>
+            </div>
         </div>
     </div>
-    
-    {% if output %}
-        <div class="card mt-4 shadow">
-            <div class="card-header bg-secondary text-white">
-                <h5 class="card-title mb-0">Processing Output</h5>
-            </div>
-            <div class="card-body">
-                <pre class="bg-light p-3 rounded" style="max-height: 400px; overflow-y: auto;">{{ output }}</pre>
-            </div>
-        </div>
-    {% endif %}
 </div>
 
 <!-- Processing overlay -->
@@ -349,119 +391,32 @@
 </div>
 
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // Show/hide train-test split options based on checkbox
-        const createSplitCheckbox = document.getElementById('{{ form.create_train_test_split.id_for_label }}');
-        const trainTestOptions = document.querySelector('.train-test-options');
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show overlay on form submission
+        const form = document.getElementById('processingForm');
+        form.addEventListener('submit', function(e) {
+            document.getElementById('processing-overlay').style.display = 'block';
+            document.getElementById('submitButton').disabled = true;
+        });
         
-        function updateTrainTestOptions() {
-            if (createSplitCheckbox.checked) {
-                trainTestOptions.style.display = 'block';
-            } else {
-                trainTestOptions.style.display = 'none';
+        // Disable transformer settings when on or off transformer switch
+        const createTransformersControl = document.getElementById('id_prepare_for_transformer');
+        const transformerSettings = document.getElementById('transformerSettings');
+        
+        if (createTransformersControl && transformerSettings) {
+            function updateTransformerSettings() {
+                transformerSettings.style.display = createTransformersControl.checked ? 'block' : 'none';
             }
+            
+            createTransformersControl.addEventListener('change', updateTransformerSettings);
+            updateTransformerSettings();
         }
         
-        createSplitCheckbox.addEventListener('change', updateTrainTestOptions);
-        updateTrainTestOptions(); // Initialize on page load
-        
-        // Show processing overlay when form is submitted
-        const processingForm = document.getElementById('processingForm');
-        const processButton = document.getElementById('processButton');
-        const processingOverlay = document.getElementById('processing-overlay');
-        
-        processingForm.addEventListener('submit', function(e) {
-            // Basic validation
-            const generateDataset = document.getElementById('{{ form.generate_dataset.id_for_label }}');
-            const createSplit = document.getElementById('{{ form.create_train_test_split.id_for_label }}');
-            
-            if (createSplit.checked && !generateDataset.checked) {
-                e.preventDefault();
-                alert('Train-test split requires generating a dataset first. Please enable "Generate Combined Dataset".');
-                return;
-            }
-            
-            // Show processing overlay
-            processButton.disabled = true;
-            processingOverlay.style.display = 'block';
+        // Enable tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
         });
-        
-        // Handle redirect after form submission
-        window.addEventListener('beforeunload', function() {
-            // When navigating away from the page, make sure the overlay remains visible
-            // This ensures it doesn't disappear during page transitions
-            const overlay = document.getElementById('processing-overlay');
-            if (overlay && overlay.style.display === 'block') {
-                sessionStorage.setItem('showProcessingOverlay', 'true');
-            }
-        });
-
-        // Check if we need to hide the overlay (if we returned to this page after an error)
-        document.addEventListener('DOMContentLoaded', function() {
-            const overlay = document.getElementById('processing-overlay');
-            
-            // If we're back on the form page, hide the overlay
-            if (overlay && window.location.href.includes('processor') || window.location.href.includes('cleaner')) {
-                overlay.style.display = 'none';
-                const submitButton = document.querySelector('button[type="submit"]');
-                if (submitButton) {
-                    submitButton.disabled = false;
-                }
-                sessionStorage.removeItem('showProcessingOverlay');
-            }
-        });
-        
-        // Dynamic participant-word relationship
-        const participantSelect = document.getElementById('{{ form.selected_participants.id_for_label }}');
-        const wordSelect = document.getElementById('{{ form.selected_words.id_for_label }}');
-        
-        participantSelect.addEventListener('change', function() {
-            // Get selected participants
-            const selectedParticipants = Array.from(participantSelect.selectedOptions).map(opt => opt.value);
-            
-            if (selectedParticipants.length > 0) {
-                // Make AJAX request to get words for these participants
-                const formData = new FormData();
-                formData.append('get_words', 'true');
-                formData.append('participant', selectedParticipants[0]); // Start with first selected
-                formData.append('csrfmiddlewaretoken', document.querySelector('[name=csrfmiddlewaretoken]').value);
-                
-                fetch(window.location.href, {
-                    method: 'POST',
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    },
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    // Update word options
-                    if (data.words && Array.isArray(data.words)) {
-                        // Clear current options
-                        wordSelect.innerHTML = '';
-                        
-                        // Add new options
-                        data.words.forEach(word => {
-                            const option = document.createElement('option');
-                            option.value = word;
-                            option.textContent = word;
-                            wordSelect.appendChild(option);
-                        });
-                    }
-                })
-                .catch(error => {
-                    console.error('Error fetching words:', error);
-                });
-            }
-        });
-        
-        // Initialize Select2 for better dropdown experience
-        if (typeof $ !== 'undefined' && typeof $.fn.select2 !== 'undefined') {
-            $('.select2').select2({
-                placeholder: 'Select options',
-                allowClear: true
-            });
-        }
     });
 </script>
 {% endblock %}

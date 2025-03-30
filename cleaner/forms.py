@@ -16,11 +16,10 @@ class CleaningForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'form-control'})
     )
 
-    # Column selection and dropping
-    columns_to_drop = forms.MultipleChoiceField(
+    # Column selection and dropping - MODIFIED to use CharField instead of MultipleChoiceField
+    columns_to_drop = forms.CharField(
         required=False,
         label="Columns to Drop",
-        choices=[],  # Will be populated dynamically
         widget=forms.SelectMultiple(attrs={'class': 'form-control select2', 'size': '6'}),
         help_text="Select columns to exclude from processing"
     )
@@ -284,21 +283,18 @@ class CleaningForm(forms.Form):
         help_text='Create a balanced dataset with equal samples per class',
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
+    regenerate_event_columns = forms.BooleanField(
+    required=False, 
+    label='Regenerate Event Columns in Transformer', 
+    initial=False,
+    help_text='If unchecked, dropped event columns will not be recreated in the transformer dataset',
+    widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Populate input file choices
         self.fields['input_file'].choices = self.get_input_file_choices()
-
-        # Populate columns_to_drop choices (will be updated via JavaScript)
-        self.fields['columns_to_drop'].choices = [
-            ('Timestamp', 'Timestamp'),
-            ('COUNTER', 'COUNTER'),
-            ('participant_id', 'participant_id'),
-            ('word', 'word'),
-            ('stage', 'stage'),
-            ('attempt', 'attempt')
-        ]
 
         # Set default values optimized for speech detection if the form is not bound
         if not self.is_bound:
@@ -427,6 +423,13 @@ class CleaningForm(forms.Form):
 
     def clean(self):
         cleaned_data = super().clean()
+
+        # Handle columns_to_drop - NEW way of handling it
+        columns_to_drop = self.data.getlist('columns_to_drop')
+        if columns_to_drop:
+            cleaned_data['columns_to_drop'] = columns_to_drop
+        else:
+            cleaned_data['columns_to_drop'] = []
 
         # Validate bandpass filter parameters
         if cleaned_data.get('apply_bandpass'):

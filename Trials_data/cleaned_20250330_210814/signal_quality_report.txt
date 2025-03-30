@@ -1,0 +1,11 @@
+EEG Signal Quality Report
+=======================
+
+**This report is based on the INPUT data before any filtering**
+
+Min value: 3338
+Max value: 12721
+Mean value: 8177.210690063921
+Standard deviation: 73.71702689924298
+Zero values: 0.0%
+

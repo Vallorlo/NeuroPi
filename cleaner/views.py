@@ -86,7 +86,17 @@ def clean_data_view(request):
                 # Extract form data
                 input_file = form.cleaned_data['input_file']
                 output_file_name = form.cleaned_data['output_file_name']
+                
+                # Get columns_to_drop from form - UPDATED to handle the new way
                 columns_to_drop = form.cleaned_data.get('columns_to_drop', [])
+                # Make sure it's a list
+                if not isinstance(columns_to_drop, list):
+                    if isinstance(columns_to_drop, str):
+                        columns_to_drop = [col.strip() for col in columns_to_drop.split(',') if col.strip()]
+                    else:
+                        columns_to_drop = []
+                
+                print(f"Columns to drop: {columns_to_drop}")
                 
                 # Filter settings
                 apply_bandpass = form.cleaned_data['apply_bandpass']

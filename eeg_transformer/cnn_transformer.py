@@ -654,14 +654,32 @@ class CNNTransformerTrainer:
         # Preprocess data
         X, y = self.preprocess_data()
         
-        # Split into train and validation sets
         X_train, X_val, y_train, y_val = train_test_split(
             X, y, test_size=self.validation_split, random_state=42, stratify=y
         )
-        
+
+        # Add these lines to fix data type issues
+        print("Checking for NaN/Inf values and converting data types...")
+        print(f"X_train original dtype: {X_train.dtype}")
+
+        # Check for problematic values
+        has_nan = np.isnan(X_train).any()
+        has_inf = np.isinf(X_train).any()
+        print(f"NaN values in training data: {has_nan}")
+        print(f"Inf values in training data: {has_inf}")
+
+        # Fix data types and replace any NaN/Inf values
+        X_train = np.nan_to_num(X_train, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+        X_val = np.nan_to_num(X_val, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+        y_train = np.nan_to_num(y_train, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+        y_val = np.nan_to_num(y_val, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+
+        print(f"X_train converted dtype: {X_train.dtype}")
+        print(f"Post-conversion NaN check: {np.isnan(X_train).any()}")
+
         print(f"Training data shape: {X_train.shape}, Labels shape: {y_train.shape}")
         print(f"Validation data shape: {X_val.shape}, Validation labels shape: {y_val.shape}")
-        
+
         # Build the model
         input_shape = (X_train.shape[1], X_train.shape[2])  # (time_steps, channels)
         num_classes = y_train.shape[1]

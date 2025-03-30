@@ -248,10 +248,13 @@ def extract_speech_features(data, fs=128, event_data=None, word_labels=None):
         print(f"Error extracting speech features: {e}")
         return None
 
-def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, use_structured_format=True, balance_classes=False):
+
+def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, 
+                            use_structured_format=True, balance_classes=False, 
+                            add_event_columns=True, dropped_columns=None):
     """
     Further process cleaned data to prepare segments optimized for CNN-Transformer model.
-    Modified to handle missing event columns gracefully.
+    Modified to handle missing event columns gracefully and respect dropped columns.
     
     Parameters:
     df (DataFrame): Cleaned EEG data
@@ -259,11 +262,17 @@ def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, 
     min_segment_length (int): Minimum length of a valid segment
     use_structured_format (bool): Whether to use a structured format with word labels
     balance_classes (bool): Whether to balance classes by sampling same amount from each word
+    add_event_columns (bool): Whether to add event columns at the end (set to False to avoid regenerating dropped columns)
+    dropped_columns (list): List of column names that were explicitly dropped and should not be regenerated
     
     Returns:
     DataFrame: Processed data ready for CNN-Transformer training
     """
     print(f"Preparing CNN-Transformer segments with length={sequence_length}, min_length={min_segment_length}")
+    
+    # Make sure dropped_columns is a list
+    if dropped_columns is None:
+        dropped_columns = []
     
     # Find event columns
     event_columns = [col for col in df.columns if col.endswith('_event')]
@@ -552,13 +561,18 @@ def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, 
                 col_name = f"time{time_idx}_ch{channel_idx}"
                 result_df.at[i, col_name] = val
         
-        # Add one-hot encoded columns for each word - ONLY IF REQUESTED
-        # No need to regenerate event columns if they were explicitly dropped
-        # Keeping this as an option for models that might still need them
-        unique_words = set(labels)
-        for word in unique_words:
-            result_df[f"{word}_event"] = (result_df['word_label'] == word)
-            
+        # Add one-hot encoded columns for each word - ONLY IF REQUESTED AND NOT DROPPED
+        # Respect the columns that were explicitly dropped
+        if add_event_columns:
+            unique_words = set(labels)
+            for word in unique_words:
+                event_col_name = f"{word}_event"
+                # Only add if not in dropped columns
+                if event_col_name not in dropped_columns:
+                    result_df[event_col_name] = (result_df['word_label'] == word)
+                else:
+                    print(f"Skipping creation of {event_col_name} as it was explicitly dropped")
+                    
         print(f"Created structured dataset with {len(result_df)} segments")
         return result_df
     else:
@@ -566,7 +580,6 @@ def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, 
         result_df = pd.concat(segments, ignore_index=True)
         print(f"Created dataset with {len(result_df)} rows")
         return result_df
-
 
 def clean_eeg_data(input_file, output_file,
                    apply_bandpass=False, lowcut=None, highcut=None, fs=128, bandpass_order=5,
@@ -1107,12 +1120,17 @@ def clean_eeg_data(input_file, output_file,
                     'message': 'Cannot prepare transformer dataset - both word_label and all event columns were dropped. One is required.'
                 }
             
+            # NEW PARAMETER: Don't add event columns that were previously dropped
+            add_event_columns = not any(col.endswith('_event') for col in columns_to_drop)
+            
             transformer_df = prepare_transformer_segments(
                 df_filtered, 
                 sequence_length=sequence_length,
                 min_segment_length=min_segment_length,
                 use_structured_format=use_structured_format,
-                balance_classes=balance_classes
+                balance_classes=balance_classes,
+                add_event_columns=add_event_columns,  # NEW PARAMETER
+                dropped_columns=columns_to_drop       # Pass the dropped columns list
             )
             
             if transformer_df is not None:
@@ -1128,7 +1146,7 @@ def clean_eeg_data(input_file, output_file,
                     print(f"Class distribution: {class_counts}")
             else:
                 print("Failed to create CNN-Transformer dataset")
-        
+                
         # Create train-test split if requested
         train_file = None
         test_file = None

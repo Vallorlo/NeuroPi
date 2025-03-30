@@ -34,3 +34,10 @@ def sub(value, arg):
 def get_item(dictionary, key):
     """Get an item from a dictionary with the given key."""
     return dictionary.get(key)
+
+
+# Alternative implementation that doesn't require the same length
+@register.filter
+def zip_lists(value, arg):
+    """Zip two lists together, like Python's zip function."""
+    return [(x, y) for x, y in zip(value or [], arg or [])]

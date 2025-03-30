@@ -76,32 +76,32 @@
                                             </thead>
                                             <tbody>
                                                 {% for class, values in metrics.classification_report.items %}
-                                                    {% if class != "accuracy" and class != "macro avg" and class != "weighted avg" %}
+                                                    {% if class != "accuracy" and class != "macro_avg" and class != "weighted_avg" %}
                                                         <tr>
                                                             <td>{{ class }}</td>
                                                             <td>{{ values.precision|floatformat:2 }}</td>
                                                             <td>{{ values.recall|floatformat:2 }}</td>
-                                                            <td>{{ values.f1-score|floatformat:2 }}</td>
+                                                            <td>{{ values.f1score|floatformat:2 }}</td>
                                                             <td>{{ values.support }}</td>
                                                         </tr>
                                                     {% endif %}
                                                 {% endfor %}
-                                                {% if metrics.classification_report.macro avg %}
+                                                {% if metrics.classification_report.macro_avg %}
                                                     <tr class="table-secondary">
                                                         <td><strong>Macro Avg</strong></td>
-                                                        <td>{{ metrics.classification_report.macro avg.precision|floatformat:2 }}</td>
-                                                        <td>{{ metrics.classification_report.macro avg.recall|floatformat:2 }}</td>
-                                                        <td>{{ metrics.classification_report.macro avg.f1-score|floatformat:2 }}</td>
-                                                        <td>{{ metrics.classification_report.macro avg.support }}</td>
+                                                        <td>{{ metrics.classification_report.macro_avg.precision|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.macro_avg.recall|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.macro_avg.f1score|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.macro_avg.support }}</td>
                                                     </tr>
                                                 {% endif %}
-                                                {% if metrics.classification_report.weighted avg %}
+                                                {% if metrics.classification_report.weighted_avg %}
                                                     <tr class="table-info">
                                                         <td><strong>Weighted Avg</strong></td>
-                                                        <td>{{ metrics.classification_report.weighted avg.precision|floatformat:2 }}</td>
-                                                        <td>{{ metrics.classification_report.weighted avg.recall|floatformat:2 }}</td>
-                                                        <td>{{ metrics.classification_report.weighted avg.f1-score|floatformat:2 }}</td>
-                                                        <td>{{ metrics.classification_report.weighted avg.support }}</td>
+                                                        <td>{{ metrics.classification_report.weighted_avg.precision|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.weighted_avg.recall|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.weighted_avg.f1score|floatformat:2 }}</td>
+                                                        <td>{{ metrics.classification_report.weighted_avg.support }}</td>
                                                     </tr>
                                                 {% endif %}
                                             </tbody>
@@ -183,13 +183,13 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for true, pred in metrics.true_labels|zip:metrics.predicted_labels %}
-                                                <tr class="{% if true == pred %}table-success{% else %}table-danger{% endif %}">
+                                            {% for pair in metrics.true_labels|zip_lists:metrics.predicted_labels %}
+                                                <tr class="{% if pair.0 == pair.1 %}table-success{% else %}table-danger{% endif %}">
                                                     <td>{{ forloop.counter }}</td>
-                                                    <td>{{ true }}</td>
-                                                    <td>{{ pred }}</td>
+                                                    <td>{{ pair.0 }}</td>
+                                                    <td>{{ pair.1 }}</td>
                                                     <td>
-                                                        {% if true == pred %}
+                                                        {% if pair.0 == pair.1 %}
                                                             <i class="bi bi-check-circle-fill text-success"></i> Correct
                                                         {% else %}
                                                             <i class="bi bi-x-circle-fill text-danger"></i> Incorrect

@@ -462,6 +462,32 @@ def evaluation_detail(request, evaluation_id):
         # Parse evaluation data
         eval_data = json.loads(evaluation.eval_data)
         
+        # Fix the classification report to make it template-friendly
+        if 'classification_report' in eval_data:
+            fixed_report = {}
+            for class_name, metrics in eval_data['classification_report'].items():
+                # Skip non-dictionary metrics (like 'accuracy')
+                if not isinstance(metrics, dict):
+                    fixed_report[class_name] = metrics
+                    continue
+                    
+                # For dictionary metrics, fix the keys
+                fixed_metrics = {}
+                for metric_name, value in metrics.items():
+                    # Replace hyphens with underscores in metric names
+                    fixed_metric_name = metric_name.replace('-', 'score')
+                    fixed_metrics[fixed_metric_name] = value
+                
+                # Fix keys with spaces for template access
+                if class_name == "macro avg":
+                    fixed_report["macro_avg"] = fixed_metrics
+                elif class_name == "weighted avg":
+                    fixed_report["weighted_avg"] = fixed_metrics
+                else:
+                    fixed_report[class_name] = fixed_metrics
+            
+            eval_data['classification_report'] = fixed_report
+        
         # Get charts from the evaluation files
         charts = {}
         eval_dir = os.path.join(settings.BASE_DIR, evaluation.model.model_path, 'evaluation')
@@ -740,3 +766,99 @@ def get_test_datasets():
     """Get list of available test datasets."""
     test_datasets = []
     base_dir = settings.TRIAL_DIR
+    
+    if os.path.exists(base_dir):
+        # First look for dedicated test datasets in processed/cleaned directories
+        for item in os.listdir(base_dir):
+            item_path = os.path.join(base_dir, item)
+            if os.path.isdir(item_path) and ('cleaned_' in item or 'processed_' in item):
+                # Look for test datasets in this directory
+                for file in os.listdir(item_path):
+                    if file.endswith('.csv') and ('test' in file.lower() or 'transformer_test' in file.lower()):
+                        file_path = os.path.join(item, file)  # Relative path for storage
+                        full_path = os.path.join(base_dir, file_path)
+                        file_size = os.path.getsize(os.path.join(base_dir, file_path)) / (1024*1024)  # Size in MB
+                        mod_time = os.path.getmtime(os.path.join(base_dir, file_path))
+                        mod_date = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d')
+                        
+                        test_datasets.append({
+                            'name': f'{item}/{file}',
+                            'path': file_path,
+                            'size': f'{file_size:.2f} MB',
+                            'date': mod_date,
+                            'type': 'Test Dataset'
+                        })
+        
+        # Also look for test datasets directly in the trials directory
+        for file in os.listdir(base_dir):
+            if file.endswith('.csv') and os.path.isfile(os.path.join(base_dir, file)):
+                if 'test' in file.lower():
+                    file_path = file  # Relative path for storage
+                    full_path = os.path.join(base_dir, file)
+                    file_size = os.path.getsize(full_path) / (1024*1024)  # Size in MB
+                    mod_time = os.path.getmtime(full_path)
+                    mod_date = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d')
+                    
+                    test_datasets.append({
+                        'name': file,
+                        'path': file_path,
+                        'size': f'{file_size:.2f} MB',
+                        'date': mod_date,
+                        'type': 'Test Dataset'
+                    })
+                # Include any combined datasets as potential test sets too
+                elif 'combined' in file.lower() or 'dataset' in file.lower():
+                    file_path = file  # Relative path for storage
+                    full_path = os.path.join(base_dir, file)
+                    file_size = os.path.getsize(full_path) / (1024*1024)  # Size in MB
+                    mod_time = os.path.getmtime(full_path)
+                    mod_date = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d')
+                    
+                    test_datasets.append({
+                        'name': file,
+                        'path': file_path,
+                        'size': f'{file_size:.2f} MB',
+                        'date': mod_date,
+                        'type': 'Combined Dataset'
+                    })
+    
+    return sorted(test_datasets, key=lambda x: x['date'], reverse=True)
+
+
+def training_history_api(request):
+    """API endpoint to get training history for a model."""
+    model_id = request.GET.get('model_id')
+    
+    if not model_id:
+        return JsonResponse({'error': 'No model ID provided'}, status=400)
+    
+    try:
+        model = TransformerModel.objects.get(id=model_id)
+        
+        # Try to load the training history file
+        history_path = os.path.join(settings.BASE_DIR, model.model_path, 'training_history.json')
+        
+        if os.path.exists(history_path):
+            with open(history_path, 'r') as f:
+                history = json.load(f)
+                
+            return JsonResponse({
+                'status': 'success',
+                'history': history
+            })
+        else:
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Training history not found'
+            }, status=404)
+            
+    except TransformerModel.DoesNotExist:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Model not found'
+        }, status=404)
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': str(e)
+        }, status=500)

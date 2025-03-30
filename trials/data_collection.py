@@ -19,7 +19,7 @@ CHANNELS = 1
 RATE = 44100
 
 # Global EEG instance
-cyHeadset = None
+cyHeadset = EEG()
 
 def record_audio(filename, duration):
     """Records audio for the specified duration and saves to a WAV file."""
@@ -66,11 +66,7 @@ def collect_stage_data(stage_duration, eeg_filename, audio_filename):
     and saves them to their respective files.
     """
     global cyHeadset
-    
-    # Initialize EEG headset if not already done
-    if cyHeadset is None:
-        cyHeadset = EEG()
-    
+
     # Check if headset was initialized properly
     if not cyHeadset.hid:
         print("ERROR: EEG headset not found or not initialized properly")

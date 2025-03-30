@@ -32,7 +32,9 @@ def clean_data_view(request):
         'message': '',
         'output': '',
         'plots': None,
-        'features': False
+        'features': False,
+        'error': None,  # Add a dedicated error field to the context
+        'debug_info': None  # Add a field for debugging information
     }
     
     try:
@@ -64,6 +66,8 @@ def clean_data_view(request):
                             'metadata_columns': metadata_columns
                         })
                     except Exception as e:
+                        print(f"Error getting columns: {str(e)}")
+                        traceback.print_exc()
                         return JsonResponse({
                             'success': False,
                             'error': str(e)
@@ -141,6 +145,14 @@ def clean_data_view(request):
                 print(f"Output file path: {output_file_path}")  # Debug: Check output path
 
                 try:
+                    # Print debugging information about what's being dropped
+                    print(f"Columns to drop: {columns_to_drop}")
+                    if columns_to_drop:
+                        event_columns_to_drop = [col for col in columns_to_drop if col.endswith('_event')]
+                        other_columns_to_drop = [col for col in columns_to_drop if not col.endswith('_event')]
+                        print(f"Event columns to drop: {event_columns_to_drop}")
+                        print(f"Other columns to drop: {other_columns_to_drop}")
+                    
                     # Call the EEG cleaning function with all parameters
                     result = clean_eeg_data(
                         input_file=input_file,
@@ -183,6 +195,21 @@ def clean_data_view(request):
                     )
                     
                     print(f"clean_eeg_data returned: {result}")  # Debug: Check return value
+                    
+                    if result.get('status') == 'error':
+                        # Handle error result from clean_eeg_data
+                        error_message = result.get('message', 'An unknown error occurred during processing')
+                        print(f"Error returned from clean_eeg_data: {error_message}")
+                        
+                        # Instead of refreshing, show the form with the error message
+                        context = {
+                            'form': form,
+                            'message': '',
+                            'output': output.getvalue(),
+                            'error': error_message,
+                            'debug_info': f"Processing failed. See error message and logs for details."
+                        }
+                        return render(request, 'cleaner/clean_data.html', context)
                     
                     if isinstance(result, dict) and result.get('status') == 'success':
                         message = result.get('message', 'Data cleaned successfully!')
@@ -362,93 +389,75 @@ def clean_data_view(request):
                             'output': output.getvalue()
                         })
                         
-                        # Don't return ZIP file directly anymore
-                        # Instead, provide download links in the template
-                        
                 except Exception as e:
                     trace = traceback.format_exc()
-                    message = f'An error occurred: {str(e)}'
+                    error_message = f'An error occurred: {str(e)}'
                     print(f"Error during processing: {e}")
                     print(trace)
-                    messages.error(request, message)
                     
-                    # Return an error response with JavaScript to remove the overlay
-                    response_html = f"""
-                    <html>
-                    <head>
-                        <script>
-                            // Remove the processing overlay first
-                            function removeOverlay() {{
-                                const overlay = document.getElementById('processing-overlay');
-                                if (overlay) {{
-                                    overlay.remove();
-                                }}
-                            }}
-                            removeOverlay();
-                            
-                            // Then alert the user about the error
-                            alert('Error during processing: {str(e)}');
-                            
-                            // Redirect back to the form page
-                            window.location.href = window.location.href;
-                        </script>
-                    </head>
-                    <body>
-                        <p>Error processing request. Redirecting...</p>
-                    </body>
-                    </html>
-                    """
-                    return HttpResponse(response_html)
-
+                    # Instead of returning a JavaScript redirect, render the template with the error
+                    context = {
+                        'form': form, 
+                        'message': error_message,
+                        'output': output.getvalue(),
+                        'error': str(e),
+                        'debug_info': trace
+                    }
+                    return render(request, 'cleaner/clean_data.html', context)
             else:
                 print("Form is NOT valid")  # Debug: Form invalid
-                message = "Invalid form inputs. Please check the error messages."
                 print(form.errors)  # Print Errors
-                messages.error(request, "Invalid form inputs. Please check the error messages.")
                 
-                # Add JavaScript to remove the processing overlay for invalid form submissions
-                response_html = """
-                <html>
-                <head>
-                    <script>
-                        // Remove the processing overlay
-                        function removeOverlay() {
-                            const overlay = document.getElementById('processing-overlay');
-                            if (overlay) {
-                                overlay.remove();
-                            }
-                        }
-                        removeOverlay();
-                        
-                        // Redirect back to the form page
-                        window.location.href = window.location.href;
-                    </script>
-                </head>
-                <body>
-                    <p>Invalid form submission. Redirecting...</p>
-                </body>
-                </html>
-                """
-                return HttpResponse(response_html)
+                # Add form errors to the context
+                context = {
+                    'form': form,
+                    'message': "Invalid form inputs. Please check the error messages.",
+                    'output': output.getvalue(),
+                    'error': "Form validation failed. Please correct the errors below.",
+                    'form_errors': form.errors
+                }
+                return render(request, 'cleaner/clean_data.html', context)
                 
-        # Update context with latest information
-        context = {
-            'form': form,
-            'message': message if 'message' in locals() else '',
-            'output': output.getvalue()
-        }
+        else:
+            # Create form with custom choices for initial page load
+            form = CleaningForm()
+
+        # Check for existing processed data
+        processed_dirs = [d for d in os.listdir(settings.TRIAL_DIR) 
+                         if os.path.isdir(os.path.join(settings.TRIAL_DIR, d)) 
+                         and d.startswith('processed_')]
+        
+        has_processed_data = len(processed_dirs) > 0
+        latest_processed = max(processed_dirs, default=None) if processed_dirs else None
+
+        # Update the context
+        context.update({
+            'form': form, 
+            'message': context.get('message', ''), 
+            'output': output.getvalue(),
+            'has_processed_data': has_processed_data,
+            'latest_processed': latest_processed
+        })
+
+        return render(request, 'cleaner/clean_data.html', context)
 
     except Exception as e:
         trace = traceback.format_exc()
-        message = f"Unexpected error: {str(e)}"
+        error_message = f"Unexpected error: {str(e)}"
         print(f"Exception in view: {e}")
         print(trace)
-        messages.error(request, message)
-        context['message'] = message
+        
+        context.update({
+            'message': error_message,
+            'output': output.getvalue() if 'output' in locals() else "",
+            'error': str(e),
+            'debug_info': trace
+        })
     
     finally:
         # Restore stdout
-        sys.stdout = old_stdout
+        if 'old_stdout' in locals():
+            sys.stdout = old_stdout
         
     return render(request, 'cleaner/clean_data.html', context)
 

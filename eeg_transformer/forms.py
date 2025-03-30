@@ -13,6 +13,13 @@ class TransformerTrainingForm(forms.ModelForm):
         label='Dataset',
         widget=forms.Select(attrs={'class': 'form-select'})
     )
+    include_silence = forms.BooleanField(
+    required=False, 
+    label='Include Silence Detection', 
+    initial=True,
+    help_text='Train model to recognize silence as well as speech',
+    widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
     
     # Word selection field (multiselect)
     selected_words = forms.MultipleChoiceField(
@@ -71,6 +78,8 @@ class TransformerTrainingForm(forms.ModelForm):
         
         # Set up word choices (will be updated via JavaScript based on selected dataset)
         self.fields['selected_words'].choices = self.get_word_choices()
+        self.fields['selected_words'].help_text = 'Leave empty to use all words. The "sil" class (silence) will be included if available in the dataset.'
+
     
     def get_dataset_choices(self):
         """Get choices for dataset selection."""
@@ -114,6 +123,12 @@ class TransformerTrainingForm(forms.ModelForm):
         
         # Combine selected words into comma-separated string
         selected_words = self.data.getlist('selected_words')
+        
+        # MODIFICATION: Add 'sil' to selected words if include_silence is checked
+        # and 'sil' not already in selected_words
+        if cleaned_data.get('include_silence', True) and 'sil' not in selected_words:
+            selected_words.append('sil')
+        
         if selected_words:
             cleaned_data['word_list'] = ','.join(selected_words)
         

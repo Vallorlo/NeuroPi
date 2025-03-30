@@ -1,5 +1,6 @@
 from django import template
 import os
+from itertools import zip_longest
 register = template.Library()
 
 @register.filter
@@ -36,7 +37,13 @@ def get_item(dictionary, key):
     return dictionary.get(key)
 
 
-# Alternative implementation that doesn't require the same length
+
+@register.filter
+def zip(value, arg):
+    """Zip two lists together, like Python's zip function."""
+    return zip_longest(value, arg) if value and arg else []
+
+
 @register.filter
 def zip_lists(value, arg):
     """Zip two lists together, like Python's zip function."""

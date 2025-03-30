@@ -25,6 +25,9 @@ urlpatterns = [
     # Live prediction
     path('predict/', views.live_prediction, name='live_prediction'),
     
+    # Post-recording evaluation (new)
+    path('post-recording/', views.post_recording_evaluate, name='post_recording_evaluate'),
+    
     # API endpoints
     path('api/predict/', views.live_predict_api, name='live_predict_api'),
     path('api/initialize-eeg/', views.initialize_eeg_api, name='initialize_eeg_api'),

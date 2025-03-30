@@ -196,7 +196,19 @@ class CNNTransformerTrainer:
         unique_words = set(word_labels)
         print(f"Found {len(unique_words)} unique words: {unique_words}")
         
+        # MODIFICATION: Include 'sil' explicitly if not already included
+        # This ensures silence is treated as a valid class
+        if 'sil' not in unique_words:
+            print("Warning: 'sil' (silence) class not found in dataset. Add explicit silence segments for better recognition.")
+        
         if self.word_list:
+            # MODIFICATION: Make sure 'sil' is included in word_list if not already there
+            # (only if there are 'sil' labeled samples in the dataset)
+            word_list_set = set(self.word_list)
+            if 'sil' in unique_words and 'sil' not in word_list_set:
+                print("Adding 'sil' (silence) to word list to enable silence detection")
+                self.word_list = list(self.word_list) + ['sil']
+                
             # Filter to only include specified words
             valid_indices = [i for i, label in enumerate(word_labels) if label in self.word_list]
             if not valid_indices:
@@ -206,7 +218,7 @@ class CNNTransformerTrainer:
             word_labels = [word_labels[i] for i in valid_indices]
             df = df.iloc[valid_indices].reset_index(drop=True)
             print(f"Filtered to {len(df)} samples for words: {self.word_list}")
-        
+            
         # Reshape the data into 3D format (samples, time, channels)
         X = np.zeros((len(df), sequence_length, num_channels))
         

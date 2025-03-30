@@ -13,7 +13,7 @@ import pandas as pd
 from .models import TransformerModel, TrainingJob, TransformerPrediction, ModelEvaluation
 from .forms import TransformerTrainingForm, TransformerPredictionForm
 from .cnn_transformer import CNNTransformerTrainer, CNNTransformerPredictor
-
+from trials.views import get_existing_participants
 # Global variables for EEG prediction
 from trials.data.aq_raw import EEG
 _eeg_predictor = None
@@ -689,7 +689,6 @@ def cancel_training(request, job_id):
             'message': str(e)
         }, status=500)
 
-# Helper functions
 def get_available_datasets():
     """Get list of available processed datasets."""
     datasets = []
@@ -824,6 +823,163 @@ def get_test_datasets():
     
     return sorted(test_datasets, key=lambda x: x['date'], reverse=True)
 
+def post_recording_evaluate(request):
+    """
+    View for recording EEG data and evaluating it with a selected model.
+    This simplifies the evaluation process by recording a single segment and evaluating it immediately.
+    """
+    # Get available models
+    models = TransformerModel.objects.filter(status='active').order_by('-created_at')
+    
+    if not models:
+        # If no models are available, redirect to the no models page
+        return render(request, 'eeg_transformer/no_models.html')
+    
+    # Get participant information
+    participants = get_existing_participants()
+    
+    # Create prediction form
+    form = TransformerPredictionForm(participants=participants)
+    
+    results = None
+    recording_status = None
+    
+    if request.method == 'POST':
+        form = TransformerPredictionForm(request.POST, participants=participants)
+        
+        if form.is_valid():
+            try:
+                # Get form data
+                model_id = form.cleaned_data['model']
+                duration = form.cleaned_data['sample_duration']
+                apply_filtering = form.cleaned_data['apply_filtering']
+                participant = form.cleaned_data['participant']
+                
+                # Initialize EEG headset
+                global _headset
+                if _headset is None or not _headset.hid:
+                    _headset = EEG()
+                    if not _headset.hid:
+                        recording_status = "error"
+                        results = {
+                            'error': 'Failed to initialize EEG headset. Please check the connection.'
+                        }
+                        return render(request, 'eeg_transformer/post_recording_evaluate.html', {
+                            'form': form,
+                            'models': models,
+                            'results': results,
+                            'recording_status': recording_status
+                        })
+                
+                # Record EEG data
+                recording_status = "recording"
+                data = []
+                timestamps = []
+                start_time = datetime.now()
+                
+                print(f"Collecting EEG data for {duration} seconds...")
+                _headset.clear_data()
+                
+                # Sample collection loop
+                end_time = start_time.timestamp() + duration
+                while datetime.now().timestamp() < end_time:
+                    try:
+                        list_str = _headset.get_data()
+                        if list_str is None:
+                            continue
+                        
+                        list_str = list_str.strip()
+                        if not list_str:
+                            continue
+                        
+                        list_values = list_str.split(',')
+                        
+                        # Expected sensor order: "COUNTER", 'F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4'
+                        if len(list_values) != 15:  # COUNTER + 14 EEG channels
+                            print(f"Incorrect number of values received: {len(list_values)}, expected 15. Skipping sample.")
+                            continue
+                        
+                        counter = list_values[0]
+                        packet = list_values[1:]  # EEG channels only
+                        
+                        if packet:
+                            data.append([counter] + packet)
+                            timestamps.append(datetime.now().timestamp() - start_time.timestamp())
+                    except Exception as e:
+                        print(f"Error collecting EEG data: {str(e)}")
+                        continue
+                
+                print(f"Collected {len(data)} samples in {duration} seconds")
+                _headset.clear_data()  # Clear queue after collection
+                
+                if not data:
+                    recording_status = "error"
+                    results = {
+                        'error': 'No EEG data collected. Please check the headset connection.'
+                    }
+                    return render(request, 'eeg_transformer/post_recording_evaluate.html', {
+                        'form': form,
+                        'models': models,
+                        'results': results,
+                        'recording_status': recording_status
+                    })
+                
+                # Convert data to numpy array for processing
+                np_data = np.array(data, dtype=float)
+                
+                # Extract only the EEG channels, shape (samples, channels)
+                eeg_data = np_data[:, 1:]
+                
+                # Load model predictor
+                model_predictor = CNNTransformerPredictor(model_path=model_id.model_path)
+                
+                # Process data and make prediction
+                recording_status = "processing"
+                predictions = model_predictor.predict(eeg_data, apply_filtering)
+                
+                if 'error' in predictions:
+                    recording_status = "error"
+                    results = {
+                        'error': predictions['error']
+                    }
+                else:
+                    recording_status = "success"
+                    results = {
+                        'predicted_word': predictions['predicted_word'],
+                        'confidence': predictions['confidence'],
+                        'predictions': predictions['predictions'],
+                        'samples_collected': len(data)
+                    }
+                    
+                    # Save the prediction to database
+                    try:
+                        prediction = TransformerPrediction(
+                            model=model_id,
+                            predicted_word=predictions['predicted_word'],
+                            confidence=predictions['confidence'],
+                            participant=participant,
+                            session_id=f"post_recording_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                        )
+                        prediction.save()
+                        results['prediction_id'] = prediction.id
+                    except Exception as e:
+                        print(f"Error saving prediction to database: {e}")
+            
+            except Exception as e:
+                traceback.print_exc()
+                recording_status = "error"
+                results = {
+                    'error': f"An error occurred: {str(e)}"
+                }
+    
+    context = {
+        'form': form,
+        'models': models,
+        'results': results,
+        'recording_status': recording_status
+    }
+    
+    return render(request, 'eeg_transformer/post_recording_evaluate.html', context)
 
 def training_history_api(request):
     """API endpoint to get training history for a model."""

@@ -1,0 +1,249 @@
+{% extends "layout.html" %}
+{% load custom_filters %}
+
+{% block title %}
+    Post-Recording Evaluation
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row">
+        <div class="col-lg-10 offset-lg-1">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h1 class="mb-0">Post-Recording Evaluation</h1>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Record EEG data while speaking and evaluate it with a CNN-Transformer model. This lets you test how well the model recognizes your speech patterns from EEG.
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-success text-white">
+                                    <h5 class="mb-0">Recording Setup</h5>
+                                </div>
+                                <div class="card-body">
+                                    <form id="recordingForm" method="post">
+                                        {% csrf_token %}
+                                        
+                                        <div class="mb-3">
+                                            <label for="{{ form.model.id_for_label }}" class="form-label">Select Model</label>
+                                            {{ form.model }}
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="{{ form.participant.id_for_label }}" class="form-label">Participant (Optional)</label>
+                                            {{ form.participant }}
+                                            <small class="form-text text-muted">For record-keeping only</small>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="{{ form.sample_duration.id_for_label }}" class="form-label">Recording Duration (seconds)</label>
+                                            {{ form.sample_duration }}
+                                            <small class="form-text text-muted">Recommended: 5-10 seconds</small>
+                                        </div>
+                                        
+                                        <div class="form-check mb-3">
+                                            {{ form.apply_filtering }}
+                                            <label class="form-check-label" for="{{ form.apply_filtering.id_for_label }}">
+                                                {{ form.apply_filtering.label }}
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="mb-3">
+                                            <label for="targetWord" class="form-label">Target Word</label>
+                                            <input type="text" id="targetWord" name="target_word" class="form-control" placeholder="Enter word you'll speak (optional)">
+                                            <small class="form-text text-muted">What word will you speak during recording?</small>
+                                        </div>
+                                        
+                                        <div class="alert alert-warning">
+                                            <i class="bi bi-exclamation-triangle"></i> Make sure your EEG headset is properly connected before starting.
+                                        </div>
+                                        
+                                        <div class="d-grid gap-2">
+                                            <button type="submit" id="startRecordingBtn" class="btn btn-primary">
+                                                <i class="bi bi-record-circle"></i> Start Recording & Evaluation
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-header bg-warning text-dark">
+                                    <h5 class="mb-0">Evaluation Results</h5>
+                                </div>
+                                <div class="card-body">
+                                    {% if recording_status == None %}
+                                        <div id="initialPlaceholder" class="text-center py-4">
+                                            <i class="bi bi-question-circle" style="font-size: 3rem; color: #ccc;"></i>
+                                            <p class="mt-3">Start a recording to see evaluation results</p>
+                                        </div>
+                                    {% elif recording_status == "recording" %}
+                                        <div id="recordingPlaceholder" class="text-center py-4">
+                                            <div class="spinner-grow text-danger" role="status">
+                                                <span class="visually-hidden">Recording...</span>
+                                            </div>
+                                            <p class="mt-3">Recording in progress...</p>
+                                            <p class="text-muted">Speak the word clearly during recording</p>
+                                        </div>
+                                    {% elif recording_status == "processing" %}
+                                        <div id="processingPlaceholder" class="text-center py-4">
+                                            <div class="spinner-border text-primary" role="status">
+                                                <span class="visually-hidden">Processing...</span>
+                                            </div>
+                                            <p class="mt-3">Processing EEG data...</p>
+                                        </div>
+                                    {% elif recording_status == "success" and results %}
+                                        <div id="resultContainer" class="text-center py-2">
+                                            <div class="text-center mb-4">
+                                                {% if results.confidence >= 0.7 %}
+                                                    <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                                                {% elif results.confidence >= 0.4 %}
+                                                    <i class="bi bi-question-circle-fill text-warning" style="font-size: 3rem;"></i>
+                                                {% else %}
+                                                    <i class="bi bi-exclamation-circle-fill text-danger" style="font-size: 3rem;"></i>
+                                                {% endif %}
+                                                <h2 id="predictedWord" class="display-6">{{ results.predicted_word }}</h2>
+                                            </div>
+                                            
+                                            <div class="mb-3">
+                                                <label class="form-label">Confidence</label>
+                                                <div class="progress" style="height: 25px;">
+                                                    <div class="progress-bar {% if results.confidence >= 0.7 %}bg-success{% elif results.confidence >= 0.4 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                         role="progressbar" 
+                                                         style="width: {{ results.confidence|mul:100 }}%;" 
+                                                         aria-valuenow="{{ results.confidence|mul:100 }}" 
+                                                         aria-valuemin="0" 
+                                                         aria-valuemax="100">
+                                                        {{ results.confidence|mul:100|floatformat:1 }}%
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            {% if results.predictions %}
+                                                <div class="table-responsive mt-4">
+                                                    <table class="table table-sm table-hover">
+                                                        <thead>
+                                                            <tr>
+                                                                <th>Word</th>
+                                                                <th>Confidence</th>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            {% for prediction in results.predictions %}
+                                                                <tr {% if prediction.word == results.predicted_word %}class="table-primary"{% endif %}>
+                                                                    <td>{{ prediction.word }}</td>
+                                                                    <td>{{ prediction.confidence|mul:100|floatformat:1 }}%</td>
+                                                                </tr>
+                                                            {% endfor %}
+                                                        </tbody>
+                                                    </table>
+                                                </div>
+                                            {% endif %}
+                                            
+                                            <div class="mt-3">
+                                                <span class="form-text">Collected {{ results.samples_collected }} samples</span>
+                                            </div>
+                                        </div>
+                                    {% elif recording_status == "error" and results %}
+                                        <div class="alert alert-danger">
+                                            <i class="bi bi-exclamation-triangle"></i> <strong>Error:</strong> {{ results.error }}
+                                        </div>
+                                        <p class="text-center">
+                                            <button class="btn btn-outline-primary" onclick="window.location.reload()">
+                                                <i class="bi bi-arrow-clockwise"></i> Try Again
+                                            </button>
+                                        </p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">How to Use</h5>
+                        </div>
+                        <div class="card-body">
+                            <ol>
+                                <li><strong>Connect your EEG headset</strong> and ensure it's properly positioned</li>
+                                <li><strong>Select a model</strong> trained on speech-related EEG data</li>
+                                <li><strong>Set the recording duration</strong> (5-10 seconds recommended)</li>
+                                <li><strong>Optional:</strong> Enter the target word you plan to speak</li>
+                                <li><strong>Click "Start Recording & Evaluation"</strong> to begin</li>
+                                <li><strong>During recording:</strong> Speak the word clearly 2-3 times</li>
+                                <li>Wait for the model to <strong>evaluate your EEG data</strong></li>
+                                <li>View the <strong>prediction results</strong></li>
+                            </ol>
+                            
+                            <div class="alert alert-info mt-3">
+                                <i class="bi bi-info-circle"></i> <strong>Tip:</strong> For best results, try to maintain consistent 
+                                speaking patterns similar to how you recorded training data. Minimize head movements during recording.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'eeg_transformer:dashboard' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-left"></i> Back to Dashboard
+                        </a>
+                        <a href="{% url 'eeg_transformer:live_prediction' %}" class="btn btn-outline-success">
+                            <i class="bi bi-lightning-charge"></i> Try Live Prediction
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if recording_status == "recording" or recording_status == "processing" %}
+<div class="modal fade show" id="recordingModal" tabindex="-1" aria-labelledby="recordingModalLabel" style="display: block; backdrop-filter: blur(5px); background-color: rgba(0,0,0,0.5);" aria-modal="true" role="dialog">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="recordingModalLabel">
+                    {% if recording_status == "recording" %}
+                        <i class="bi bi-record-circle text-danger"></i> Recording in Progress
+                    {% else %}
+                        <i class="bi bi-cpu"></i> Processing EEG Data
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="modal-body text-center py-4">
+                {% if recording_status == "recording" %}
+                    <div class="spinner-grow text-danger mb-3" style="width: 3rem; height: 3rem;" role="status">
+                        <span class="visually-hidden">Recording...</span>
+                    </div>
+                    <h5>Recording EEG Data</h5>
+                    <p class="text-muted">Please speak the target word clearly 2-3 times</p>
+                    <div class="progress mt-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-danger" role="progressbar" style="width: 100%"></div>
+                    </div>
+                {% else %}
+                    <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status">
+                        <span class="visually-hidden">Processing...</span>
+                    </div>
+                    <h5>Processing EEG Data</h5>
+                    <p class="text-muted">Analyzing signal patterns...</p>
+                    <div class="progress mt-3">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+    // Disable form submission during recording
+    document.getElementById('recordingForm').addEventListener('submit', function(e) {
+        document.getElementById('startRecordingBtn').disabled = true;
+    });
+</script>
+{% endif %}
+{% endblock content %}

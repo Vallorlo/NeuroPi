@@ -183,13 +183,13 @@
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {% for pair in metrics.true_labels|zip_lists:metrics.predicted_labels %}
-                                                <tr class="{% if pair.0 == pair.1 %}table-success{% else %}table-danger{% endif %}">
+                                            {% for true, pred in metrics.true_labels|zip:metrics.predicted_labels %}
+                                                <tr class="{% if true == pred %}table-success{% else %}table-danger{% endif %}">
                                                     <td>{{ forloop.counter }}</td>
-                                                    <td>{{ pair.0 }}</td>
-                                                    <td>{{ pair.1 }}</td>
+                                                    <td>{{ true }}</td>
+                                                    <td>{{ pred }}</td>
                                                     <td>
-                                                        {% if pair.0 == pair.1 %}
+                                                        {% if true == pred %}
                                                             <i class="bi bi-check-circle-fill text-success"></i> Correct
                                                         {% else %}
                                                             <i class="bi bi-x-circle-fill text-danger"></i> Incorrect

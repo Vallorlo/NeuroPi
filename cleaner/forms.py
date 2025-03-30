@@ -16,6 +16,15 @@ class CleaningForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'form-control'})
     )
 
+    # Column selection and dropping
+    columns_to_drop = forms.MultipleChoiceField(
+        required=False,
+        label="Columns to Drop",
+        choices=[],  # Will be populated dynamically
+        widget=forms.SelectMultiple(attrs={'class': 'form-control select2', 'size': '6'}),
+        help_text="Select columns to exclude from processing"
+    )
+
     # NEW: Advanced data organization
     create_train_test_split = forms.BooleanField(
         required=False, 
@@ -267,11 +276,29 @@ class CleaningForm(forms.Form):
         help_text='Minimum length of a valid segment in samples',
         widget=forms.NumberInput(attrs={'class': 'form-control'})
     )
+    
+    balance_classes = forms.BooleanField(
+        required=False, 
+        label='Balance Classes', 
+        initial=False,
+        help_text='Create a balanced dataset with equal samples per class',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Populate input file choices
         self.fields['input_file'].choices = self.get_input_file_choices()
+
+        # Populate columns_to_drop choices (will be updated via JavaScript)
+        self.fields['columns_to_drop'].choices = [
+            ('Timestamp', 'Timestamp'),
+            ('COUNTER', 'COUNTER'),
+            ('participant_id', 'participant_id'),
+            ('word', 'word'),
+            ('stage', 'stage'),
+            ('attempt', 'attempt')
+        ]
 
         # Set default values optimized for speech detection if the form is not bound
         if not self.is_bound:
@@ -359,9 +386,6 @@ class CleaningForm(forms.Form):
                             f'🔍 {item}/test_dataset.csv'
                         ))
             
-
-
-
                 # Then look for loose CSV files in the root directory
             for filename in os.listdir(trials_data_path):
                 if filename.endswith('.csv'):
@@ -469,6 +493,21 @@ class CleaningForm(forms.Form):
             elif outlier_threshold < 1.0:
                 self.add_error('outlier_threshold', "Outlier threshold must be at least 1.0")
 
-        
+        # Validate transformer parameters
+        if cleaned_data.get('prepare_for_transformer'):
+            sequence_length = cleaned_data.get('sequence_length')
+            min_segment_length = cleaned_data.get('min_segment_length')
+            
+            if sequence_length is None:
+                self.add_error('sequence_length', "Sequence length is required for CNN-Transformer preparation")
+            elif sequence_length < 10:
+                self.add_error('sequence_length', "Sequence length must be at least 10")
+                
+            if min_segment_length is None:
+                self.add_error('min_segment_length', "Minimum segment length is required for CNN-Transformer preparation")
+            elif min_segment_length < 5:
+                self.add_error('min_segment_length', "Minimum segment length must be at least 5")
+            elif min_segment_length > sequence_length:
+                self.add_error('min_segment_length', "Minimum segment length cannot be greater than sequence length")
 
         return cleaned_data

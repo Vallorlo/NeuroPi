@@ -42,6 +42,12 @@
                                         </div>
                                         
                                         <div class="mb-3">
+                                            <label for="{{ form.columns_to_drop.id_for_label }}" class="form-label">{{ form.columns_to_drop.label }}</label>
+                                            {{ form.columns_to_drop }}
+                                            <div class="form-text">Select columns to exclude from processing. <span id="columnsInfo" class="text-muted"></span></div>
+                                        </div>
+                                        
+                                        <div class="mb-3">
                                             <label for="{{ form.include_channels.id_for_label }}" class="form-label">{{ form.include_channels.label }}</label>
                                             {{ form.include_channels }}
                                             <div class="form-text">Select which EEG channels to include in processing.</div>
@@ -186,6 +192,14 @@
                                                 {{ form.use_structured_format.label }}
                                             </label>
                                             <small class="form-text text-muted d-block">{{ form.use_structured_format.help_text }}</small>
+                                        </div>
+                                        
+                                        <div class="form-check mb-3">
+                                            {{ form.balance_classes }}
+                                            <label class="form-check-label" for="{{ form.balance_classes.id_for_label }}">
+                                                {{ form.balance_classes.label }}
+                                            </label>
+                                            <small class="form-text text-muted d-block">{{ form.balance_classes.help_text }}</small>
                                         </div>
                                         
                                         <div class="row">
@@ -439,6 +453,11 @@
         const removeOutliers = document.getElementById('{{ form.remove_outliers.id_for_label }}');
         const createTrainTest = document.getElementById('{{ form.create_train_test_split.id_for_label }}');
         const extractFeatures = document.getElementById('{{ form.extract_features.id_for_label }}');
+        const inputFile = document.getElementById('{{ form.input_file.id_for_label }}');
+        const columnsToDrop = document.getElementById('{{ form.columns_to_drop.id_for_label }}');
+        const columnsInfo = document.getElementById('columnsInfo');
+        const prepareTransformer = document.getElementById('{{ form.prepare_for_transformer.id_for_label }}');
+        const transformerOptions = document.getElementById('transformerOptions');
         
         const bandpassSettings = document.querySelector('.bandpass-settings');
         const highpassSettings = document.querySelector('.highpass-settings');
@@ -456,6 +475,7 @@
             icaSettings.style.display = applyIca.checked ? 'block' : 'none';
             outlierSettings.style.display = removeOutliers.checked ? 'block' : 'none';
             trainTestSettings.style.display = createTrainTest.checked ? 'block' : 'none';
+            transformerOptions.style.display = prepareTransformer.checked ? 'block' : 'none';
             
             if (applyBandpass.checked) {
                 applyHighpass.disabled = true;
@@ -479,8 +499,104 @@
         applyIca.addEventListener('change', toggleVisibility);
         removeOutliers.addEventListener('change', toggleVisibility);
         createTrainTest.addEventListener('change', toggleVisibility);
+        prepareTransformer.addEventListener('change', toggleVisibility);
         
         toggleVisibility();
+        protectEssentialColumns();
+        // Function to get columns from the selected file
+        function getColumnsFromFile() {
+            const selectedFile = inputFile.value;
+            if (!selectedFile) return;
+            
+            columnsInfo.textContent = 'Loading columns...';
+            
+            // Make AJAX request to get columns
+            const formData = new FormData();
+            formData.append('get_columns', '1');
+            formData.append('input_file', selectedFile);
+            
+            fetch(window.location.href, {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Clear existing options
+                    columnsToDrop.innerHTML = '';
+                    
+                    // Add sensor columns
+                    if (data.sensor_columns && data.sensor_columns.length > 0) {
+                        const sensorGroup = document.createElement('optgroup');
+                        sensorGroup.label = 'Sensor Channels';
+                        data.sensor_columns.forEach(col => {
+                            const option = document.createElement('option');
+                            option.value = col;
+                            option.textContent = col;
+                            sensorGroup.appendChild(option);
+                        });
+                        columnsToDrop.appendChild(sensorGroup);
+                    }
+                    
+                    // Add event columns
+                    if (data.event_columns && data.event_columns.length > 0) {
+                        const eventGroup = document.createElement('optgroup');
+                        eventGroup.label = 'Event Columns';
+                        data.event_columns.forEach(col => {
+                            const option = document.createElement('option');
+                            option.value = col;
+                            option.textContent = col;
+                            eventGroup.appendChild(option);
+                        });
+                        columnsToDrop.appendChild(eventGroup);
+                    }
+                    
+                    // Add metadata columns
+                    if (data.metadata_columns && data.metadata_columns.length > 0) {
+                        const metadataGroup = document.createElement('optgroup');
+                        metadataGroup.label = 'Metadata Columns';
+                        data.metadata_columns.forEach(col => {
+                            const option = document.createElement('option');
+                            option.value = col;
+                            option.textContent = col;
+                            metadataGroup.appendChild(option);
+                        });
+                        columnsToDrop.appendChild(metadataGroup);
+                    }
+                    
+                    // Set info text
+                    const totalColumns = data.columns ? data.columns.length : 0;
+                    columnsInfo.textContent = `(${totalColumns} columns found)`;
+                    
+                    // Re-initialize select2 if available
+                    if (typeof $.fn.select2 !== 'undefined') {
+                        $(columnsToDrop).select2({
+                            placeholder: 'Select columns to drop',
+                            allowClear: true
+                        });
+                    }
+                } else {
+                    columnsInfo.textContent = `Error: ${data.error || 'Failed to load columns'}`;
+                }
+            })
+            .catch(error => {
+                columnsInfo.textContent = `Error: ${error.message || 'Failed to load columns'}`;
+                console.error('Error fetching columns:', error);
+            });
+        }
+        
+        // Listen for file selection change
+        inputFile.addEventListener('change', getColumnsFromFile);
+        
+        // If a file is already selected on page load, fetch its columns
+        if (inputFile.value) {
+            getColumnsFromFile();
+            protectEssentialColumns();
+        }
         
         form.addEventListener('submit', function(e) {
             let isValid = true;
@@ -509,7 +625,7 @@
             });
         }
 
-                // Handle redirect after form submission
+        // Handle redirect after form submission
         window.addEventListener('beforeunload', function() {
             // When navigating away from the page, make sure the overlay remains visible
             // This ensures it doesn't disappear during page transitions
@@ -535,22 +651,29 @@
         });
 
 
-        document.addEventListener('DOMContentLoaded', function() {
-            // Show/hide transformer options based on checkbox
-            const prepareTransformerCheckbox = document.getElementById('{{ form.prepare_for_transformer.id_for_label }}');
-            const transformerOptions = document.getElementById('transformerOptions');
+        // Function to disable essential columns in the dropdown
+        function protectEssentialColumns() {
+            // Essential columns that should not be dropped
+            const essentialColumns = ['Timestamp', 'word_label'];
             
-            function updateTransformerOptions() {
-                if (prepareTransformerCheckbox.checked) {
-                    transformerOptions.style.display = 'block';
-                } else {
-                    transformerOptions.style.display = 'none';
+            // Disable these options in the dropdown
+            Array.from(columnsToDrop.options).forEach(option => {
+                if (essentialColumns.includes(option.value)) {
+                    option.disabled = true;
+                    option.title = "This column is essential and cannot be dropped";
+                    // Deselect if already selected
+                    if (option.selected) {
+                        option.selected = false;
+                    }
                 }
-            }
+            });
             
-            prepareTransformerCheckbox.addEventListener('change', updateTransformerOptions);
-            updateTransformerOptions(); // Initialize on page load
-        });
+            // Update Select2 if it's being used
+            if (typeof $.fn.select2 !== 'undefined') {
+                $(columnsToDrop).select2();
+            }
+        }
+
     });
 </script>
 {% endblock %}

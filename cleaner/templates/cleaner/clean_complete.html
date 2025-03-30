@@ -169,6 +169,9 @@
                                             {% if result.event_types %}
                                                 <th>Event</th>
                                             {% endif %}
+                                            {% if data_preview.0.word_label %}
+                                                <th>Word Label</th>
+                                            {% endif %}
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -178,10 +181,11 @@
                                             {% for value in row.values|slice:":8" %}
                                                 <td>{{ value }}</td>
                                             {% endfor %}
-                                            {% if row.event %}
-                                                <td><span class="badge bg-success">Yes</span></td>
-                                            {% else %}
-                                                <td><span class="badge bg-secondary">No</span></td>
+                                            {% if result.event_types %}
+                                                <td><span class="badge {% if row.event %}bg-success{% else %}bg-secondary{% endif %}">{% if row.event %}Yes{% else %}No{% endif %}</span></td>
+                                            {% endif %}
+                                            {% if row.word_label %}
+                                                <td><span class="badge {% if row.word_label != 'sil' %}bg-primary{% else %}bg-secondary{% endif %}">{{ row.word_label }}</span></td>
                                             {% endif %}
                                         </tr>
                                         {% endfor %}
@@ -251,88 +255,101 @@
                                     <span class="badge bg-primary rounded-pill">Download</span>
                                 </a>
                                 {% endif %}
-                                {% if result.transformer_dataset %}
-                                <div class="card mt-4">
-                                    <div class="card-header bg-info text-white">
-                                        <h5 class="mb-0"><i class="bi bi-lightning-charge me-2"></i>CNN-Transformer Dataset</h5>
-                                    </div>
-                                    <div class="card-body">
-                                        <div class="alert alert-success">
-                                            <p><i class="bi bi-check-circle me-2"></i><strong>Success!</strong> CNN-Transformer dataset created successfully.</p>
-                                            <p>The dataset was optimized with a structured format specifically designed for CNN-Transformer models.</p>
-                                        </div>
-                                        
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="card mb-3">
-                                                    <div class="card-body">
-                                                        <h6 class="card-title">Dataset Information</h6>
-                                                        <ul class="list-group list-group-flush">
-                                                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                                Total Segments
-                                                                <span class="badge bg-primary rounded-pill">{{ result.transformer_rows }}</span>
-                                                            </li>
-                                                            {% if result.transformer_train_rows is defined %}
-                                                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                                Training Segments
-                                                                <span class="badge bg-success rounded-pill">{{ result.transformer_train_rows }}</span>
-                                                            </li>
-                                                            <li class="list-group-item d-flex justify-content-between align-items-center">
-                                                                Testing Segments
-                                                                <span class="badge bg-info rounded-pill">{{ result.transformer_test_rows }}</span>
-                                                            </li>
-                                                            {% endif %}
-                                                        </ul>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="col-md-6">
-                                                <div class="card mb-3">
-                                                    <div class="card-body">
-                                                        <h6 class="card-title">Download Files</h6>
-                                                        <div class="list-group">
-                                                            <a href="{{ result.transformer_file_url }}" class="list-group-item list-group-item-action">
-                                                                <div class="d-flex w-100 justify-content-between">
-                                                                    <h6 class="mb-1">CNN-Transformer Dataset</h6>
-                                                                    <small><i class="bi bi-download"></i></small>
-                                                                </div>
-                                                                <p class="mb-1">Optimized dataset ready for CNN-Transformer training</p>
-                                                            </a>
-                                                            {% if result.transformer_train_file_url is defined %}
-                                                            <a href="{{ result.transformer_train_file_url }}" class="list-group-item list-group-item-action">
-                                                                <div class="d-flex w-100 justify-content-between">
-                                                                    <h6 class="mb-1">Training Dataset</h6>
-                                                                    <small><i class="bi bi-download"></i></small>
-                                                                </div>
-                                                                <p class="mb-1">Training split for CNN-Transformer</p>
-                                                            </a>
-                                                            <a href="{{ result.transformer_test_file_url }}" class="list-group-item list-group-item-action">
-                                                                <div class="d-flex w-100 justify-content-between">
-                                                                    <h6 class="mb-1">Testing Dataset</h6>
-                                                                    <small><i class="bi bi-download"></i></small>
-                                                                </div>
-                                                                <p class="mb-1">Testing split for CNN-Transformer</p>
-                                                            </a>
-                                                            {% endif %}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="alert alert-info">
-                                            <p><i class="bi bi-info-circle me-2"></i><strong>Next Steps:</strong> Use this dataset to train a CNN-Transformer model in the EEG Transformer module.</p>
-                                            <a href="/eeg_transformer/train/" class="btn btn-primary">
-                                                <i class="bi bi-lightning-charge"></i> Train CNN-Transformer Model
-                                            </a>
-                                        </div>
-                                    </div>
-                                </div>
-                                {% endif %}
                             </div>
                         </div>
                     </div>
+                    
+                    {% if result.transformer_dataset %}
+                    <div class="card mt-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0"><i class="bi bi-lightning-charge me-2"></i>CNN-Transformer Dataset</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="alert alert-success">
+                                <p><i class="bi bi-check-circle me-2"></i><strong>Success!</strong> CNN-Transformer dataset created successfully.</p>
+                                <p>The dataset was optimized with a structured format specifically designed for CNN-Transformer models.</p>
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <h6 class="card-title">Dataset Information</h6>
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    Total Segments
+                                                    <span class="badge bg-primary rounded-pill">{{ result.transformer_rows }}</span>
+                                                </li>
+                                                {% if result.transformer_train_file %}
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    Training Segments
+                                                    <span class="badge bg-success rounded-pill">{{ result.transformer_train_rows|default:"N/A" }}</span>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    Testing Segments
+                                                    <span class="badge bg-info rounded-pill">{{ result.transformer_test_rows|default:"N/A" }}</span>
+                                                </li>
+                                                {% endif %}
+                                            </ul>
+                                            
+                                            {% if result.class_distribution %}
+                                            <h6 class="card-title mt-3">Class Distribution</h6>
+                                            <ul class="list-group list-group-flush">
+                                                {% for word, count in result.class_distribution.items %}
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    {{ word }}
+                                                    <span class="badge bg-primary rounded-pill">{{ count }}</span>
+                                                </li>
+                                                {% endfor %}
+                                            </ul>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-body">
+                                            <h6 class="card-title">Download Files</h6>
+                                            <div class="list-group">
+                                                <a href="{{ result.transformer_file_url }}" class="list-group-item list-group-item-action">
+                                                    <div class="d-flex w-100 justify-content-between">
+                                                        <h6 class="mb-1">CNN-Transformer Dataset</h6>
+                                                        <small><i class="bi bi-download"></i></small>
+                                                    </div>
+                                                    <p class="mb-1">Optimized dataset ready for CNN-Transformer training</p>
+                                                </a>
+                                                {% if result.transformer_train_file_url %}
+                                                <a href="{{ result.transformer_train_file_url }}" class="list-group-item list-group-item-action">
+                                                    <div class="d-flex w-100 justify-content-between">
+                                                        <h6 class="mb-1">Training Dataset</h6>
+                                                        <small><i class="bi bi-download"></i></small>
+                                                    </div>
+                                                    <p class="mb-1">Training split for CNN-Transformer</p>
+                                                </a>
+                                                <a href="{{ result.transformer_test_file_url }}" class="list-group-item list-group-item-action">
+                                                    <div class="d-flex w-100 justify-content-between">
+                                                        <h6 class="mb-1">Testing Dataset</h6>
+                                                        <small><i class="bi bi-download"></i></small>
+                                                    </div>
+                                                    <p class="mb-1">Testing split for CNN-Transformer</p>
+                                                </a>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="alert alert-info">
+                                <p><i class="bi bi-info-circle me-2"></i><strong>Next Steps:</strong> Use this dataset to train a CNN-Transformer model in the EEG Transformer module.</p>
+                                <a href="/eeg_transformer/train/" class="btn btn-primary">
+                                    <i class="bi bi-lightning-charge"></i> Train CNN-Transformer Model
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                     
                     <!-- Processing Output -->
                     <div class="card mt-3">

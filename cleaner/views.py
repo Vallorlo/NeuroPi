@@ -15,6 +15,7 @@ import traceback
 import zipfile
 from datetime import datetime
 import csv
+import pandas as pd
 
 def clean_data_view(request):
     """Main view for the EEG cleaning tool."""
@@ -37,6 +38,42 @@ def clean_data_view(request):
     try:
         if request.method == 'POST':
             print("POST request received")  # Debug: POST request
+            
+            # Check if this is an AJAX request to get columns from a selected file
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest' and 'get_columns' in request.POST:
+                input_file = request.POST.get('input_file')
+                if input_file and os.path.exists(input_file):
+                    try:
+                        # Read the first few rows to get columns
+                        df = pd.read_csv(input_file, nrows=5)
+                        columns = df.columns.tolist()
+                        
+                        # Categorize columns
+                        sensor_columns = [col for col in columns if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt', 'word_label'] 
+                                        and not col.endswith('_event')]
+                        event_columns = [col for col in columns if col.endswith('_event')]
+                        metadata_columns = [col for col in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt', 'word_label'] 
+                                          if col in columns]
+                        
+                        # Return the categorized columns
+                        return JsonResponse({
+                            'success': True,
+                            'columns': columns,
+                            'sensor_columns': sensor_columns,
+                            'event_columns': event_columns,
+                            'metadata_columns': metadata_columns
+                        })
+                    except Exception as e:
+                        return JsonResponse({
+                            'success': False,
+                            'error': str(e)
+                        })
+                else:
+                    return JsonResponse({
+                        'success': False,
+                        'error': 'Invalid file path'
+                    })
+            
             form = CleaningForm(request.POST)
             
             if form.is_valid():
@@ -45,6 +82,7 @@ def clean_data_view(request):
                 # Extract form data
                 input_file = form.cleaned_data['input_file']
                 output_file_name = form.cleaned_data['output_file_name']
+                columns_to_drop = form.cleaned_data.get('columns_to_drop', [])
                 
                 # Filter settings
                 apply_bandpass = form.cleaned_data['apply_bandpass']
@@ -82,6 +120,7 @@ def clean_data_view(request):
                 use_structured_format = form.cleaned_data.get('use_structured_format', True)
                 sequence_length = form.cleaned_data.get('sequence_length', 40)
                 min_segment_length = form.cleaned_data.get('min_segment_length', 20)
+                balance_classes = form.cleaned_data.get('balance_classes', False)
 
                 include_channels = form.cleaned_data.get('include_channels', None)
                 compute_band_powers = form.cleaned_data.get('compute_band_powers', False)
@@ -96,7 +135,6 @@ def clean_data_view(request):
                 # Create output directory with timestamp to prevent overwrites
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_dir = os.path.join(settings.BASE_DIR, 'Trials_data', f'cleaned_{timestamp}')
-                os.makedirs(output_dir, exist_ok=True)
                 os.makedirs(output_dir, exist_ok=True)
                 
                 output_file_path = os.path.join(output_dir, output_file_name)
@@ -139,7 +177,9 @@ def clean_data_view(request):
                         prepare_for_transformer=prepare_for_transformer,
                         sequence_length=sequence_length,
                         min_segment_length=min_segment_length,
-                        use_structured_format=use_structured_format
+                        use_structured_format=use_structured_format,
+                        balance_classes=balance_classes,
+                        columns_to_drop=columns_to_drop
                     )
                     
                     print(f"clean_eeg_data returned: {result}")  # Debug: Check return value
@@ -242,11 +282,20 @@ def clean_data_view(request):
                                 
                                 event_cols = [i for i, h in enumerate(headers) if h.endswith('_event')]
                                 
+                                # Check if we have word_label column
+                                word_label_col = -1
+                                if 'word_label' in headers:
+                                    word_label_col = headers.index('word_label')
+                                
                                 # Get sensor column indices
                                 sensor_cols = []
                                 for channel in result.get('channels_processed', []):
                                     if channel in headers:
                                         sensor_cols.append(headers.index(channel))
+                                
+                                # If no sensor columns found but we have time_ch columns, use those
+                                if not sensor_cols and any('time' in h and 'ch' in h for h in headers):
+                                    sensor_cols = [i for i, h in enumerate(headers) if 'time' in h and 'ch' in h][:8]  # First 8 channels
                                 
                                 # Read up to 10 rows
                                 for i, row in enumerate(reader):
@@ -254,14 +303,33 @@ def clean_data_view(request):
                                         break
                                         
                                     # Check if we have an event in any event column
-                                    has_event = any(row[col].lower() == 'true' for col in event_cols) if event_cols else False
+                                    has_event = False
+                                    
+                                    if event_cols:
+                                        has_event = any(row[col].lower() == 'true' for col in event_cols if col < len(row))
+                                    elif word_label_col >= 0:
+                                        # If we have word_label column, check if it's not 'sil'
+                                        if word_label_col < len(row) and row[word_label_col] != 'sil':
+                                            has_event = True
                                     
                                     # Format the preview data
                                     preview_row = {
-                                        'timestamp': float(row[timestamp_col]) if row[timestamp_col] else 0,
-                                        'values': [int(float(row[i])) if row[i] and row[i] != 'nan' else 0 for i in sensor_cols],
+                                        'timestamp': float(row[timestamp_col]) if timestamp_col < len(row) and row[timestamp_col] and row[timestamp_col] != 'nan' else 0,
+                                        'values': [],
                                         'event': has_event
                                     }
+                                    
+                                    # Add sensor values
+                                    for col in sensor_cols:
+                                        if col < len(row) and row[col] and row[col] != 'nan':
+                                            preview_row['values'].append(int(float(row[col])))
+                                        else:
+                                            preview_row['values'].append(0)
+                                    
+                                    # If we have word_label column, add it
+                                    if word_label_col >= 0 and word_label_col < len(row):
+                                        preview_row['word_label'] = row[word_label_col]
+                                    
                                     data_preview.append(preview_row)
                         except Exception as e:
                             print(f"Error creating data preview: {e}")

@@ -1,0 +1,1 @@
+{"eeg_columns": ["channel_0", "channel_1", "channel_2", "channel_3", "channel_4", "channel_5", "channel_6", "channel_7", "channel_8", "channel_9", "channel_10", "channel_11", "channel_12"], "word_event_columns": ["goodbye_event", "hello_event", "yes_event"], "sequence_length": 40, "words": ["goodbye", "hello", "yes"], "num_channels": 13, "is_structured": true}

@@ -252,7 +252,7 @@ def extract_speech_features(data, fs=128, event_data=None):
         print(f"Error extracting speech features: {e}")
         return None
 
-def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, use_structured_format=True):
+def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, use_structured_format=True, balance_classes=False):
     """
     Further process cleaned data to prepare segments optimized for CNN-Transformer model.
     
@@ -261,6 +261,7 @@ def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, 
     sequence_length (int): Target sequence length for the model
     min_segment_length (int): Minimum length of a valid segment
     use_structured_format (bool): Whether to use a structured format with word labels
+    balance_classes (bool): Whether to balance classes by sampling same amount from each word
     
     Returns:
     DataFrame: Processed data ready for CNN-Transformer training
@@ -269,13 +270,17 @@ def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, 
     
     # Find event columns
     event_columns = [col for col in df.columns if col.endswith('_event')]
-    if not event_columns:
-        print("No event columns found in the data")
+    
+    # Check if we have word_label column
+    has_word_label = 'word_label' in df.columns
+    
+    if not event_columns and not has_word_label:
+        print("No event columns or word_label found in the data")
         return None
     
     # Get sensor columns
     sensor_columns = [col for col in df.columns 
-                     if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt'] 
+                     if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt', 'word_label'] 
                      and not col.endswith('_event')]
     
     # Initialize lists to store segments and labels
@@ -283,102 +288,250 @@ def prepare_transformer_segments(df, sequence_length=40, min_segment_length=20, 
     labels = []
     segment_info = []
     
-    # Process each word event
-    for event_column in event_columns:
-        word = event_column.replace('_event', '')
-        print(f"Processing segments for word: {word}")
+    # If we have word_label column, use it
+    if has_word_label:
+        print("Using word_label column for segment extraction")
         
-        # Get all continuous segments of True values for this event
-        in_segment = False
-        current_segment = []
-        all_segments = []
+        # Get unique words (excluding 'sil')
+        unique_words = [word for word in df['word_label'].unique() if word != 'sil']
+        print(f"Found {len(unique_words)} unique words: {unique_words}")
         
-        for i, val in enumerate(df[event_column]):
-            if val and not in_segment:
-                # Start of a new segment
-                in_segment = True
-                current_segment = [i]
-            elif val and in_segment:
-                # Continue the segment
-                current_segment.append(i)
-            elif not val and in_segment:
-                # End of segment
-                if len(current_segment) >= min_segment_length:
-                    all_segments.append(current_segment)
-                in_segment = False
-                current_segment = []
-        
-        # Add the last segment if still active
-        if in_segment and len(current_segment) >= min_segment_length:
-            all_segments.append(current_segment)
+        # Process each word
+        for word in unique_words:
+            print(f"Processing segments for word: {word}")
             
-        print(f"Found {len(all_segments)} segments for {word}")
-        
-        # Process each segment
-        for segment_indices in all_segments:
-            # Calculate padding needed
-            if len(segment_indices) < sequence_length:
-                # Need to pad
-                pad_before = (sequence_length - len(segment_indices)) // 2
-                pad_after = sequence_length - len(segment_indices) - pad_before
-                
-                # Ensure padding stays within dataframe bounds
-                start_idx = max(0, segment_indices[0] - pad_before)
-                end_idx = min(len(df) - 1, segment_indices[-1] + pad_after)
-                
-                # If still too short, adjust the segment's start and end
-                if end_idx - start_idx + 1 < sequence_length:
-                    # Prioritize including the actual segment
-                    center = (segment_indices[0] + segment_indices[-1]) // 2
-                    start_idx = max(0, center - sequence_length // 2)
-                    end_idx = min(len(df) - 1, start_idx + sequence_length - 1)
-            else:
-                # Segment is longer than needed, take a central portion
-                center = len(segment_indices) // 2
-                start_idx = segment_indices[center - sequence_length // 2]
-                end_idx = segment_indices[center + sequence_length // 2 - 1]
+            # Get all continuous segments where word_label matches
+            in_segment = False
+            current_segment = []
+            all_segments = []
             
-            # Extract the segment data
-            segment_data = df.iloc[start_idx:end_idx+1]
+            for i, val in enumerate(df['word_label'] == word):
+                if val and not in_segment:
+                    # Start of a new segment
+                    in_segment = True
+                    current_segment = [i]
+                elif val and in_segment:
+                    # Continue the segment
+                    current_segment.append(i)
+                elif not val and in_segment:
+                    # End of segment
+                    if len(current_segment) >= min_segment_length:
+                        all_segments.append(current_segment)
+                    in_segment = False
+                    current_segment = []
             
-            # Skip if we couldn't get enough data
-            if len(segment_data) < sequence_length:
-                continue
+            # Add the last segment if still active
+            if in_segment and len(current_segment) >= min_segment_length:
+                all_segments.append(current_segment)
                 
-            # If we need exactly sequence_length samples, trim or pad
-            if len(segment_data) > sequence_length:
-                segment_data = segment_data.iloc[:sequence_length]
-            elif len(segment_data) < sequence_length:
-                # This shouldn't happen with the above logic, but just in case
-                # Pad with the last row repeated
-                pad_rows = pd.concat([segment_data.iloc[[-1]]] * (sequence_length - len(segment_data)))
-                segment_data = pd.concat([segment_data, pad_rows])
+            print(f"Found {len(all_segments)} segments for {word}")
             
-            # Store the segment
-            if use_structured_format:
-                # Restructure the data for easier CNN-Transformer processing
-                # Store metadata
-                meta = {
-                    'start_index': start_idx,
-                    'end_index': end_idx,
-                    'word': word,
-                    'participant_id': segment_data['participant_id'].iloc[0] if 'participant_id' in segment_data.columns else None,
-                    'sequence_length': len(segment_data)
-                }
-                segment_info.append(meta)
+            # Process each segment (similar to event-based processing)
+            for segment_indices in all_segments:
+                # Calculate padding needed
+                if len(segment_indices) < sequence_length:
+                    # Need to pad
+                    pad_before = (sequence_length - len(segment_indices)) // 2
+                    pad_after = sequence_length - len(segment_indices) - pad_before
+                    
+                    # Ensure padding stays within dataframe bounds
+                    start_idx = max(0, segment_indices[0] - pad_before)
+                    end_idx = min(len(df) - 1, segment_indices[-1] + pad_after)
+                    
+                    # If still too short, adjust the segment's start and end
+                    if end_idx - start_idx + 1 < sequence_length:
+                        # Prioritize including the actual segment
+                        center = (segment_indices[0] + segment_indices[-1]) // 2
+                        start_idx = max(0, center - sequence_length // 2)
+                        end_idx = min(len(df) - 1, start_idx + sequence_length - 1)
+                else:
+                    # Segment is longer than needed, take a central portion
+                    center = len(segment_indices) // 2
+                    start_idx = segment_indices[center - sequence_length // 2]
+                    end_idx = segment_indices[center + sequence_length // 2 - 1]
                 
-                # Store the sensor data and label
-                segments.append(segment_data[sensor_columns].values)
-                labels.append(word)
-            else:
-                # Just add the segment to the original dataframe
-                segment_data['segment_id'] = len(segments)
-                segment_data['word_label'] = word
-                segments.append(segment_data)
+                # Extract the segment data
+                segment_data = df.iloc[start_idx:end_idx+1]
+                
+                # Skip if we couldn't get enough data
+                if len(segment_data) < sequence_length:
+                    continue
+                    
+                # If we need exactly sequence_length samples, trim or pad
+                if len(segment_data) > sequence_length:
+                    segment_data = segment_data.iloc[:sequence_length]
+                elif len(segment_data) < sequence_length:
+                    # This shouldn't happen with the above logic, but just in case
+                    # Pad with the last row repeated
+                    pad_rows = pd.concat([segment_data.iloc[[-1]]] * (sequence_length - len(segment_data)))
+                    segment_data = pd.concat([segment_data, pad_rows])
+                
+                # Store the segment
+                if use_structured_format:
+                    # Store metadata
+                    meta = {
+                        'start_index': start_idx,
+                        'end_index': end_idx,
+                        'word': word,
+                        'participant_id': segment_data['participant_id'].iloc[0] if 'participant_id' in segment_data.columns else None,
+                        'sequence_length': len(segment_data)
+                    }
+                    segment_info.append(meta)
+                    
+                    # Store the sensor data and label
+                    segments.append(segment_data[sensor_columns].values)
+                    labels.append(word)
+                else:
+                    # Just add the segment to the original dataframe
+                    segment_data['segment_id'] = len(segments)
+                    segment_data['word_label'] = word
+                    segments.append(segment_data)
+    else:
+        # Use event columns (original method)
+        print("Using event columns for segment extraction")
+        # Process each word event (rest of the code from the original function)
+        for event_column in event_columns:
+            word = event_column.replace('_event', '')
+            print(f"Processing segments for word: {word}")
+            
+            # Get all continuous segments of True values for this event
+            in_segment = False
+            current_segment = []
+            all_segments = []
+            
+            for i, val in enumerate(df[event_column]):
+                if val and not in_segment:
+                    # Start of a new segment
+                    in_segment = True
+                    current_segment = [i]
+                elif val and in_segment:
+                    # Continue the segment
+                    current_segment.append(i)
+                elif not val and in_segment:
+                    # End of segment
+                    if len(current_segment) >= min_segment_length:
+                        all_segments.append(current_segment)
+                    in_segment = False
+                    current_segment = []
+            
+            # Add the last segment if still active
+            if in_segment and len(current_segment) >= min_segment_length:
+                all_segments.append(current_segment)
+                
+            print(f"Found {len(all_segments)} segments for {word}")
+            
+            # Process each segment
+            for segment_indices in all_segments:
+                # Calculate padding needed
+                if len(segment_indices) < sequence_length:
+                    # Need to pad
+                    pad_before = (sequence_length - len(segment_indices)) // 2
+                    pad_after = sequence_length - len(segment_indices) - pad_before
+                    
+                    # Ensure padding stays within dataframe bounds
+                    start_idx = max(0, segment_indices[0] - pad_before)
+                    end_idx = min(len(df) - 1, segment_indices[-1] + pad_after)
+                    
+                    # If still too short, adjust the segment's start and end
+                    if end_idx - start_idx + 1 < sequence_length:
+                        # Prioritize including the actual segment
+                        center = (segment_indices[0] + segment_indices[-1]) // 2
+                        start_idx = max(0, center - sequence_length // 2)
+                        end_idx = min(len(df) - 1, start_idx + sequence_length - 1)
+                else:
+                    # Segment is longer than needed, take a central portion
+                    center = len(segment_indices) // 2
+                    start_idx = segment_indices[center - sequence_length // 2]
+                    end_idx = segment_indices[center + sequence_length // 2 - 1]
+                
+                # Extract the segment data
+                segment_data = df.iloc[start_idx:end_idx+1]
+                
+                # Skip if we couldn't get enough data
+                if len(segment_data) < sequence_length:
+                    continue
+                    
+                # If we need exactly sequence_length samples, trim or pad
+                if len(segment_data) > sequence_length:
+                    segment_data = segment_data.iloc[:sequence_length]
+                elif len(segment_data) < sequence_length:
+                    # This shouldn't happen with the above logic, but just in case
+                    # Pad with the last row repeated
+                    pad_rows = pd.concat([segment_data.iloc[[-1]]] * (sequence_length - len(segment_data)))
+                    segment_data = pd.concat([segment_data, pad_rows])
+                
+                # Store the segment
+                if use_structured_format:
+                    # Restructure the data for easier CNN-Transformer processing
+                    # Store metadata
+                    meta = {
+                        'start_index': start_idx,
+                        'end_index': end_idx,
+                        'word': word,
+                        'participant_id': segment_data['participant_id'].iloc[0] if 'participant_id' in segment_data.columns else None,
+                        'sequence_length': len(segment_data)
+                    }
+                    segment_info.append(meta)
+                    
+                    # Store the sensor data and label
+                    segments.append(segment_data[sensor_columns].values)
+                    labels.append(word)
+                else:
+                    # Just add the segment to the original dataframe
+                    segment_data['segment_id'] = len(segments)
+                    segment_data['word_label'] = word
+                    segments.append(segment_data)
     
     if not segments:
         print("No valid segments could be extracted")
         return None
+    
+    # Balance classes if requested
+    if balance_classes and use_structured_format:
+        print("Balancing classes...")
+        
+        # Count samples per class
+        class_counts = {}
+        for label in labels:
+            if label in class_counts:
+                class_counts[label] += 1
+            else:
+                class_counts[label] = 1
+        
+        print(f"Initial class distribution: {class_counts}")
+        
+        # Find the class with minimum samples
+        min_samples = min(class_counts.values())
+        print(f"Balancing all classes to {min_samples} samples")
+        
+        # Create balanced datasets
+        balanced_segments = []
+        balanced_labels = []
+        balanced_info = []
+        
+        for word in class_counts.keys():
+            # Get indices of this word
+            word_indices = [i for i, label in enumerate(labels) if label == word]
+            
+            # Sample min_samples indices randomly
+            if len(word_indices) > min_samples:
+                import random
+                sampled_indices = random.sample(word_indices, min_samples)
+            else:
+                sampled_indices = word_indices
+            
+            # Add to balanced datasets
+            for idx in sampled_indices:
+                balanced_segments.append(segments[idx])
+                balanced_labels.append(labels[idx])
+                balanced_info.append(segment_info[idx])
+        
+        # Replace original with balanced
+        segments = balanced_segments
+        labels = balanced_labels
+        segment_info = balanced_info
+        
+        print(f"After balancing: {len(segments)} total segments")
     
     if use_structured_format:
         # Create a structured format with flat segment data
@@ -424,7 +577,8 @@ def clean_eeg_data(input_file, output_file,
                    create_train_test_split=False, test_size=0.2, random_state=42, stratify_by_word=True,
                    include_channels=None, compute_band_powers=False, normalize_data=False,
                    remove_outliers=False, outlier_threshold=3.0,
-                   prepare_for_transformer=False, sequence_length=40, min_segment_length=20, use_structured_format=True):
+                   prepare_for_transformer=False, sequence_length=40, min_segment_length=20, 
+                   use_structured_format=True, balance_classes=False, columns_to_drop=None):
     """
     Cleans EEG data optimized for speech detection, applying appropriate filters and ICA.
     Also supports train-test splitting and additional preprocessing options.
@@ -501,6 +655,10 @@ def clean_eeg_data(input_file, output_file,
         Minimum length of a valid segment for CNN-Transformer
     use_structured_format : bool
         Whether to use a structured format with word labels for CNN-Transformer
+    balance_classes : bool
+        Whether to balance classes for CNN-Transformer training
+    columns_to_drop : list
+        List of column names to drop from the dataset
         
     Returns:
     --------
@@ -520,6 +678,29 @@ def clean_eeg_data(input_file, output_file,
         df = pd.read_csv(input_file)
         print(f"Dataframe shape: {df.shape}")
 
+        # Drop specified columns if provided
+        if columns_to_drop:
+            # Define protected columns that should never be dropped
+            protected_columns = ['Timestamp', 'word_label']
+            
+            # Remove protected columns from the drop list
+            safe_columns_to_drop = [col for col in columns_to_drop if col not in protected_columns]
+            
+            # If user tried to drop protected columns, inform them
+            skipped_columns = [col for col in columns_to_drop if col in protected_columns]
+            if skipped_columns:
+                print(f"Skipped dropping essential columns: {skipped_columns}")
+            
+            print(f"Dropping columns: {safe_columns_to_drop}")
+            
+            # Only drop columns that actually exist in the dataframe
+            safe_columns_to_drop = [col for col in safe_columns_to_drop if col in df.columns]
+            if safe_columns_to_drop:
+                df = df.drop(columns=safe_columns_to_drop)
+                print(f"Dataframe shape after dropping columns: {df.shape}")
+            else:
+                print("No specified columns will be dropped")
+                
         # Check for metadata columns from the processor
         metadata_columns = ['participant_id', 'word', 'stage', 'attempt']
         has_metadata = all(col in df.columns for col in metadata_columns)
@@ -527,8 +708,13 @@ def clean_eeg_data(input_file, output_file,
         if has_metadata:
             print("Detected metadata columns from processor. These will be preserved for reference.")
         
+        # Check if we have word_label column (combined dataset format)
+        has_word_label = 'word_label' in df.columns
+        if has_word_label:
+            print("Detected word_label column. Using enhanced processing for combined dataset format.")
+        
         # Identify columns for EEG data and event markers
-        sensor_columns = [col for col in df.columns if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt'] 
+        sensor_columns = [col for col in df.columns if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt', 'word_label'] 
                          and not col.endswith('_event')]
         event_columns = [col for col in df.columns if col.endswith('_event')]
         
@@ -560,6 +746,8 @@ def clean_eeg_data(input_file, output_file,
             columns_to_keep = ['Timestamp'] + sensor_columns + event_columns
             if has_metadata:
                 columns_to_keep += metadata_columns
+            if has_word_label:
+                columns_to_keep.append('word_label')
             df_filtered = df[columns_to_keep].copy()
             
         print(f"Filtered dataframe shape: {df_filtered.shape}")
@@ -867,7 +1055,8 @@ def clean_eeg_data(input_file, output_file,
                 df_filtered, 
                 sequence_length=sequence_length,
                 min_segment_length=min_segment_length,
-                use_structured_format=use_structured_format
+                use_structured_format=use_structured_format,
+                balance_classes=balance_classes
             )
             
             if transformer_df is not None:
@@ -876,6 +1065,11 @@ def clean_eeg_data(input_file, output_file,
                 transformer_df.to_csv(transformer_output, index=False)
                 
                 print(f"CNN-Transformer dataset saved with {len(transformer_df)} segments")
+                
+                # Get class distribution
+                if 'word_label' in transformer_df.columns:
+                    class_counts = transformer_df['word_label'].value_counts().to_dict()
+                    print(f"Class distribution: {class_counts}")
             else:
                 print("Failed to create CNN-Transformer dataset")
         
@@ -898,7 +1092,10 @@ def clean_eeg_data(input_file, output_file,
                         stratify = df_filtered['word']
                     elif 'word_label' in df_filtered.columns:
                         # Use word_label if available (transformer format)
-                        stratify = df_filtered['word_label']
+                        # But filter out 'sil' labels to avoid bias
+                        word_labels = df_filtered['word_label'].copy()
+                        word_labels[word_labels == 'sil'] = 'background'
+                        stratify = word_labels
                     elif event_columns:
                         # Assign a label based on which event column has the most True values
                         event_counts = {}
@@ -996,6 +1193,10 @@ def clean_eeg_data(input_file, output_file,
             result['transformer_rows'] = len(transformer_df)
             result['transformer_train_file'] = transformer_train_file
             result['transformer_test_file'] = transformer_test_file
+            
+            # Add class distribution if available
+            if 'word_label' in transformer_df.columns:
+                result['class_distribution'] = transformer_df['word_label'].value_counts().to_dict()
         
         # Add warnings to result if any
         if signal_stats.get('warnings', []):

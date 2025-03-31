@@ -16,3 +16,6 @@ python-dateutil>=2.8.2
 joblib>=1.1.0
 tqdm>=4.62.0
 nvidia-cudnn-cu11==8.6.0.163
+librosa
+noisereduce
+soundfile

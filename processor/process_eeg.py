@@ -13,6 +13,86 @@ from pydub.silence import detect_nonsilent
 import re
 import unicodedata
 
+from scipy.io import wavfile
+from scipy import signal
+import librosa
+import noisereduce as nr
+import soundfile as sf
+
+def preprocess_audio(audio_file_path, output_dir=None, noise_reduction_strength=0.5, 
+                    lowpass_cutoff=5000, highpass_cutoff=150):
+    """
+    Preprocess audio file to remove background noise and apply filters.
+    """
+    # Generate output path if not provided
+    if output_dir is None:
+        output_dir = os.path.dirname(audio_file_path)
+    
+    # Create processed filename
+    base_name = os.path.basename(audio_file_path)
+    processed_filename = os.path.join(output_dir, f"processed_{base_name}")
+    
+    # Check if processed file already exists
+    if os.path.exists(processed_filename):
+        print(f"Using existing processed audio: {processed_filename}")
+        return processed_filename
+    
+    print(f"Processing audio file: {audio_file_path}")
+    
+    try:
+        # Load audio file
+        audio_data, sample_rate = librosa.load(audio_file_path, sr=None)
+        print(f"Loaded audio: {len(audio_data)} samples, {sample_rate}Hz")
+        
+        # Step 1: Apply noise reduction
+        # First, estimate noise profile from the first 0.5 seconds (assuming it's silence/background)
+        noise_length = min(int(sample_rate * 0.5), len(audio_data) // 10)
+        noise_sample = audio_data[:noise_length]
+        
+        # Apply noise reduction
+        reduced_noise = nr.reduce_noise(
+            y=audio_data, 
+            y_noise=noise_sample,
+            sr=sample_rate,
+            prop_decrease=noise_reduction_strength,
+            stationary=True
+        )
+        print("Noise reduction applied")
+        
+        # Step 2: Apply bandpass filter 
+        nyquist = sample_rate / 2
+        low = highpass_cutoff / nyquist
+        high = lowpass_cutoff / nyquist
+        
+        # Design filter
+        b, a = signal.butter(4, [low, high], btype='band')
+        
+        # Apply filter
+        filtered_audio = signal.filtfilt(b, a, reduced_noise)
+        print("Bandpass filter applied")
+        
+        # Step 3: Normalize audio to increase volume
+        max_val = np.max(np.abs(filtered_audio))
+        if max_val > 0:
+            normalized_audio = filtered_audio / max_val * 0.9  # Scale to 90% of max to avoid clipping
+            print("Audio normalized")
+        else:
+            normalized_audio = filtered_audio
+            print("Audio normalization skipped (zero signal)")
+        
+        # Save the processed audio
+        sf.write(processed_filename, normalized_audio, sample_rate)
+        print(f"Processed audio saved to: {processed_filename}")
+        
+        return processed_filename
+    
+    except Exception as e:
+        print(f"Error preprocessing audio: {e}")
+        import traceback
+        traceback.print_exc()
+        return audio_file_path  # Return the original file path if processing fails
+
+
 def visualize_eeg_data(eeg_data, word, output_path):
     """
     Creates a visualization of EEG data with speech events highlighted.
@@ -91,8 +171,9 @@ def visualize_eeg_data(eeg_data, word, output_path):
 
     except Exception as e:
         print(f"Error creating visualization: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return False
-
 
 def get_audio_file_for_eeg(stage_path, attempt_num):
     """
@@ -141,6 +222,33 @@ def get_timestamp_file_for_eeg(stage_path, attempt_num):
         if pattern in all_files:
              return os.path.join(stage_path, pattern)
 
+    # If not found, try to find any txt file with timestamp and the attempt number in the name
+    for file in all_files:
+        if file.endswith('.txt') and 'time' in file.lower() and 'stamp' in file.lower() and attempt_num in file:
+            return os.path.join(stage_path, file)
+
+    return None
+
+def get_timestamp_file_for_eeg(stage_path, attempt_num):
+    """
+    Searches for the corresponding timestamp file for non-audio stages.
+    """
+    # List of possible timestamp file name patterns
+    patterns = [
+        f"time_stamp_attempt_{attempt_num}.txt",
+        f"time_stamp_{attempt_num}.txt",
+        f"timestamp_attempt_{attempt_num}.txt",
+        f"timestamp_{attempt_num}.txt"
+    ]
+
+    # Check all files in the directory
+    all_files = os.listdir(stage_path)
+
+    # Try the specific patterns first
+    for pattern in patterns:
+        if pattern in all_files:
+             return os.path.join(stage_path, pattern)
+
 
     # If not found, try to find any txt file with timestamp and the attempt number in the name
     for file in all_files:
@@ -149,31 +257,71 @@ def get_timestamp_file_for_eeg(stage_path, attempt_num):
 
     return None
 
-def detect_speech_timestamps(audio_file_path, min_silence_len=300, silence_thresh=-40):
+def detect_speech_timestamps(audio_file_path, min_silence_len=300, silence_thresh=-40,
+                           preprocess=True, noise_reduction_strength=0.5):
     """
     Detects speech segments in an audio file and returns their start and end timestamps.
     """
     try:
         print(f"Processing audio file: {audio_file_path}")
-
+        
+        # Check if the file exists
+        if not os.path.exists(audio_file_path):
+            print(f"Audio file not found: {audio_file_path}")
+            return []
+            
+        # Get output directory for processed files
+        output_dir = os.path.dirname(audio_file_path)
+        
+        # Check if a processed version already exists
+        base_name = os.path.basename(audio_file_path)
+        processed_filename = os.path.join(output_dir, f"processed_{base_name}")
+        
+        if preprocess:
+            if os.path.exists(processed_filename):
+                print(f"Using existing processed audio: {processed_filename}")
+                audio_to_process = processed_filename
+            else:
+                # Apply preprocessing
+                audio_to_process = preprocess_audio(
+                    audio_file_path,
+                    output_dir,
+                    noise_reduction_strength=noise_reduction_strength
+                )
+        else:
+            # Use original file
+            audio_to_process = audio_file_path
+            
         # Get audio duration as a fallback
-        with contextlib.closing(wave.open(audio_file_path, 'r')) as f:
+        with contextlib.closing(wave.open(audio_to_process, 'r')) as f:
             frames = f.getnframes()
             rate = f.getframerate()
             duration = frames / float(rate)
 
         # Attempt to process with pydub
         try:
-            audio = AudioSegment.from_wav(audio_file_path)
-            nonsilent_chunks = detect_nonsilent(audio,
-                                                min_silence_len=min_silence_len,
-                                                silence_thresh=silence_thresh)
+            audio = AudioSegment.from_wav(audio_to_process)
+            
+            # Increase the volume slightly to improve detection
+            audio = audio + 6  # Add 6 dB
+            
+            # Detect non-silent chunks with the specified parameters
+            nonsilent_chunks = detect_nonsilent(
+                audio,
+                min_silence_len=min_silence_len,
+                silence_thresh=silence_thresh
+            )
 
             # Convert to seconds
             speech_timestamps = [(start/1000, end/1000) for start, end in nonsilent_chunks]
 
-            if not speech_timestamps:
-                print(f"No speech detected in {os.path.basename(audio_file_path)}. Using full audio duration as fallback.")
+            # Log the results
+            if speech_timestamps:
+                print(f"Detected {len(speech_timestamps)} speech segments:")
+                for i, (start, end) in enumerate(speech_timestamps):
+                    print(f"  Segment {i+1}: {start:.2f}s - {end:.2f}s (duration: {end-start:.2f}s)")
+            else:
+                print(f"No speech detected in {os.path.basename(audio_to_process)}. Using full audio duration as fallback.")
                 speech_timestamps = [(0, duration)]
 
             return speech_timestamps
@@ -184,7 +332,11 @@ def detect_speech_timestamps(audio_file_path, min_silence_len=300, silence_thres
 
     except Exception as e:
         print(f"Error processing audio file {audio_file_path}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return []
+
+
 
 def read_timestamp_file(timestamp_file_path, padding=1):
     """
@@ -245,15 +397,93 @@ def read_timestamp_file(timestamp_file_path, padding=1):
         return []
     except Exception as e:
         print(f"Error reading timestamp file {timestamp_file_path}: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return []
 
+def visualize_speech_detection(audio_file_path, speech_timestamps, output_dir=None):
+    """
+    Generate a visualization of speech detection results.
+    
+    Parameters:
+    ----------
+    audio_file_path : str
+        Path to the audio file
+    speech_timestamps : list
+        List of (start_time, end_time) tuples
+    output_dir : str, optional
+        Directory to save visualization, defaults to same dir as input
+    
+    Returns:
+    -------
+    str
+        Path to the visualization file
+    """
+    if not speech_timestamps:
+        print("No speech timestamps to visualize")
+        return None
+        
+    if output_dir is None:
+        output_dir = os.path.dirname(audio_file_path)
+        
+    base_name = os.path.basename(audio_file_path)
+    viz_path = os.path.join(output_dir, f"speech_detection_{os.path.splitext(base_name)[0]}.png")
+    
+    try:
+        # Load audio
+        y, sr = librosa.load(audio_file_path, sr=None)
+        
+        # Plot waveform
+        plt.figure(figsize=(12, 6))
+        
+        # Plot full waveform
+        times = np.linspace(0, len(y)/sr, len(y))
+        plt.plot(times, y, color='gray', alpha=0.5)
+        
+        # Highlight speech segments
+        for start, end in speech_timestamps:
+            start_idx = int(start * sr)
+            end_idx = min(int(end * sr), len(y))
+            
+            # Plot speech segment
+            segment_times = np.linspace(start, end, end_idx - start_idx)
+            plt.plot(segment_times, y[start_idx:end_idx], color='blue', linewidth=1.5)
+            
+            # Add vertical lines to indicate segment boundaries
+            plt.axvline(x=start, color='green', linestyle='-', alpha=0.7)
+            plt.axvline(x=end, color='red', linestyle='-', alpha=0.7)
+        
+        plt.title(f'Speech Detection Results: {len(speech_timestamps)} segments')
+        plt.xlabel('Time (s)')
+        plt.ylabel('Amplitude')
+        plt.grid(True, alpha=0.3)
+        
+        # Add a legend
+        from matplotlib.lines import Line2D
+        legend_elements = [
+            Line2D([0], [0], color='gray', alpha=0.5, label='Audio Waveform'),
+            Line2D([0], [0], color='blue', label='Detected Speech'),
+            Line2D([0], [0], color='green', label='Segment Start'),
+            Line2D([0], [0], color='red', label='Segment End')
+        ]
+        plt.legend(handles=legend_elements, loc='upper right')
+        
+        # Save the figure
+        plt.tight_layout()
+        plt.savefig(viz_path, dpi=150)
+        plt.close()
+        
+        print(f"Speech detection visualization saved to: {viz_path}")
+        return viz_path
+        
+    except Exception as e:
+        print(f"Error generating speech detection visualization: {e}")
+        return None
 
 def add_word_event_to_eeg(eeg_file_path, speech_timestamps, word):
     """
     Adds a word label column to the EEG data CSV file based on speech timestamps.
-    Instead of using binary True/False columns, this creates a single 'word_label' column
-    that contains the word during speech events and 'sil' (silence) otherwise.
-    Also maintains the traditional word-specific event column for backward compatibility.
+    Fixed to avoid 'bool' object is not callable error.
     """
     try:
         print(f"Processing EEG file: {eeg_file_path}")
@@ -271,11 +501,15 @@ def add_word_event_to_eeg(eeg_file_path, speech_timestamps, word):
         
         # Create word-specific event column for backward compatibility
         event_column = f"{word}_event"
+        # Make sure not to use boolean values as functions
+        # Initialize all rows to False first
         eeg_data[event_column] = False
 
         # Set word_label and event column for timestamps within speech segments
         for start_time, end_time in speech_timestamps:
             print(f"Marking '{word}' event from {start_time:.3f}s to {end_time:.3f}s")
+            # Create the mask using comparison operators - not function calls
+            # This is the key fix - ensuring we're using boolean operators properly
             mask = (eeg_data['Timestamp'] >= start_time) & (eeg_data['Timestamp'] <= end_time)
             eeg_data.loc[mask, 'word_label'] = word
             eeg_data.loc[mask, event_column] = True
@@ -288,7 +522,9 @@ def add_word_event_to_eeg(eeg_file_path, speech_timestamps, word):
         return eeg_data
 
     except Exception as e:
-        print(f"Error processing EEG file {eeg_file_path}: {str(e)}")
+        print(f"Error processing EEG file {eeg_file_path}: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def get_stage_number(stage_dir):
@@ -304,14 +540,18 @@ def get_stage_number(stage_dir):
     except Exception:
         return None
 
-
 def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualizations=True, 
                       timestamp_padding=0.25, generate_dataset=False, 
                       selected_stages=None, selected_participants=None, 
                       selected_words=None, create_train_test=False, 
                       test_size=0.2, random_state=42, stratify_by_word=True,
                       prepare_for_transformer=False, segment_duration=0.5,
-                      window_overlap=50, create_labels_column=True):
+                      window_overlap=50, create_labels_column=True,
+                      # New audio processing parameters:
+                      preprocess_audio=True,
+                      noise_reduction_strength=0.5,
+                      silence_thresh=-40,
+                      min_silence_len=300):
     """
     Processes all trial data in the given directory structure.
 
@@ -333,6 +573,10 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
     segment_duration (float): Duration of each segment in seconds (for transformer preparation)
     window_overlap (float): Percentage of overlap between consecutive windows (for transformer preparation)
     create_labels_column (bool): Create a single "word" column instead of multiple event columns (for transformer preparation)
+    preprocess_audio (bool): Whether to apply audio preprocessing (noise reduction, filtering)
+    noise_reduction_strength (float): Strength of noise reduction (0 to 1)
+    silence_thresh (int): Threshold for silence detection in dB
+    min_silence_len (int): Minimum silence length in ms
 
     Returns:
     dict: Statistics about the processing
@@ -504,8 +748,14 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                                 # Fallback to Timestamp File
                                 use_audio = False
                             else:
-                                # Process audio to get speech timestamps
-                                speech_timestamps = detect_speech_timestamps(audio_path)
+                                # Process audio to get speech timestamps with our enhanced function
+                                speech_timestamps = detect_speech_timestamps(
+                                    audio_path, 
+                                    min_silence_len=min_silence_len,
+                                    silence_thresh=silence_thresh,
+                                    preprocess=preprocess_audio,
+                                    noise_reduction_strength=noise_reduction_strength
+                                )
                                 stats['audio_processed'] += 1
 
                         if not speech_timestamps and use_audio:
@@ -530,9 +780,44 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                             stats['files_with_errors'].append(eeg_file)
                             continue
 
-                        # Add word-specific event column and word_label to EEG data
+                        # Add word-specific event column and word_label to EEG data using our fixed function
                         eeg_path = os.path.join(stage_path, eeg_file)
-                        updated_eeg = add_word_event_to_eeg(eeg_path, speech_timestamps, word)
+                        
+                        # Load EEG data directly
+                        try:
+                            # Read the EEG data
+                            eeg_data = pd.read_csv(eeg_path)
+                            
+                            # Create or check word_label column
+                            if 'word_label' not in eeg_data.columns:
+                                eeg_data['word_label'] = 'sil'  # Initialize with silence
+                            
+                            # Create word-specific event column
+                            event_column = f"{word}_event"
+                            eeg_data[event_column] = False  # Initialize to False
+                            
+                            # Mark events where speech is detected
+                            for start_time, end_time in speech_timestamps:
+                                print(f"Marking '{word}' event from {start_time:.3f}s to {end_time:.3f}s")
+                                # Use boolean indexing - this is the key fix
+                                mask = (eeg_data['Timestamp'] >= start_time) & (eeg_data['Timestamp'] <= end_time)
+                                eeg_data.loc[mask, 'word_label'] = word
+                                eeg_data.loc[mask, event_column] = True
+                            
+                            # Summarize results
+                            true_count = eeg_data[event_column].sum()
+                            total_count = len(eeg_data)
+                            print(f"Marked {true_count} of {total_count} samples as '{word}' events ({true_count/total_count*100:.2f}%)")
+                            
+                            # The updated_eeg is now our processed dataframe
+                            updated_eeg = eeg_data
+                            
+                        except Exception as e:
+                            print(f"Error processing EEG file {eeg_path}: {e}")
+                            import traceback
+                            traceback.print_exc()
+                            stats['files_with_errors'].append(eeg_file)
+                            continue
 
                         if updated_eeg is None:
                             stats['files_with_errors'].append(eeg_file)
@@ -587,6 +872,8 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                                 print(f"Error adding data to dataset: {e}")
                     except Exception as e:  # Catch any other exceptions during processing
                         print(f"An unexpected error occurred while processing {eeg_file}: {e}")
+                        import traceback
+                        traceback.print_exc()
                         stats['files_with_errors'].append(eeg_file)
 
     # Dataset creation

@@ -1,3 +1,4 @@
+import traceback
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, HttpResponseRedirect, JsonResponse
 from .forms import ProcessingForm
@@ -20,49 +21,227 @@ from .process_eeg import (
     get_media_directory,
     clean_media_files
 )
+from sklearn.model_selection import train_test_split
+import re
 import datetime
-import mimetypes
-import traceback
-
 
 def process_manual_review(request):
     """View for manually reviewing and adjusting speech detection results."""
-    # Check if we have processing parameters in session
-    if 'processing_params' not in request.session or 'files_to_process' not in request.session:
-        return redirect('process_data')
-    
-    # Get processing parameters from session
-    params = request.session['processing_params']
-    files_to_process = json.loads(request.session['files_to_process'])
-    
-    # Get current file index from query parameter, default to 0
-    file_index = int(request.GET.get('file', 0))
-    
-    # If file index is out of range, processing is complete
-    if file_index >= len(files_to_process):
-        # Remove parameters from session
-        del request.session['processing_params']
-        del request.session['files_to_process']
-        
-        # Redirect to completion page
-        return HttpResponseRedirect(f'/processor')
-    
-    # Get current file to process
-    file_data = files_to_process[file_index]
-    
-    output = io.StringIO()  # Capture printed output
+    # Redirect stdout to capture debugging output
+    output = io.StringIO()
     old_stdout = sys.stdout
     sys.stdout = output
     
     try:
-        # Create context for template
+        # Check if we have processing parameters in session
+        if 'processing_params' not in request.session or 'files_to_process' not in request.session:
+            return redirect('process_data')
+        
+        # Get processing parameters from session
+        params = request.session['processing_params']
+        files_to_process = json.loads(request.session['files_to_process'])
+        
+        # Get current file index from query parameter, default to 0
+        file_index = int(request.GET.get('file', 0))
+        
+        # If file index is out of range, processing is complete
+        if file_index >= len(files_to_process):
+            # Get output directory from params
+            output_dir = params.get('output_dir')
+            
+            # Prepare result stats and links for the complete page
+            stats = {
+                'trials_processed': len(files_to_process),
+                'total_participants': len(set(f['participant'] for f in files_to_process if 'participant' in f)),
+                'total_unique_words': len(set(f['word'] for f in files_to_process if 'word' in f)),
+                'stages_processed': len(set(f['stage'] for f in files_to_process if 'stage' in f)),
+                'attempts_processed': len(files_to_process),
+                'visualizations_created': len([f for f in files_to_process if 'output_viz' in f]),
+                'participant_list': list(set(f['participant'] for f in files_to_process if 'participant' in f)),
+                'words_list': list(set(f['word'] for f in files_to_process if 'word' in f)),
+                'audio_processed': len(files_to_process),
+                'timestamp_processed': 0,  # We don't track this separately in manual mode
+                'dataset_rows': 0
+            }
+            
+            dataset_links = []
+            
+            try:
+                # Check if we should generate a dataset
+                if params.get('generate_dataset', False):
+                    # Collect all processed files
+                    processed_files = []
+                    for file_data in files_to_process:
+                        if file_data.get('processed') and 'output_path' in file_data:
+                            processed_files.append(file_data['output_path'])
+                    
+                    if processed_files:
+                        # Read and combine all processed files
+                        all_data = []
+                        for file_path in processed_files:
+                            try:
+                                df = pd.read_csv(file_path)
+                                
+                                # Extract metadata from file path
+                                path_parts = os.path.normpath(file_path).split(os.sep)
+                                participant = None
+                                word = None
+                                stage = None
+                                attempt = None
+                                
+                                for i, part in enumerate(path_parts):
+                                    if part.startswith('trial_') and i+1 < len(path_parts):
+                                        participant = part.replace('trial_', '')
+                                        if i+1 < len(path_parts):
+                                            word = path_parts[i+1]
+                                        if i+2 < len(path_parts) and 'stage' in path_parts[i+2].lower():
+                                            stage_part = path_parts[i+2]
+                                            stage_match = re.search(r'\d+', stage_part)
+                                            if stage_match:
+                                                stage = stage_match.group(0)
+                                        break
+                                
+                                # Extract attempt from filename
+                                filename = os.path.basename(file_path)
+                                attempt_match = re.search(r'attempt[_]?(\d+)', filename)
+                                if attempt_match:
+                                    attempt = attempt_match.group(1)
+                                
+                                # Add metadata if not already in the dataframe
+                                if participant and 'participant_id' not in df.columns:
+                                    df['participant_id'] = participant
+                                if word and 'word' not in df.columns:
+                                    df['word'] = word
+                                if stage and 'stage' not in df.columns:
+                                    df['stage'] = stage
+                                if attempt and 'attempt' not in df.columns:
+                                    df['attempt'] = attempt
+                                
+                                all_data.append(df)
+                            except Exception as e:
+                                print(f"Error reading file {file_path}: {e}")
+                        
+                        if all_data:
+                            # Combine all dataframes
+                            combined_df = pd.concat(all_data, ignore_index=True)
+                            
+                            # Fix missing event columns - fill NaN values with False
+                            all_columns = combined_df.columns.tolist()
+                            event_columns = [col for col in all_columns if '_event' in col]
+                            for col in event_columns:
+                                if combined_df[col].isnull().any():
+                                    combined_df[col] = combined_df[col].fillna(False)
+                            
+                            # Make sure the word_label column is filled correctly
+                            if 'word_label' in combined_df.columns:
+                                combined_df['word_label'] = combined_df['word_label'].fillna('sil')
+                            
+                            # Save combined dataset
+                            combined_path = os.path.join(output_dir, "combined_eeg_dataset.csv")
+                            combined_df.to_csv(combined_path, index=False)
+                            print(f"Created combined dataset with {len(combined_df)} rows at {combined_path}")
+                            
+                            # Add to dataset links
+                            dataset_links.append({
+                                'name': 'Combined Dataset',
+                                'path': combined_path,
+                                'filename': f'{os.path.basename(output_dir)}/combined_eeg_dataset.csv',
+                                'size': f"{os.path.getsize(combined_path) / (1024*1024):.2f} MB"
+                            })
+                            
+                            stats['dataset_rows'] = len(combined_df)
+                            
+                            # Create train-test split if requested
+                            if params.get('create_train_test', False):
+                                try:
+                                    # Get split parameters
+                                    test_size = params.get('test_size', 0.2)
+                                    random_state = params.get('random_state', 42)
+                                    stratify_by_word = params.get('stratify_by_word', True)
+                                    
+                                    # Determine stratification
+                                    stratify = None
+                                    if stratify_by_word:
+                                        if 'word_label' in combined_df.columns:
+                                            # For word_label, we need to handle 'sil' differently
+                                            # as it would dominate. Instead, use the 'word' column
+                                            # which has the actual word for each row
+                                            stratify = combined_df['word']
+                                        elif 'word' in combined_df.columns:
+                                            stratify = combined_df['word']
+                                    
+                                    # Create split
+                                    train_df, test_df = train_test_split(
+                                        combined_df, 
+                                        test_size=test_size,
+                                        random_state=random_state,
+                                        stratify=stratify
+                                    )
+                                    
+                                    # Save splits
+                                    train_path = os.path.join(output_dir, "train_dataset.csv")
+                                    test_path = os.path.join(output_dir, "test_dataset.csv")
+                                    
+                                    train_df.to_csv(train_path, index=False)
+                                    test_df.to_csv(test_path, index=False)
+                                    
+                                    print(f"Created train dataset with {len(train_df)} rows")
+                                    print(f"Created test dataset with {len(test_df)} rows")
+                                    
+                                    # Add to dataset links
+                                    dataset_links.append({
+                                        'name': 'Training Dataset',
+                                        'path': train_path,
+                                        'filename': f'{os.path.basename(output_dir)}/train_dataset.csv',
+                                        'size': f"{os.path.getsize(train_path) / (1024*1024):.2f} MB"
+                                    })
+                                    
+                                    dataset_links.append({
+                                        'name': 'Testing Dataset',
+                                        'path': test_path,
+                                        'filename': f'{os.path.basename(output_dir)}/test_dataset.csv',
+                                        'size': f"{os.path.getsize(test_path) / (1024*1024):.2f} MB"
+                                    })
+                                    
+                                    # Update stats
+                                    stats['train_rows'] = len(train_df)
+                                    stats['test_rows'] = len(test_df)
+                                
+                                except Exception as e:
+                                    print(f"Error creating train-test split: {e}")
+                
+            except Exception as e:
+                print(f"Error creating combined dataset: {e}")
+            
+            # Remove parameters from session
+            del request.session['processing_params']
+            del request.session['files_to_process']
+            
+            # Create success message
+            message = "Processing complete! "
+            if params.get('generate_dataset', False):
+                message += f"Combined dataset created with {stats.get('dataset_rows', 0)} rows. "
+            if params.get('create_train_test', False) and 'train_rows' in stats:
+                message += f"Train/test datasets created with {stats.get('train_rows', 0)}/{stats.get('test_rows', 0)} rows."
+            
+            # Render the process_complete template
+            return render(request, 'processor/process_complete.html', {
+                'message': message,
+                'stats': stats,
+                'dataset_links': dataset_links,
+                'output': output.getvalue()
+            })
+        
+        # Get current file to process
+        file_data = files_to_process[file_index]
+        
         context = {
             'file_data': file_data,
             'file_index': file_index,
             'total_files': len(files_to_process),
             'next_file_index': file_index + 1,
             'enable_audio_playback': params.get('enable_audio_playback', True),
-            'reprocess': params.get('reprocess', False),  # Get reprocess flag
+            'reprocess': params.get('reprocess', False),
             'output': '',
         }
         
@@ -88,7 +267,7 @@ def process_manual_review(request):
                     segments,
                     file_data['word'],
                     output_dir=output_dir,
-                    reprocess=params.get('reprocess', False),  # Pass reprocess flag
+                    reprocess=params.get('reprocess', False),
                     participant=participant,
                     stage=stage,
                     attempt=attempt
@@ -131,13 +310,13 @@ def process_manual_review(request):
                 # Process the audio file with the centralized file management
                 processed_audio_path = preprocess_audio(
                     original_audio_path,
-                    output_dir=params.get('output_dir'),  # Use output_dir from parameters
+                    output_dir=params.get('output_dir'),
                     noise_reduction_strength=params.get('noise_reduction_strength', 0.5) if params.get('noise_reduction', True) else 0.0,
                     apply_highpass=params.get('audio_highpass', True),
                     highpass_cutoff=params.get('audio_highpass_cutoff', 150),
                     apply_lowpass=params.get('audio_lowpass', True),
                     lowpass_cutoff=params.get('audio_lowpass_cutoff', 5000),
-                    reprocess=reprocess,  # Pass reprocess flag
+                    reprocess=reprocess,
                     participant=participant,
                     word=word,
                     stage=stage,
@@ -166,7 +345,7 @@ def process_manual_review(request):
                     noise_reduction_strength=0.0,
                     apply_highpass=False,
                     apply_lowpass=False,
-                    reprocess=reprocess,  # Pass reprocess flag
+                    reprocess=reprocess,
                     participant=participant,
                     word=word,
                     stage=stage,
@@ -180,8 +359,6 @@ def process_manual_review(request):
                         speech_segments = raw_speech_markers
                     else:
                         # Convert flat list of timestamps to start/end pairs
-                        # We'll assume each timestamp is a start, and the next timestamp is an end
-                        # If we have odd number of timestamps, we'll add a small duration to the last one
                         pairs = []
                         for i in range(0, len(raw_speech_markers), 2):
                             if i + 1 < len(raw_speech_markers):
@@ -456,8 +633,6 @@ def process_data_view(request):
                         create_visualizations=create_visualizations,
                         generate_dataset=generate_dataset,
                         timestamp_padding=timestamp_padding,
-                        silence_thresh=silence_thresh,
-                        min_silence_len=min_silence,
                         selected_stages=selected_stages,
                         selected_participants=selected_participants,
                         selected_words=selected_words,
@@ -467,12 +642,10 @@ def process_data_view(request):
                         stratify_by_word=stratify_by_word,
                         preprocess_audio=True,
                         noise_reduction_strength=noise_reduction_strength if noise_reduction else 0.0,
-                        apply_highpass=audio_highpass,
-                        highpass_cutoff=audio_highpass_cutoff,
-                        apply_lowpass=audio_lowpass,
-                        lowpass_cutoff=audio_lowpass_cutoff,
+                        silence_thresh=silence_thresh,
+                        min_silence_len=min_silence,
                         reprocess=reprocess  # Pass the reprocessing flag
-                    )           
+                    )
                     message = "Processing complete!"
                     
                     # If datasets were created, add links to download them

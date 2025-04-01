@@ -11,8 +11,220 @@ import pandas as pd
 from django.conf import settings
 from django.core.files.storage import FileSystemStorage
 import tempfile
-from .process_eeg import process_trial_data  
+from .process_eeg import (
+    process_trial_data, 
+    get_files_to_process,
+    detect_speech_timestamps,
+    preprocess_audio,
+    process_file_with_segments
+)
 import datetime
+import mimetypes
+import traceback
+
+
+def process_manual_review(request):
+    """View for manually reviewing and adjusting speech detection results."""
+    # Check if we have processing parameters in session
+    if 'processing_params' not in request.session or 'files_to_process' not in request.session:
+        return redirect('process_data')
+    
+    # Get processing parameters from session
+    params = request.session['processing_params']
+    files_to_process = json.loads(request.session['files_to_process'])
+    
+    # Get current file index from query parameter, default to 0
+    file_index = int(request.GET.get('file', 0))
+    
+    # If file index is out of range, processing is complete
+    if file_index >= len(files_to_process):
+        # Remove parameters from session
+        del request.session['processing_params']
+        del request.session['files_to_process']
+        
+        # Redirect to completion page
+        return HttpResponseRedirect(f'/processor')
+    
+    # Get current file to process
+    file_data = files_to_process[file_index]
+    
+    output = io.StringIO()  # Capture printed output
+    old_stdout = sys.stdout
+    sys.stdout = output
+    
+    try:
+        # Create context for template
+        context = {
+            'file_data': file_data,
+            'file_index': file_index,
+            'total_files': len(files_to_process),
+            'next_file_index': file_index + 1,
+            'enable_audio_playback': params.get('enable_audio_playback', True),
+            'output': '',
+        }
+        
+        # Handle form submission for this file
+        if request.method == 'POST':
+            # Get segments from form data
+            segments_json = request.POST.get('segments_json', '[]')
+            try:
+                segments = json.loads(segments_json)
+                
+                # Get output directory
+                output_dir = params.get('output_dir')
+                
+                # Process file with segments
+                output_path, output_viz = process_file_with_segments(
+                    file_data['eeg_file_path'],
+                    segments,
+                    file_data['word'],
+                    output_dir=output_dir
+                )
+                
+                # Update the file information in the session
+                files_to_process[file_index]['processed'] = True
+                files_to_process[file_index]['output_path'] = output_path
+                files_to_process[file_index]['output_viz'] = output_viz
+                request.session['files_to_process'] = json.dumps(files_to_process)
+                
+                # Redirect to next file
+                return HttpResponseRedirect(f'/processor/manual_review/?file={file_index + 1}')
+                
+            except Exception as e:
+                context['error'] = f"Error processing segments: {e}"
+                traceback.print_exc()
+        
+        # Initialize speech_segments as an empty list
+        speech_segments = []
+        
+        if file_data['audio_file_path']:
+            # Use audio file for speech detection
+            try:
+                original_audio_path = file_data['audio_file_path']
+                print(f"Original audio file: {original_audio_path}")
+                
+                # Get directory where audio file is located (should be stage folder)
+                audio_dir = os.path.dirname(original_audio_path)
+                
+                # Process the audio file and get the processed version - keep it in the same directory
+                # This ensures each processed file stays in its own word/stage/attempt folder
+                processed_audio_path = preprocess_audio(
+                    original_audio_path,
+                    output_dir=audio_dir,  # Keep in same directory to maintain structure
+                    noise_reduction_strength=params.get('noise_reduction_strength', 0.5) if params.get('noise_reduction', True) else 0.0,
+                    apply_highpass=params.get('audio_highpass', True),
+                    highpass_cutoff=params.get('audio_highpass_cutoff', 150),
+                    apply_lowpass=params.get('audio_lowpass', True),
+                    lowpass_cutoff=params.get('audio_lowpass_cutoff', 5000)
+                )
+                
+                print(f"Processed audio file: {processed_audio_path}")
+                
+                # Store the processed audio path in the session for this file_index
+                request.session[f'audio_path_{file_index}'] = processed_audio_path
+                
+                # Extract just the filename to use in the URL
+                processed_audio_filename = os.path.basename(processed_audio_path)
+                
+                # Generate a URL to directly serve this file
+                audio_url = f"/processor/audio/{file_index}/{processed_audio_filename}"
+                context['processed_audio_url'] = audio_url
+                context['audio_file_name'] = processed_audio_filename
+                
+                # Use the processed audio file for speech detection
+                raw_speech_markers = detect_speech_timestamps(
+                    processed_audio_path,
+                    min_silence_len=params.get('min_silence', 300),
+                    silence_thresh=params.get('silence_thresh', -40),
+                    preprocess=False,  # Already preprocessed
+                    noise_reduction_strength=0.0,
+                    apply_highpass=False,
+                    apply_lowpass=False
+                )
+                
+                # Ensure we have proper start/end pairs
+                if raw_speech_markers and isinstance(raw_speech_markers, list):
+                    if all(isinstance(marker, tuple) and len(marker) == 2 for marker in raw_speech_markers):
+                        # Data is already in the correct format (start, end pairs)
+                        speech_segments = raw_speech_markers
+                    else:
+                        # Convert flat list of timestamps to start/end pairs
+                        # We'll assume each timestamp is a start, and the next timestamp is an end
+                        # If we have odd number of timestamps, we'll add a small duration to the last one
+                        pairs = []
+                        for i in range(0, len(raw_speech_markers), 2):
+                            if i + 1 < len(raw_speech_markers):
+                                # A complete pair
+                                pairs.append([raw_speech_markers[i], raw_speech_markers[i+1]])
+                            else:
+                                # Last element without a pair
+                                pairs.append([raw_speech_markers[i], raw_speech_markers[i] + 0.5])
+                        speech_segments = pairs
+                        
+                print(f"Processed speech segments: {speech_segments}")
+                
+            except Exception as e:
+                print(f"Error processing audio: {e}")
+                traceback.print_exc()
+                context['audio_error'] = str(e)
+                
+        elif file_data['timestamp_file_path']:
+            # Use timestamp file
+            from .process_eeg import read_timestamp_file
+            try:
+                raw_timestamps = read_timestamp_file(
+                    file_data['timestamp_file_path'],
+                    padding=params.get('timestamp_padding', 0.25)
+                )
+                
+                # Ensure timestamps are in the right format
+                if isinstance(raw_timestamps, list):
+                    if all(isinstance(ts, tuple) and len(ts) == 2 for ts in raw_timestamps):
+                        # Already in start/end pair format
+                        speech_segments = raw_timestamps
+                    else:
+                        # Convert to start/end pairs
+                        pairs = []
+                        padding = params.get('timestamp_padding', 0.25)
+                        for timestamp in raw_timestamps:
+                            if isinstance(timestamp, (int, float)):
+                                start = max(0, timestamp - padding)
+                                end = timestamp + padding
+                                pairs.append([start, end])
+                        speech_segments = pairs
+                
+            except Exception as e:
+                print(f"Error reading timestamp file: {e}")
+                traceback.print_exc()
+                context['timestamp_error'] = str(e)
+        
+        # Convert speech_segments to proper format and ensure it's valid
+        if speech_segments:
+            # Make sure all segments are lists and not tuples (for JSON serialization)
+            speech_segments = [[float(segment[0]), float(segment[1])] for segment in speech_segments]
+        
+        context['speech_segments'] = speech_segments
+        
+        # Load EEG data for visualization
+        try:
+            eeg_data = pd.read_csv(file_data['eeg_file_path'])
+            context['eeg_data'] = {
+                'timestamps': eeg_data['Timestamp'].tolist(),
+                'duration': eeg_data['Timestamp'].max() - eeg_data['Timestamp'].min(),
+                'num_samples': len(eeg_data),
+                'sample_rate': 128  # Default sample rate for EEG data
+            }
+            
+        except Exception as e:
+            context['error'] = f"Error loading EEG data: {e}"
+            traceback.print_exc()
+        
+        context['output'] = output.getvalue()
+        
+        return render(request, 'processor/manual_review.html', context)
+        
+    finally:
+        sys.stdout = old_stdout
 
 
 def process_data_view(request):
@@ -73,12 +285,26 @@ def process_data_view(request):
             form.fields['selected_words'].choices = word_choices
             
             if form.is_valid():
+                # Basic options
                 verbose = form.cleaned_data['verbose']
                 create_visualizations = form.cleaned_data['create_visualizations']
                 generate_dataset = form.cleaned_data['generate_dataset']
+                manual_processing = form.cleaned_data['manual_processing']
+                enable_audio_playback = form.cleaned_data['enable_audio_playback']
+                
+                # Speech detection parameters
                 silence_thresh = form.cleaned_data['silence_thresh']
                 min_silence = form.cleaned_data['min_silence']
                 timestamp_padding = form.cleaned_data['timestamp_padding']
+                
+                # Advanced audio processing options
+                noise_reduction = form.cleaned_data['noise_reduction']
+                noise_reduction_strength = form.cleaned_data['noise_reduction_strength']
+                audio_highpass = form.cleaned_data['audio_highpass']
+                audio_highpass_cutoff = form.cleaned_data['audio_highpass_cutoff']
+                audio_lowpass = form.cleaned_data['audio_lowpass']
+                audio_lowpass_cutoff = form.cleaned_data['audio_lowpass_cutoff']
+                
                 zip_file = request.FILES.get('zip_file')
                 
                 # Train-test split options
@@ -122,6 +348,64 @@ def process_data_view(request):
                 output_dir = os.path.join(root_dir, output_dir_name)
                 os.makedirs(output_dir, exist_ok=True)
 
+                # If manual processing is enabled, we need to redirect to the manual review page
+                if manual_processing:
+                    # Get list of files to process
+                    files_to_process = get_files_to_process(
+                        root_dir=root_dir,
+                        selected_participants=selected_participants,
+                        selected_words=selected_words,
+                        selected_stages=selected_stages
+                    )
+                    
+                    if not files_to_process:
+                        message = "No files found to process with the current selection."
+                        return render(request, 'processor/process_data.html', {
+                            'form': form, 
+                            'message': message, 
+                            'output': output.getvalue(),
+                            'available_participants': available_participants,
+                            'available_words': available_words,
+                            'has_processed_data': False,
+                        })
+                    
+                    # Store processing parameters in session for the manual review page
+                    request.session['processing_params'] = {
+                        'root_dir': root_dir,
+                        'output_dir': output_dir,
+                        'timestamp': timestamp,
+                        'silence_thresh': silence_thresh,
+                        'min_silence': min_silence,
+                        'timestamp_padding': timestamp_padding,
+                        'noise_reduction': noise_reduction,
+                        'noise_reduction_strength': noise_reduction_strength,
+                        'audio_highpass': audio_highpass,
+                        'audio_highpass_cutoff': audio_highpass_cutoff,
+                        'audio_lowpass': audio_lowpass,
+                        'audio_lowpass_cutoff': audio_lowpass_cutoff,
+                        'enable_audio_playback': enable_audio_playback,
+                        'generate_dataset': generate_dataset,
+                        'create_train_test': create_train_test,
+                        'test_size': test_size,
+                        'random_state': random_state,
+                        'stratify_by_word': stratify_by_word,
+                        'selected_stages': selected_stages,
+                    }
+                    
+                    # Serialize the files to process
+                    request.session['files_to_process'] = json.dumps([{
+                        'eeg_file_path': f["eeg_file_path"],
+                        'audio_file_path': f["audio_file_path"] if f["audio_file_path"] else '',
+                        'timestamp_file_path': f["timestamp_file_path"] if f["timestamp_file_path"] else '',
+                        'participant': f["participant"],
+                        'word': f["word"],
+                        'stage': f["stage"],
+                        'attempt': f["attempt"]
+                    } for f in files_to_process])
+                    
+                    # Redirect to manual review page with file index 0
+                    return redirect('process_manual_review')
+
                 try:
                     stats = process_trial_data(
                         root_dir=root_dir,
@@ -130,6 +414,8 @@ def process_data_view(request):
                         create_visualizations=create_visualizations,
                         generate_dataset=generate_dataset,
                         timestamp_padding=timestamp_padding,
+                        silence_thresh=silence_thresh,
+                        min_silence_len=min_silence,
                         selected_stages=selected_stages,
                         selected_participants=selected_participants,
                         selected_words=selected_words,
@@ -137,6 +423,12 @@ def process_data_view(request):
                         test_size=test_size,
                         random_state=random_state,
                         stratify_by_word=stratify_by_word,
+                        preprocess_audio=True,
+                        noise_reduction_strength=noise_reduction_strength if noise_reduction else 0.0,
+                        apply_highpass=audio_highpass,
+                        highpass_cutoff=audio_highpass_cutoff,
+                        apply_lowpass=audio_lowpass,
+                        lowpass_cutoff=audio_lowpass_cutoff,
                         # Disable transformer-specific preparation (moved to cleaner)
                         prepare_for_transformer=False
                         )           
@@ -282,6 +574,7 @@ def process_data_view(request):
         sys.stdout = old_stdout # Restore the original stdout
 
 
+
 def download_dataset(request, filename):
     """View to handle dataset downloads"""
     # Handle paths that might include subdirectories
@@ -313,3 +606,61 @@ def download_dataset(request, filename):
                 return response
     
     return HttpResponse("File not found", status=404)
+
+
+
+def serve_audio_file(request, filename, file_index=None):
+    """View to serve audio files for playback in manual review mode"""
+    # First check if we have a file_index parameter and a saved audio path in session
+    if file_index is not None and f'audio_path_{file_index}' in request.session:
+        # Get the full file path from session
+        file_path = request.session[f'audio_path_{file_index}']
+        print(f"Serving audio file from session for file_index {file_index}: {file_path}")
+        
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, 'rb') as f:
+                    file_content = f.read()
+                
+                content_type = 'audio/wav'
+                response = HttpResponse(file_content, content_type=content_type)
+                response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
+                return response
+            except Exception as e:
+                print(f"Error serving audio file from session: {e}")
+                pass  # Continue to fallback methods
+    
+    # If direct session path failed, check if we can find the file directly
+    if not file_index:
+        # Check in Trials_data and all subdirectories
+        potential_paths = []
+        trials_data_path = os.path.join(settings.BASE_DIR, 'Trials_data')
+        for root, dirs, files in os.walk(trials_data_path):
+            for file in files:
+                if file == filename:
+                    potential_paths.append(os.path.join(root, file))
+                    print(f"Found audio file: {file}")
+        
+        # If found in Trials_data, serve the first one
+        if potential_paths:
+            file_path = potential_paths[0]
+            print(f"Serving audio file from Trials_data: {file_path}")
+            
+            try:
+                with open(file_path, 'rb') as f:
+                    file_content = f.read()
+                
+                content_type = 'audio/wav'
+                response = HttpResponse(file_content, content_type=content_type)
+                response['Content-Disposition'] = f'inline; filename="{os.path.basename(file_path)}"'
+                return response
+            except Exception as e:
+                print(f"Error serving audio file from Trials_data: {e}")
+                return HttpResponse(f"Error opening audio file: {str(e)}", status=500)
+    
+    # Additional diagnostic information
+    print(f"Audio file not found: {filename}")
+    if file_index:
+        print(f"Requested for file_index: {file_index}")
+    
+    return HttpResponse("Audio file not found. This could be because the file wasn't generated correctly or the path is incorrect.", status=404)

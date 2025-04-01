@@ -26,6 +26,14 @@ class ProcessingForm(forms.Form):
         help_text='Create a combined CSV file with all processed data'
     )
     
+    # Manual Processing Option
+    manual_processing = forms.BooleanField(
+        required=False, 
+        label='Manual Processing Mode', 
+        initial=False,
+        help_text='Review and adjust speech detection results manually'
+    )
+    
     # Audio Processing Parameters
     silence_thresh = forms.IntegerField(
         label='Silence Threshold (dB)', 
@@ -46,6 +54,58 @@ class ProcessingForm(forms.Form):
         initial=0.25, 
         widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.05'}),
         help_text='Time padding around speech markers in seconds'
+    )
+    
+    # Enhanced Audio Processing Options
+    noise_reduction = forms.BooleanField(
+        required=False, 
+        label='Apply Noise Reduction', 
+        initial=True,
+        help_text='Reduce background noise in the audio'
+    )
+    
+    noise_reduction_strength = forms.FloatField(
+        label='Noise Reduction Strength', 
+        initial=0.5, 
+        min_value=0.0, 
+        max_value=1.0,
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
+        help_text='Strength of noise reduction (0.0 to 1.0)'
+    )
+    
+    audio_highpass = forms.BooleanField(
+        required=False, 
+        label='Apply Highpass Filter', 
+        initial=True,
+        help_text='Filter out low frequency noise below the cutoff'
+    )
+    
+    audio_highpass_cutoff = forms.IntegerField(
+        label='Highpass Cutoff (Hz)', 
+        initial=150, 
+        widget=forms.NumberInput(attrs={'class': 'form-control'}),
+        help_text='Frequencies below this will be filtered out'
+    )
+    
+    audio_lowpass = forms.BooleanField(
+        required=False, 
+        label='Apply Lowpass Filter', 
+        initial=True,
+        help_text='Filter out high frequency noise above the cutoff'
+    )
+    
+    audio_lowpass_cutoff = forms.IntegerField(
+        label='Lowpass Cutoff (Hz)', 
+        initial=5000, 
+        widget=forms.NumberInput(attrs={'class': 'form-control'}),
+        help_text='Frequencies above this will be filtered out'
+    )
+    
+    enable_audio_playback = forms.BooleanField(
+        required=False, 
+        label='Enable Audio Playback', 
+        initial=True,
+        help_text='Allow playback of processed audio files during review'
     )
     
     # File Upload

@@ -1,0 +1,549 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Manual Speech Detection Review
+{% endblock title %}
+
+{% block extra_js %}
+<!-- Use CDN for wavesurfer.js to ensure it loads correctly -->
+<script src="https://unpkg.com/wavesurfer.js@6.6.3/dist/wavesurfer.js"></script>
+<script src="https://unpkg.com/wavesurfer.js@6.6.3/dist/plugin/wavesurfer.regions.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-5 mb-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">
+                        Manual Speech Detection Review 
+                        <small class="float-end">(File {{ file_index|add:1 }} of {{ total_files }})</small>
+                    </h2>
+                </div>
+                <div class="card-body">
+                    {% if error %}
+                    <div class="alert alert-danger">
+                        {{ error }}
+                    </div>
+                    {% endif %}
+                    
+                    <div class="alert alert-info">
+                        <h5><i class="bi bi-info-circle-fill me-2"></i>File Details</h5>
+                        <div class="row">
+                            <div class="col-md-3">
+                                <strong>Participant:</strong> {{ file_data.participant }}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Word:</strong> {{ file_data.word }}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Stage:</strong> {{ file_data.stage }}
+                            </div>
+                            <div class="col-md-3">
+                                <strong>Attempt:</strong> {{ file_data.attempt }}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <form method="post" id="segmentForm">
+                        {% csrf_token %}
+                        <input type="hidden" name="segments_json" id="segments_json" value="[]">
+                        
+                        <!-- Audio Waveform (if available) -->
+                        {% if file_data.audio_file_path and enable_audio_playback %}
+                        <div class="card mb-4">
+                            <div class="card-header bg-light">
+                                <h5 class="mb-0">
+                                    Audio Waveform 
+                                    <button type="button" id="playButton" class="btn btn-sm btn-primary float-end">
+                                        <i class="bi bi-play-fill"></i> Play
+                                    </button>
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <div id="waveform" style="width: 100%; height: 150px;"></div>
+                                
+                                <div class="mt-2">
+                                    <div class="progress">
+                                        <div class="progress-bar" role="progressbar" style="width: 0%;" id="loadingProgress"></div>
+                                    </div>
+                                    <small class="text-muted" id="loadingStatus">Loading audio...</small>
+                                </div>
+
+                                <!-- Instructions for waveform editing -->
+                                <div class="alert alert-secondary mt-2 mb-0">
+                                    <i class="bi bi-info-circle me-2"></i>
+                                    <strong>Tip:</strong> You can drag the colored regions in the waveform to adjust segments. 
+                                    Double-click on the waveform to create a new segment.
+                                </div>
+                                
+                                <div class="mt-2 small">
+                                    <a href="#" onclick="document.getElementById('audioDebugInfo').classList.toggle('d-none'); return false;">
+                                        <i class="bi bi-bug"></i> Show/Hide Debug Info
+                                    </a>
+                                    <div id="audioDebugInfo" class="d-none bg-light p-2 mt-1 rounded">
+                                        <strong>Audio URL:</strong> {{ processed_audio_url }}<br>
+                                        <strong>Audio File:</strong> {{ audio_file_name }}<br>
+                                        <strong>File Index:</strong> {{ file_index }}<br>
+                                        <strong>Total Files:</strong> {{ total_files }}<br>
+                                        <strong>EEG Duration:</strong> {{ eeg_data.duration|floatformat:2 }} seconds
+                                    </div>
+                                </div>
+
+                                
+                                {% if audio_error %}
+                                <div class="alert alert-warning mt-2">
+                                    <strong>Audio Processing Error:</strong> {{ audio_error }}
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+                        
+                        <!-- EEG duration reference -->
+                        <div class="alert alert-info mb-4">
+                            <div class="row">
+                                <div class="col-md-4">
+                                    <i class="bi bi-file-earmark-medical me-2"></i>
+                                    <strong>EEG File Duration:</strong> {{ eeg_data.duration|floatformat:2 }} seconds
+                                </div>
+                                <div class="col-md-4">
+                                    <i class="bi bi-123 me-2"></i>
+                                    <strong>Samples:</strong> {{ eeg_data.num_samples }} data points
+                                </div>
+                                <div class="col-md-4">
+                                    <i class="bi bi-activity me-2"></i>
+                                    <strong>Sample Rate:</strong> {{ eeg_data.sample_rate|default:"128" }} Hz
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Speech Segments -->
+                        <div class="card mb-4">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0">Speech Segments</h5>
+                                <div>
+                                    <button type="button" id="addSegmentBtn" class="btn btn-success btn-sm">
+                                        <i class="bi bi-plus-circle"></i> Add Segment
+                                    </button>
+                                    <button type="button" id="clearSegmentsBtn" class="btn btn-danger btn-sm ms-2">
+                                        <i class="bi bi-trash"></i> Clear All
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped" id="segmentsTable">
+                                        <thead>
+                                            <tr>
+                                                <th>Segment #</th>
+                                                <th>Start Time (s)</th>
+                                                <th>End Time (s)</th>
+                                                <th>Duration (s)</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <!-- Segments will be added here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Controls -->
+                        <div class="d-flex justify-content-between">
+                            <a href="/processor" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancel Processing
+                            </a>
+                            <div>
+                                <a href="#" class="btn btn-warning me-2" id="resetBtn">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Reset to Auto-Detected
+                                </a>
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle"></i> Save and Continue
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log("Manual review page loaded");
+        
+        // EEG data from server
+        const eegTimestamps = {{ eeg_data.timestamps|safe }};
+        const eegDuration = {{ eeg_data.duration }};
+        
+        // Speech segments detected automatically
+        let speechSegments = {{ speech_segments|safe }};
+        console.log("Loaded speech segments:", speechSegments);
+        
+        // Store segments for submission
+        let currentSegments = [];
+        
+        // Initialize with auto-detected segments if available
+        if (speechSegments && speechSegments.length > 0) {
+            currentSegments = JSON.parse(JSON.stringify(speechSegments)); // Deep copy
+            console.log("Initialized with auto-detected segments");
+        } else {
+            console.log("No speech segments detected automatically");
+        }
+
+        // Setup wavesurfer for audio visualization if audio file is available
+        let wavesurfer = null;
+        {% if file_data.audio_file_path and enable_audio_playback and processed_audio_url %}
+        try {
+            console.log("Initializing WaveSurfer");
+            
+            // Create wavesurfer instance
+            wavesurfer = WaveSurfer.create({
+                container: document.getElementById('waveform'),
+                waveColor: 'violet',
+                progressColor: 'purple',
+                height: 100,
+                normalize: true,
+                responsive: true,
+                cursorWidth: 2,
+                cursorColor: 'red',
+                barWidth: 2,
+                barGap: 1,
+                plugins: [
+                    WaveSurfer.regions.create({
+                        dragSelection: true, // Allow user to create regions by dragging
+                        slop: 5, // Slop for easier region creation/dragging
+                        color: 'rgba(0, 255, 0, 0.2)' // Default color for all regions
+                    })
+                ]
+            });
+            
+            // Log events for debugging
+            wavesurfer.on('ready', function() {
+                console.log("Wavesurfer ready");
+                document.getElementById('loadingProgress').style.width = '100%';
+                document.getElementById('loadingStatus').textContent = 'Audio loaded successfully';
+                highlightWaveformSegments();
+            });
+            
+            wavesurfer.on('loading', function(percentage) {
+                console.log(`Loading audio: ${percentage}%`);
+                document.getElementById('loadingProgress').style.width = `${percentage}%`;
+                document.getElementById('loadingStatus').textContent = `Loading audio: ${percentage}%`;
+            });
+            
+            wavesurfer.on('error', function(err) {
+                console.error("Wavesurfer error:", err);
+                document.getElementById('loadingStatus').textContent = `Error loading audio: ${err.message || 'Unknown error'}`;
+            });
+            
+            // Use the processed audio URL
+            const audioUrl = "{{ processed_audio_url }}";
+            console.log("Loading audio from URL:", audioUrl);
+            
+            // Load the audio file
+            wavesurfer.load(audioUrl);
+            
+            // Play/pause button
+            const playButton = document.getElementById('playButton');
+            if (playButton) {
+                playButton.addEventListener('click', function() {
+                    console.log("Play button clicked");
+                    wavesurfer.playPause();
+                    
+                    if (wavesurfer.isPlaying()) {
+                        playButton.innerHTML = '<i class="bi bi-pause-fill"></i> Pause';
+                    } else {
+                        playButton.innerHTML = '<i class="bi bi-play-fill"></i> Play';
+                    }
+                });
+                
+                // When audio ends, reset button
+                wavesurfer.on('finish', function() {
+                    playButton.innerHTML = '<i class="bi bi-play-fill"></i> Play';
+                });
+            }
+            
+            // Handle region creation via double-click
+            wavesurfer.on('dblclick', function(e) {
+                const clickTime = wavesurfer.drawer.handleEvent(e) * wavesurfer.getDuration();
+                const newStart = Math.max(0, clickTime - 0.25);
+                const newEnd = Math.min(wavesurfer.getDuration(), clickTime + 0.25);
+                
+                // Add new segment
+                const newSegment = [newStart, newEnd];
+                currentSegments.push(newSegment);
+                
+                // Update visualizations
+                updateSegmentsTable();
+                highlightWaveformSegments();
+            });
+            
+            // Function to highlight segments in waveform
+            function highlightWaveformSegments() {
+                console.log("Highlighting waveform segments");
+                
+                // Clear any existing region markers
+                wavesurfer.clearRegions();
+                
+                // Add regions for each segment
+                currentSegments.forEach((segment, index) => {
+                    console.log(`Adding region for segment ${index}: ${segment[0]} to ${segment[1]}`);
+                    
+                    const region = wavesurfer.addRegion({
+                        start: segment[0],
+                        end: segment[1],
+                        color: 'rgba(0, 255, 0, 0.2)',
+                        id: 'segment_' + index,
+                        drag: true,
+                        resize: true
+                    });
+                    
+                    // Event handler for region updates
+                    region.on('update-end', function() {
+                        console.log(`Region ${index} updated: ${region.start} to ${region.end}`);
+                        currentSegments[index][0] = region.start;
+                        currentSegments[index][1] = region.end;
+                        updateSegmentsTable();
+                    });
+                });
+            }
+            
+            // Check if wavesurfer is ready, otherwise wait for it
+            if (wavesurfer.isReady) {
+                highlightWaveformSegments();
+            }
+        } catch (error) {
+            console.error("Error setting up wavesurfer:", error);
+        }
+        {% endif %}
+        
+        // Initialize segments table
+        updateSegmentsTable();
+        
+        // Add new segment
+        document.getElementById('addSegmentBtn').addEventListener('click', function() {
+            console.log("Add segment button clicked");
+            
+            // Use the middle of the audio file for new segments
+            let maxTime = 30; // Default to 30 seconds
+            {% if file_data.audio_file_path and enable_audio_playback %}
+            if (wavesurfer && wavesurfer.isReady) {
+                maxTime = wavesurfer.getDuration();
+            } else {
+                maxTime = eegDuration;
+            }
+            {% else %}
+            maxTime = eegDuration;
+            {% endif %}
+            
+            // Default to a 0.5 second segment in the middle of the signal
+            const midPoint = maxTime / 2;
+            const newSegment = [midPoint - 0.25, midPoint + 0.25];
+            
+            currentSegments.push(newSegment);
+            updateSegmentsTable();
+            
+            {% if file_data.audio_file_path and enable_audio_playback %}
+            // Also update waveform regions
+            if (wavesurfer && wavesurfer.isReady) {
+                highlightWaveformSegments();
+            }
+            {% endif %}
+        });
+        
+        // Clear all segments
+        document.getElementById('clearSegmentsBtn').addEventListener('click', function() {
+            console.log("Clear segments button clicked");
+            
+            if (confirm('Are you sure you want to clear all segments?')) {
+                currentSegments = [];
+                updateSegmentsTable();
+                
+                {% if file_data.audio_file_path and enable_audio_playback %}
+                // Also update waveform regions
+                if (wavesurfer && wavesurfer.isReady) {
+                    highlightWaveformSegments();
+                }
+                {% endif %}
+            }
+        });
+        
+        // Reset to auto-detected
+        document.getElementById('resetBtn').addEventListener('click', function(e) {
+            e.preventDefault();
+            console.log("Reset button clicked");
+            
+            if (confirm('Reset to auto-detected segments?')) {
+                if (speechSegments && speechSegments.length > 0) {
+                    currentSegments = JSON.parse(JSON.stringify(speechSegments)); // Deep copy
+                } else {
+                    currentSegments = [];
+                }
+                updateSegmentsTable();
+                
+                {% if file_data.audio_file_path and enable_audio_playback %}
+                // Also update waveform regions
+                if (wavesurfer && wavesurfer.isReady) {
+                    highlightWaveformSegments();
+                }
+                {% endif %}
+            }
+        });
+        
+        // Update segments table
+        function updateSegmentsTable() {
+            console.log("Updating segments table");
+            
+            const tbody = document.querySelector('#segmentsTable tbody');
+            if (!tbody) {
+                console.error("Segments table body not found");
+                return;
+            }
+            
+            tbody.innerHTML = '';
+            
+            if (currentSegments.length === 0) {
+                // Add a row indicating no segments
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="5" class="text-center">No speech segments defined. Click "Add Segment" to create one.</td>
+                `;
+                tbody.appendChild(row);
+            } else {
+                // Add rows for each segment
+                currentSegments.forEach((segment, index) => {
+                    const row = document.createElement('tr');
+                    
+                    // Ensure segment has proper values
+                    const start = parseFloat(segment[0]) || 0;
+                    const end = parseFloat(segment[1]) || (start + 0.5);
+                    const duration = end - start;
+                    
+                    row.innerHTML = `
+                        <td>${index + 1}</td>
+                        <td><input type="number" class="form-control segment-start" value="${start.toFixed(3)}" min="0" step="0.001" data-index="${index}"></td>
+                        <td><input type="number" class="form-control segment-end" value="${end.toFixed(3)}" min="0" step="0.001" data-index="${index}"></td>
+                        <td>${duration.toFixed(3)}</td>
+                        <td>
+                            <button type="button" class="btn btn-danger btn-sm delete-segment" data-index="${index}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </td>
+                    `;
+                    
+                    tbody.appendChild(row);
+                });
+            }
+            
+            // Update hidden field for form submission
+            document.getElementById('segments_json').value = JSON.stringify(currentSegments);
+            
+            // Add event listeners to the new inputs and buttons
+            attachSegmentEventListeners();
+        }
+        
+        // Attach event listeners for segment editing
+        function attachSegmentEventListeners() {
+            console.log("Attaching segment event listeners");
+            
+            // Update segment start time
+            document.querySelectorAll('.segment-start').forEach(input => {
+                input.addEventListener('change', function() {
+                    console.log("Segment start changed");
+                    
+                    const index = parseInt(this.dataset.index);
+                    const start = parseFloat(this.value);
+                    const end = parseFloat(currentSegments[index][1]);
+                    
+                    // Validate input
+                    if (start >= end) {
+                        alert('Start time must be less than end time');
+                        this.value = currentSegments[index][0].toFixed(3);
+                        return;
+                    }
+                    
+                    currentSegments[index][0] = start;
+                    
+                    // Update the waveform region
+                    {% if file_data.audio_file_path and enable_audio_playback %}
+                    if (wavesurfer && wavesurfer.isReady) {
+                        const region = wavesurfer.regions.list['segment_' + index];
+                        if (region) {
+                            region.start = start;
+                            region.update();
+                        } else {
+                            // If region doesn't exist, recreate all regions
+                            highlightWaveformSegments();
+                        }
+                    }
+                    {% endif %}
+                });
+            });
+            
+            // Update segment end time
+            document.querySelectorAll('.segment-end').forEach(input => {
+                input.addEventListener('change', function() {
+                    console.log("Segment end changed");
+                    
+                    const index = parseInt(this.dataset.index);
+                    const start = parseFloat(currentSegments[index][0]);
+                    const end = parseFloat(this.value);
+                    
+                    // Validate input
+                    if (end <= start) {
+                        alert('End time must be greater than start time');
+                        this.value = currentSegments[index][1].toFixed(3);
+                        return;
+                    }
+                    
+                    currentSegments[index][1] = end;
+                    
+                    // Update the waveform region
+                    {% if file_data.audio_file_path and enable_audio_playback %}
+                    if (wavesurfer && wavesurfer.isReady) {
+                        const region = wavesurfer.regions.list['segment_' + index];
+                        if (region) {
+                            region.end = end;
+                            region.update();
+                        } else {
+                            // If region doesn't exist, recreate all regions
+                            highlightWaveformSegments();
+                        }
+                    }
+                    {% endif %}
+                });
+            });
+            
+            // Delete segment
+            document.querySelectorAll('.delete-segment').forEach(button => {
+                button.addEventListener('click', function() {
+                    console.log("Delete segment clicked");
+                    
+                    const index = parseInt(this.dataset.index);
+                    currentSegments.splice(index, 1);
+                    updateSegmentsTable();
+                    
+                    {% if file_data.audio_file_path and enable_audio_playback %}
+                    // Also update waveform regions
+                    if (wavesurfer && wavesurfer.isReady) {
+                        highlightWaveformSegments();
+                    }
+                    {% endif %}
+                });
+            });
+        }
+        
+        // Submit form
+        document.getElementById('segmentForm').addEventListener('submit', function() {
+            console.log("Form submitted");
+            document.getElementById('segments_json').value = JSON.stringify(currentSegments);
+        });
+    });
+</script>
+{% endblock %}

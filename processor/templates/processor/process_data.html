@@ -40,7 +40,7 @@
                                 <div id="collapseBasic" class="accordion-collapse collapse show" aria-labelledby="headingBasic" data-bs-parent="#processingAccordion">
                                     <div class="accordion-body">
                                         <div class="row">
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <div class="form-check form-switch mb-3">
                                                     {{ form.verbose }}
                                                     <label class="form-check-label" for="{{ form.verbose.id_for_label }}">
@@ -49,7 +49,7 @@
                                                     <div class="form-text">{{ form.verbose.help_text }}</div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <div class="form-check form-switch mb-3">
                                                     {{ form.create_visualizations }}
                                                     <label class="form-check-label" for="{{ form.create_visualizations.id_for_label }}">
@@ -58,13 +58,22 @@
                                                     <div class="form-text">{{ form.create_visualizations.help_text }}</div>
                                                 </div>
                                             </div>
-                                            <div class="col-md-4">
+                                            <div class="col-md-3">
                                                 <div class="form-check form-switch mb-3">
                                                     {{ form.generate_dataset }}
                                                     <label class="form-check-label" for="{{ form.generate_dataset.id_for_label }}">
                                                         {{ form.generate_dataset.label }}
                                                     </label>
                                                     <div class="form-text">{{ form.generate_dataset.help_text }}</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="form-check form-switch mb-3">
+                                                    {{ form.manual_processing }}
+                                                    <label class="form-check-label" for="{{ form.manual_processing.id_for_label }}">
+                                                        {{ form.manual_processing.label }}
+                                                    </label>
+                                                    <div class="form-text">{{ form.manual_processing.help_text }}</div>
                                                 </div>
                                             </div>
                                         </div>
@@ -85,10 +94,44 @@
                                                 </div>
                                             </div>
                                         </div>
+                                        
+                                        <!-- Manual Processing Details -->
+                                        <div class="card mt-3" id="manualModeInfo">
+                                            <div class="card-header bg-info text-white">
+                                                <h5 class="mb-0"><i class="bi bi-hand-index me-2"></i>Manual Processing Mode</h5>
+                                            </div>
+                                            <div class="card-body">
+                                                <div class="row">
+                                                    <div class="col-md-7">
+                                                        <p>When manual processing is enabled:</p>
+                                                        <ul>
+                                                            <li>Each file will be presented for you to review individually</li>
+                                                            <li>You can adjust automatically detected speech segments</li>
+                                                            <li>You can add, remove, or edit segments as needed</li>
+                                                            <li>Audio playback allows you to hear what was detected</li>
+                                                        </ul>
+                                                        <p>This mode is useful for ensuring high-quality data and refining speech detection.</p>
+                                                    </div>
+                                                    <div class="col-md-5">
+                                                        <div class="alert alert-warning">
+                                                            <i class="bi bi-exclamation-triangle me-2"></i>
+                                                            <strong>Note:</strong> Manual processing will take longer but provides more accurate results,
+                                                            especially for challenging recordings or when precise timing is crucial.
+                                                        </div>
+                                                        <div class="form-check form-switch mt-3">
+                                                            {{ form.enable_audio_playback }}
+                                                            <label class="form-check-label" for="{{ form.enable_audio_playback.id_for_label }}">
+                                                                {{ form.enable_audio_playback.label }}
+                                                            </label>
+                                                            <div class="form-text">{{ form.enable_audio_playback.help_text }}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            
                             <!-- Speech Detection Section -->
                             <div class="accordion-item">
                                 <h2 class="accordion-header" id="headingSpeech">
@@ -236,6 +279,125 @@
                                                 <i class="bi bi-filter me-2"></i> 
                                                 <strong>Available Words:</strong> {{ available_words|join:", " }}
                                             </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- New Enhanced Audio Processing Section -->
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingAudio">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAudio" aria-expanded="false" aria-controls="collapseAudio">
+                                        Enhanced Audio Processing
+                                    </button>
+                                </h2>
+                                <div id="collapseAudio" class="accordion-collapse collapse" aria-labelledby="headingAudio" data-bs-parent="#processingAccordion">
+                                    <div class="accordion-body">
+                                        <div class="alert alert-info">
+                                            <p><i class="bi bi-soundwave me-2"></i> <strong>Audio Enhancement:</strong> These options help improve speech detection by filtering and enhancing the audio before processing.</p>
+                                        </div>
+                                        
+                                        <div class="row mb-3">
+                                            <div class="col-md-6">
+                                                <div class="card h-100">
+                                                    <div class="card-header">
+                                                        <h5 class="mb-0">Noise Reduction</h5>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="form-check form-switch mb-3">
+                                                            {{ form.noise_reduction }}
+                                                            <label class="form-check-label" for="{{ form.noise_reduction.id_for_label }}">
+                                                                {{ form.noise_reduction.label }}
+                                                            </label>
+                                                            <div class="form-text">{{ form.noise_reduction.help_text }}</div>
+                                                        </div>
+                                                        
+                                                        <div class="mb-3">
+                                                            <label for="{{ form.noise_reduction_strength.id_for_label }}" class="form-label">{{ form.noise_reduction_strength.label }}</label>
+                                                            {{ form.noise_reduction_strength }}
+                                                            <div class="form-text">{{ form.noise_reduction_strength.help_text }}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="col-md-6">
+                                                <div class="card h-100">
+                                                    <div class="card-header">
+                                                        <h5 class="mb-0">General Speech Settings</h5>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="mb-3">
+                                                            <label for="{{ form.silence_thresh.id_for_label }}" class="form-label">{{ form.silence_thresh.label }}</label>
+                                                            {{ form.silence_thresh }}
+                                                            <div class="form-text">{{ form.silence_thresh.help_text }}</div>
+                                                        </div>
+                                                        
+                                                        <div class="mb-3">
+                                                            <label for="{{ form.min_silence.id_for_label }}" class="form-label">{{ form.min_silence.label }}</label>
+                                                            {{ form.min_silence }}
+                                                            <div class="form-text">{{ form.min_silence.help_text }}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="card h-100">
+                                                    <div class="card-header">
+                                                        <h5 class="mb-0">Highpass Filter</h5>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="form-check form-switch mb-3">
+                                                            {{ form.audio_highpass }}
+                                                            <label class="form-check-label" for="{{ form.audio_highpass.id_for_label }}">
+                                                                {{ form.audio_highpass.label }}
+                                                            </label>
+                                                            <div class="form-text">{{ form.audio_highpass.help_text }}</div>
+                                                        </div>
+                                                        
+                                                        <div class="mb-3">
+                                                            <label for="{{ form.audio_highpass_cutoff.id_for_label }}" class="form-label">{{ form.audio_highpass_cutoff.label }}</label>
+                                                            {{ form.audio_highpass_cutoff }}
+                                                            <div class="form-text">{{ form.audio_highpass_cutoff.help_text }}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="col-md-6">
+                                                <div class="card h-100">
+                                                    <div class="card-header">
+                                                        <h5 class="mb-0">Lowpass Filter</h5>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="form-check form-switch mb-3">
+                                                            {{ form.audio_lowpass }}
+                                                            <label class="form-check-label" for="{{ form.audio_lowpass.id_for_label }}">
+                                                                {{ form.audio_lowpass.label }}
+                                                            </label>
+                                                            <div class="form-text">{{ form.audio_lowpass.help_text }}</div>
+                                                        </div>
+                                                        
+                                                        <div class="mb-3">
+                                                            <label for="{{ form.audio_lowpass_cutoff.id_for_label }}" class="form-label">{{ form.audio_lowpass_cutoff.label }}</label>
+                                                            {{ form.audio_lowpass_cutoff }}
+                                                            <div class="form-text">{{ form.audio_lowpass_cutoff.help_text }}</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="alert alert-light border mt-3">
+                                            <h6><i class="bi bi-info-circle me-2"></i>Recommended Settings for Speech</h6>
+                                            <ul class="mb-0">
+                                                <li><strong>Noise Reduction Strength:</strong> 0.5 (medium) for most recordings, higher for noisy environments</li>
+                                                <li><strong>Highpass Cutoff:</strong> 150 Hz (removes low frequency rumble and background noise)</li>
+                                                <li><strong>Lowpass Cutoff:</strong> 5000 Hz (keeps the range important for speech intelligibility)</li>
+                                                <li><strong>Silence Threshold:</strong> -40 dB (may need adjustment based on recording volume)</li>
+                                            </ul>
                                         </div>
                                     </div>
                                 </div>
@@ -417,6 +579,53 @@
         var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Show overlay on form submission
+        const form = document.getElementById('processingForm');
+        form.addEventListener('submit', function(e) {
+            document.getElementById('processing-overlay').style.display = 'block';
+            document.getElementById('submitButton').disabled = true;
+        });
+        
+        // Manual processing mode toggle
+        const manualProcessingCheck = document.getElementById('id_manual_processing');
+        const manualModeInfo = document.getElementById('manualModeInfo');
+        const audioPlaybackCheck = document.getElementById('id_enable_audio_playback');
+        
+        function updateManualModeVisibility() {
+            if (manualProcessingCheck.checked) {
+                manualModeInfo.style.display = 'block';
+            } else {
+                manualModeInfo.style.display = 'none';
+            }
+        }
+        
+        manualProcessingCheck.addEventListener('change', updateManualModeVisibility);
+        updateManualModeVisibility();
+        
+        // Audio processing dependencies
+        const noiseReductionCheck = document.getElementById('id_noise_reduction');
+        const noiseReductionStrengthInput = document.getElementById('id_noise_reduction_strength');
+        
+        const highpassCheck = document.getElementById('id_audio_highpass');
+        const highpassCutoffInput = document.getElementById('id_audio_highpass_cutoff');
+        
+        const lowpassCheck = document.getElementById('id_audio_lowpass');
+        const lowpassCutoffInput = document.getElementById('id_audio_lowpass_cutoff');
+        
+        function updateAudioControlStates() {
+            noiseReductionStrengthInput.disabled = !noiseReductionCheck.checked;
+            highpassCutoffInput.disabled = !highpassCheck.checked;
+            lowpassCutoffInput.disabled = !lowpassCheck.checked;
+        }
+        
+        noiseReductionCheck.addEventListener('change', updateAudioControlStates);
+        highpassCheck.addEventListener('change', updateAudioControlStates);
+        lowpassCheck.addEventListener('change', updateAudioControlStates);
+        
+        updateAudioControlStates();
     });
 </script>
 {% endblock %}

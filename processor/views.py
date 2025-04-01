@@ -16,7 +16,9 @@ from .process_eeg import (
     get_files_to_process,
     detect_speech_timestamps,
     preprocess_audio,
-    process_file_with_segments
+    process_file_with_segments,
+    get_media_directory,
+    clean_media_files
 )
 import datetime
 import mimetypes
@@ -60,6 +62,7 @@ def process_manual_review(request):
             'total_files': len(files_to_process),
             'next_file_index': file_index + 1,
             'enable_audio_playback': params.get('enable_audio_playback', True),
+            'reprocess': params.get('reprocess', False),  # Get reprocess flag
             'output': '',
         }
         
@@ -73,12 +76,22 @@ def process_manual_review(request):
                 # Get output directory
                 output_dir = params.get('output_dir')
                 
+                # Extract metadata from file_data
+                participant = file_data['participant']
+                word = file_data['word']
+                stage = file_data['stage']
+                attempt = file_data['attempt']
+                
                 # Process file with segments
                 output_path, output_viz = process_file_with_segments(
                     file_data['eeg_file_path'],
                     segments,
                     file_data['word'],
-                    output_dir=output_dir
+                    output_dir=output_dir,
+                    reprocess=params.get('reprocess', False),  # Pass reprocess flag
+                    participant=participant,
+                    stage=stage,
+                    attempt=attempt
                 )
                 
                 # Update the file information in the session
@@ -97,25 +110,38 @@ def process_manual_review(request):
         # Initialize speech_segments as an empty list
         speech_segments = []
         
+        # Get reprocess flag
+        reprocess = params.get('reprocess', False)
+        
         if file_data['audio_file_path']:
             # Use audio file for speech detection
             try:
                 original_audio_path = file_data['audio_file_path']
                 print(f"Original audio file: {original_audio_path}")
                 
+                # Extract metadata from file_data for centralized file handling
+                participant = file_data['participant']
+                word = file_data['word']
+                stage = file_data['stage']
+                attempt = file_data['attempt']
+                
                 # Get directory where audio file is located (should be stage folder)
                 audio_dir = os.path.dirname(original_audio_path)
                 
-                # Process the audio file and get the processed version - keep it in the same directory
-                # This ensures each processed file stays in its own word/stage/attempt folder
+                # Process the audio file with the centralized file management
                 processed_audio_path = preprocess_audio(
                     original_audio_path,
-                    output_dir=audio_dir,  # Keep in same directory to maintain structure
+                    output_dir=params.get('output_dir'),  # Use output_dir from parameters
                     noise_reduction_strength=params.get('noise_reduction_strength', 0.5) if params.get('noise_reduction', True) else 0.0,
                     apply_highpass=params.get('audio_highpass', True),
                     highpass_cutoff=params.get('audio_highpass_cutoff', 150),
                     apply_lowpass=params.get('audio_lowpass', True),
-                    lowpass_cutoff=params.get('audio_lowpass_cutoff', 5000)
+                    lowpass_cutoff=params.get('audio_lowpass_cutoff', 5000),
+                    reprocess=reprocess,  # Pass reprocess flag
+                    participant=participant,
+                    word=word,
+                    stage=stage,
+                    attempt=attempt
                 )
                 
                 print(f"Processed audio file: {processed_audio_path}")
@@ -139,7 +165,12 @@ def process_manual_review(request):
                     preprocess=False,  # Already preprocessed
                     noise_reduction_strength=0.0,
                     apply_highpass=False,
-                    apply_lowpass=False
+                    apply_lowpass=False,
+                    reprocess=reprocess,  # Pass reprocess flag
+                    participant=participant,
+                    word=word,
+                    stage=stage,
+                    attempt=attempt
                 )
                 
                 # Ensure we have proper start/end pairs
@@ -285,12 +316,16 @@ def process_data_view(request):
             form.fields['selected_words'].choices = word_choices
             
             if form.is_valid():
+                # Extract form data
                 # Basic options
                 verbose = form.cleaned_data['verbose']
                 create_visualizations = form.cleaned_data['create_visualizations']
                 generate_dataset = form.cleaned_data['generate_dataset']
                 manual_processing = form.cleaned_data['manual_processing']
                 enable_audio_playback = form.cleaned_data['enable_audio_playback']
+                
+                # NEW: Reprocessing option
+                reprocess = form.cleaned_data['reprocess']
                 
                 # Speech detection parameters
                 silence_thresh = form.cleaned_data['silence_thresh']
@@ -390,6 +425,7 @@ def process_data_view(request):
                         'random_state': random_state,
                         'stratify_by_word': stratify_by_word,
                         'selected_stages': selected_stages,
+                        'reprocess': reprocess,  # Include reprocessing option
                     }
                     
                     # Serialize the files to process
@@ -407,6 +443,12 @@ def process_data_view(request):
                     return redirect('process_manual_review')
 
                 try:
+                    # If reprocessing is enabled, clean media files first
+                    if reprocess:
+                        media_dir = get_media_directory(output_dir)
+                        clean_media_files(media_dir)
+                        print(f"Cleaned media directory for reprocessing: {media_dir}")
+                        
                     stats = process_trial_data(
                         root_dir=root_dir,
                         output_dir=output_dir,
@@ -429,9 +471,8 @@ def process_data_view(request):
                         highpass_cutoff=audio_highpass_cutoff,
                         apply_lowpass=audio_lowpass,
                         lowpass_cutoff=audio_lowpass_cutoff,
-                        # Disable transformer-specific preparation (moved to cleaner)
-                        prepare_for_transformer=False
-                        )           
+                        reprocess=reprocess  # Pass the reprocessing flag
+                    )           
                     message = "Processing complete!"
                     
                     # If datasets were created, add links to download them
@@ -629,6 +670,27 @@ def serve_audio_file(request, filename, file_index=None):
             except Exception as e:
                 print(f"Error serving audio file from session: {e}")
                 pass  # Continue to fallback methods
+    
+    # Look for the file in the centralized media directory
+    media_dir = get_media_directory(os.path.join(settings.BASE_DIR, 'Trials_data'))
+    processed_audio_dir = os.path.join(media_dir, 'processed_audio')
+    if os.path.exists(processed_audio_dir):
+        for root, dirs, files in os.walk(processed_audio_dir):
+            if filename in files:
+                file_path = os.path.join(root, filename)
+                print(f"Serving audio file from media directory: {file_path}")
+                
+                try:
+                    with open(file_path, 'rb') as f:
+                        file_content = f.read()
+                    
+                    content_type = 'audio/wav'
+                    response = HttpResponse(file_content, content_type=content_type)
+                    response['Content-Disposition'] = f'inline; filename="{filename}"'
+                    return response
+                except Exception as e:
+                    print(f"Error serving audio file from media directory: {e}")
+                    break  # Continue to next method
     
     # If direct session path failed, check if we can find the file directly
     if not file_index:

@@ -78,6 +78,29 @@
                                             </div>
                                         </div>
                                         
+                                        <!-- Add the new reprocessing option in its own row with a visual indicator -->
+                                        <div class="row mt-2">
+                                            <div class="col-md-6">
+                                                <div class="card border-warning">
+                                                    <div class="card-body pb-0">
+                                                        <div class="form-check form-switch mb-2">
+                                                            {{ form.reprocess }}
+                                                            <label class="form-check-label" for="{{ form.reprocess.id_for_label }}">
+                                                                <i class="bi bi-arrow-repeat text-warning me-1"></i>
+                                                                {{ form.reprocess.label }}
+                                                            </label>
+                                                        </div>
+                                                        <div class="form-text mb-2">
+                                                            {{ form.reprocess.help_text }}
+                                                            <div class="small text-danger mt-1">
+                                                                <i class="bi bi-exclamation-triangle"></i> This will regenerate all audio processing and visualization files, which can take longer.
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
                                         <div class="row mt-3">
                                             <div class="col-md-6">
                                                 <div class="mb-3">

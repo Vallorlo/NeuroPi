@@ -12,65 +12,232 @@ from pydub import AudioSegment
 from pydub.silence import detect_nonsilent
 import re
 import unicodedata
-
+import shutil
 from scipy.io import wavfile
 from scipy import signal
 import librosa
 import noisereduce as nr
 import soundfile as sf
 
-# Updated functions in processor/process_eeg.py
+# New helper functions for centralized file management
+
+def get_media_directory(base_dir):
+    """
+    Returns the path to the centralized media directory.
+    Creates it if it doesn't exist.
+    """
+    media_dir = os.path.join(base_dir, 'media')
+    os.makedirs(media_dir, exist_ok=True)
+    return media_dir
+
+def get_processed_audio_path(media_dir, participant, word, stage, attempt, processing_params=None):
+    """
+    Generate a standardized path for processed audio files.
+    
+    Parameters:
+    -----------
+    media_dir : str
+        Base media directory
+    participant : str
+        Participant ID
+    word : str
+        Word being processed
+    stage : int or str
+        Stage number
+    attempt : int or str
+        Attempt number
+    processing_params : dict, optional
+        Dictionary of processing parameters
+        
+    Returns:
+    --------
+    str
+        Path to the processed audio file
+    """
+    # Create audio subdirectory in media
+    audio_dir = os.path.join(media_dir, 'processed_audio')
+    os.makedirs(audio_dir, exist_ok=True)
+    
+    # Create a param string if parameters are provided
+    param_str = ""
+    if processing_params:
+        param_str = f"_params-{processing_params['apply_highpass']}_{processing_params['highpass_cutoff']}_" \
+                   f"{processing_params['apply_lowpass']}_{processing_params['lowpass_cutoff']}_" \
+                   f"{int(processing_params['noise_reduction_strength']*10)}"
+    
+    # Create filename
+    filename = f"processed_audio_{participant}_{word}_stage{stage}_attempt{attempt}{param_str}.wav"
+    return os.path.join(audio_dir, filename)
+
+def get_visualization_path(media_dir, viz_type, participant, word, stage, attempt):
+    """
+    Generate a standardized path for visualization files.
+    
+    Parameters:
+    -----------
+    media_dir : str
+        Base media directory
+    viz_type : str
+        Type of visualization (e.g., 'speech', 'eeg')
+    participant : str
+        Participant ID
+    word : str
+        Word being processed
+    stage : int or str
+        Stage number
+    attempt : int or str
+        Attempt number
+    
+    Returns:
+    --------
+    str
+        Path to the visualization file
+    """
+    # Create visualizations subdirectory in media
+    viz_dir = os.path.join(media_dir, 'visualizations')
+    os.makedirs(viz_dir, exist_ok=True)
+    
+    # Create type-specific subdirectory
+    type_dir = os.path.join(viz_dir, viz_type)
+    os.makedirs(type_dir, exist_ok=True)
+    
+    # Create filename
+    filename = f"{viz_type}_{participant}_{word}_stage{stage}_attempt{attempt}.png"
+    return os.path.join(type_dir, filename)
+
+def get_processed_eeg_path(output_dir, participant, word, stage, attempt):
+    """
+    Generate a standardized path for processed EEG files.
+    Creates the necessary directory structure.
+    
+    Parameters:
+    -----------
+    output_dir : str
+        Base output directory
+    participant : str
+        Participant ID
+    word : str
+        Word being processed
+    stage : int or str
+        Stage number
+    attempt : int or str
+        Attempt number
+    
+    Returns:
+    --------
+    str
+        Path to the processed EEG file
+    """
+    # Create directory structure to maintain organization
+    participant_dir = os.path.join(output_dir, f"trial_{participant}")
+    word_dir = os.path.join(participant_dir, word)
+    stage_dir = os.path.join(word_dir, f"stage{stage}")
+    
+    # Create directories
+    os.makedirs(stage_dir, exist_ok=True)
+    
+    # Create filename
+    filename = f"processed_eeg_data_attempt_{attempt}.csv"
+    return os.path.join(stage_dir, filename)
+
+def clean_media_files(media_dir, file_type=None):
+    """
+    Remove processed files from the media directory.
+    Useful for forcing reprocessing.
+    
+    Parameters:
+    -----------
+    media_dir : str
+        Base media directory
+    file_type : str, optional
+        Type of files to clean ('audio', 'visualizations', or None for all)
+    """
+    if not os.path.exists(media_dir):
+        return
+        
+    if file_type == 'audio':
+        audio_dir = os.path.join(media_dir, 'processed_audio')
+        if os.path.exists(audio_dir):
+            shutil.rmtree(audio_dir)
+            os.makedirs(audio_dir, exist_ok=True)
+    elif file_type == 'visualizations':
+        viz_dir = os.path.join(media_dir, 'visualizations')
+        if os.path.exists(viz_dir):
+            shutil.rmtree(viz_dir)
+            os.makedirs(viz_dir, exist_ok=True)
+    else:
+        # Clean all types
+        for subdir in ['processed_audio', 'visualizations']:
+            path = os.path.join(media_dir, subdir)
+            if os.path.exists(path):
+                shutil.rmtree(path)
+                os.makedirs(path, exist_ok=True)
+
 
 def preprocess_audio(audio_file_path, output_dir=None, noise_reduction_strength=0.5,
                     apply_highpass=True, highpass_cutoff=150,
-                    apply_lowpass=True, lowpass_cutoff=5000):
+                    apply_lowpass=True, lowpass_cutoff=5000, 
+                    reprocess=False, participant=None, word=None, stage=None, attempt=None):
     """
     Preprocess audio file to remove background noise and apply filters.
-    Enhanced to preserve directory structure and prevent overwriting.
+    Enhanced with centralized file management and caching.
     """
     try:
-        # Get directory components from the path
-        path_parts = os.path.normpath(audio_file_path).split(os.sep)
+        # Extract metadata from path if not provided
+        if None in (participant, word, stage, attempt):
+            # Try to extract from path
+            path_parts = os.path.normpath(audio_file_path).split(os.sep)
+            for i, part in enumerate(path_parts):
+                if part.startswith('trial_') and i+1 < len(path_parts):
+                    participant = part.replace('trial_', '')
+                    if i+1 < len(path_parts):
+                        word = path_parts[i+1]
+                    if i+2 < len(path_parts) and 'stage' in path_parts[i+2].lower():
+                        stage_part = path_parts[i+2]
+                        stage_match = re.search(r'\d+', stage_part)
+                        if stage_match:
+                            stage = stage_match.group(0)
+                    break
+            
+            # Try to extract attempt from filename
+            filename = os.path.basename(audio_file_path)
+            attempt_match = re.search(r'attempt[_]?(\d+)', filename)
+            if attempt_match:
+                attempt = attempt_match.group(1)
+            else:
+                # Try to find any number in the filename
+                num_match = re.search(r'\d+', filename)
+                if num_match:
+                    attempt = num_match.group(0)
         
-        # Extract participant, word, stage from path if possible
-        participant_dir = None
-        word_dir = None
-        stage_dir = None
-        
-        for i, part in enumerate(path_parts):
-            if part.startswith('trial_') and i+1 < len(path_parts):
-                participant_dir = part
-                if i+1 < len(path_parts):
-                    word_dir = path_parts[i+1]
-                if i+2 < len(path_parts):
-                    stage_dir = path_parts[i+2]
-                break
-        
-        # Generate output path that preserves structure
+        if None in (participant, word, stage, attempt):
+            print("Warning: Could not extract all metadata from path. Using original directory structure.")
+            return audio_file_path
+            
+        # Set default output directory if not provided
         if output_dir is None:
             output_dir = os.path.dirname(audio_file_path)
+            
+        # Get media directory
+        media_dir = get_media_directory(output_dir)
         
-        # Create structure-preserving output directory
-        final_output_dir = output_dir
-        if participant_dir and word_dir and stage_dir and 'processed_' in output_dir:
-            # If we're in a processed directory, preserve the structure
-            participant_output = os.path.join(output_dir, participant_dir)
-            word_output = os.path.join(participant_output, word_dir)
-            stage_output = os.path.join(word_output, stage_dir)
-            final_output_dir = stage_output
-            
-            # Create the directory structure
-            os.makedirs(final_output_dir, exist_ok=True)
-            print(f"Created audio output directory structure: {final_output_dir}")
-            
-        # Create processed filename with parameters encoded
-        base_name = os.path.basename(audio_file_path)
-        param_str = f"{int(apply_highpass)}_{highpass_cutoff}_{int(apply_lowpass)}_{lowpass_cutoff}_{int(noise_reduction_strength*10)}"
-        processed_filename = os.path.join(final_output_dir, f"processed_{param_str}_{base_name}")
+        # Create processing parameters dictionary
+        processing_params = {
+            'apply_highpass': apply_highpass,
+            'highpass_cutoff': highpass_cutoff,
+            'apply_lowpass': apply_lowpass,
+            'lowpass_cutoff': lowpass_cutoff,
+            'noise_reduction_strength': noise_reduction_strength
+        }
+        
+        # Get standardized output path
+        processed_filename = get_processed_audio_path(
+            media_dir, participant, word, stage, attempt, processing_params
+        )
         
         # Check if processed file already exists
-        if os.path.exists(processed_filename):
-            print(f"Using existing processed audio with same parameters: {processed_filename}")
+        if os.path.exists(processed_filename) and not reprocess:
+            print(f"Using existing processed audio: {processed_filename}")
             return processed_filename
         
         print(f"Processing audio file: {audio_file_path}")
@@ -151,10 +318,11 @@ def preprocess_audio(audio_file_path, output_dir=None, noise_reduction_strength=
 def detect_speech_timestamps(audio_file_path, min_silence_len=300, silence_thresh=-40,
                            preprocess=True, noise_reduction_strength=0.5,
                            apply_highpass=True, highpass_cutoff=150,
-                           apply_lowpass=True, lowpass_cutoff=5000):
+                           apply_lowpass=True, lowpass_cutoff=5000,
+                           reprocess=False, participant=None, word=None, stage=None, attempt=None):
     """
     Detects speech segments in an audio file and returns their start and end timestamps.
-    Enhanced with configurable audio processing parameters.
+    Enhanced with centralized file management and caching.
     """
     try:
         print(f"Processing audio file: {audio_file_path}")
@@ -163,7 +331,34 @@ def detect_speech_timestamps(audio_file_path, min_silence_len=300, silence_thres
         if not os.path.exists(audio_file_path):
             print(f"Audio file not found: {audio_file_path}")
             return []
+        
+        # Extract metadata from path if not provided
+        if None in (participant, word, stage, attempt):
+            # Try to extract from path
+            path_parts = os.path.normpath(audio_file_path).split(os.sep)
+            for i, part in enumerate(path_parts):
+                if part.startswith('trial_') and i+1 < len(path_parts):
+                    participant = part.replace('trial_', '')
+                    if i+1 < len(path_parts):
+                        word = path_parts[i+1]
+                    if i+2 < len(path_parts) and 'stage' in path_parts[i+2].lower():
+                        stage_part = path_parts[i+2]
+                        stage_match = re.search(r'\d+', stage_part)
+                        if stage_match:
+                            stage = stage_match.group(0)
+                    break
             
+            # Try to extract attempt from filename
+            filename = os.path.basename(audio_file_path)
+            attempt_match = re.search(r'attempt[_]?(\d+)', filename)
+            if attempt_match:
+                attempt = attempt_match.group(1)
+            else:
+                # Try to find any number in the filename
+                num_match = re.search(r'\d+', filename)
+                if num_match:
+                    attempt = num_match.group(0)
+                    
         # Get output directory for processed files
         output_dir = os.path.dirname(audio_file_path)
         
@@ -176,7 +371,12 @@ def detect_speech_timestamps(audio_file_path, min_silence_len=300, silence_thres
                 apply_highpass=apply_highpass,
                 highpass_cutoff=highpass_cutoff,
                 apply_lowpass=apply_lowpass,
-                lowpass_cutoff=lowpass_cutoff
+                lowpass_cutoff=lowpass_cutoff,
+                reprocess=reprocess,
+                participant=participant,
+                word=word,
+                stage=stage,
+                attempt=attempt
             )
         else:
             # Use original file
@@ -214,8 +414,19 @@ def detect_speech_timestamps(audio_file_path, min_silence_len=300, silence_thres
                 print(f"No speech detected in {os.path.basename(audio_to_process)}. Using full audio duration as fallback.")
                 speech_timestamps = [(0, duration)]
 
-            # Create visualization of speech detection
-            visualize_speech_detection(audio_to_process, speech_timestamps, output_dir)
+            # Create visualization of speech detection with proper metadata
+            if None not in (participant, word, stage, attempt):
+                media_dir = get_media_directory(output_dir)
+                visualize_speech_detection(
+                    audio_to_process, 
+                    speech_timestamps, 
+                    media_dir=media_dir,
+                    participant=participant,
+                    word=word,
+                    stage=stage,
+                    attempt=attempt,
+                    reprocess=reprocess
+                )
 
             return speech_timestamps
 
@@ -229,21 +440,61 @@ def detect_speech_timestamps(audio_file_path, min_silence_len=300, silence_thres
         traceback.print_exc()
         return []
 
-
-def visualize_speech_detection(audio_file_path, speech_timestamps, output_dir=None):
+def visualize_speech_detection(audio_file_path, speech_timestamps, output_dir=None, media_dir=None,
+                             participant=None, word=None, stage=None, attempt=None, reprocess=False):
     """
     Generate a visualization of speech detection results.
-    Enhanced with better visual output and annotations.
+    Enhanced with centralized file management and caching.
     """
     if not speech_timestamps:
         print("No speech timestamps to visualize")
         return None
         
-    if output_dir is None:
+    # Set default output directory if not provided
+    if output_dir is None and media_dir is None:
         output_dir = os.path.dirname(audio_file_path)
+        media_dir = get_media_directory(output_dir)
+    elif media_dir is None:
+        media_dir = get_media_directory(output_dir)
         
-    base_name = os.path.basename(audio_file_path)
-    viz_path = os.path.join(output_dir, f"speech_detection_{os.path.splitext(base_name)[0]}.png")
+    # If metadata is incomplete, try to extract from audio_file_path
+    if None in (participant, word, stage, attempt):
+        path_parts = os.path.normpath(audio_file_path).split(os.sep)
+        for i, part in enumerate(path_parts):
+            if part.startswith('trial_') and i+1 < len(path_parts):
+                participant = part.replace('trial_', '')
+                if i+1 < len(path_parts):
+                    word = path_parts[i+1]
+                if i+2 < len(path_parts) and 'stage' in path_parts[i+2].lower():
+                    stage_part = path_parts[i+2]
+                    stage_match = re.search(r'\d+', stage_part)
+                    if stage_match:
+                        stage = stage_match.group(0)
+                break
+                
+        # Try to extract attempt from filename
+        filename = os.path.basename(audio_file_path)
+        attempt_match = re.search(r'attempt[_]?(\d+)', filename)
+        if attempt_match:
+            attempt = attempt_match.group(1)
+        else:
+            # Try to find any number in the filename
+            num_match = re.search(r'\d+', filename)
+            if num_match:
+                attempt = num_match.group(0)
+    
+    # If we have complete metadata, use standardized path
+    if None not in (participant, word, stage, attempt):
+        viz_path = get_visualization_path(media_dir, 'speech', participant, word, stage, attempt)
+    else:
+        # Fall back to a simple path in the output directory
+        base_name = os.path.basename(audio_file_path)
+        viz_path = os.path.join(media_dir, f"speech_detection_{os.path.splitext(base_name)[0]}.png")
+    
+    # Check if visualization already exists
+    if os.path.exists(viz_path) and not reprocess:
+        print(f"Using existing speech detection visualization: {viz_path}")
+        return viz_path
     
     try:
         # Load audio
@@ -302,6 +553,7 @@ def visualize_speech_detection(audio_file_path, speech_timestamps, output_dir=No
             plt.axvline(x=end, color='red', linestyle='-', alpha=0.7)
         
         # Save the figure with high resolution
+        os.makedirs(os.path.dirname(viz_path), exist_ok=True)
         plt.tight_layout()
         plt.savefig(viz_path, dpi=150)
         plt.close()
@@ -312,7 +564,6 @@ def visualize_speech_detection(audio_file_path, speech_timestamps, output_dir=No
     except Exception as e:
         print(f"Error generating speech detection visualization: {e}")
         return None
-
 
 def get_files_to_process(root_dir, selected_participants=None, selected_words=None, selected_stages=None):
     """
@@ -419,37 +670,51 @@ def get_files_to_process(root_dir, selected_participants=None, selected_words=No
     
     return files_to_process
 
-def process_file_with_segments(eeg_file_path, segments, word, output_dir=None):
+def process_file_with_segments(eeg_file_path, segments, word, output_dir=None, 
+                       reprocess=False, participant=None, stage=None, attempt=None):
     """
     Process a file with manually adjusted segments.
     Used in manual processing mode.
-    Preserves directory structure to prevent file overwrites.
+    Enhanced with centralized file management and reprocessing option.
     """
     try:
         # Read EEG data
         eeg_data = pd.read_csv(eeg_file_path)
         
-        # Get participant, word, stage, attempt from file path
-        # Assuming path structure like '.../trial_participant/word/stage/eeg_file.csv'
-        path_parts = os.path.normpath(eeg_file_path).split(os.sep)
+        # Get participant, word, stage, attempt from file path if not provided
+        if None in (participant, stage, attempt):
+            # Assuming path structure like '.../trial_participant/word/stage/eeg_file.csv'
+            path_parts = os.path.normpath(eeg_file_path).split(os.sep)
+            
+            # Find relevant parts in the path
+            participant_dir = None
+            word_dir = None
+            stage_dir = None
+            file_name = os.path.basename(eeg_file_path)
+            
+            # Traverse path parts backward to identify components
+            for i, part in enumerate(path_parts):
+                if part.startswith('trial_') and i+1 < len(path_parts):
+                    participant_dir = part
+                    if i+1 < len(path_parts):
+                        word_dir = path_parts[i+1]
+                    if i+2 < len(path_parts):
+                        stage_dir = path_parts[i+2]
+                    break
+                    
+            # Extract participant name and stage number
+            participant = participant_dir.replace('trial_', '') if participant_dir else None
+            stage = get_stage_number(stage_dir) if stage_dir else None
+            
+            # Extract attempt number from filename
+            if 'attempt' in file_name:
+                attempt = file_name.split('attempt')[-1].split('.')[0].strip('_')
+            else:
+                # Try to extract from filename
+                parts = file_name.split('_')
+                attempt = next((p for p in parts if p.isdigit()), None)
         
-        # Find relevant parts in the path
-        participant_dir = None
-        word_dir = None
-        stage_dir = None
-        file_name = os.path.basename(eeg_file_path)
-        
-        # Traverse path parts backward to identify components
-        for i, part in enumerate(path_parts):
-            if part.startswith('trial_') and i+1 < len(path_parts):
-                participant_dir = part
-                if i+1 < len(path_parts):
-                    word_dir = path_parts[i+1]
-                if i+2 < len(path_parts):
-                    stage_dir = path_parts[i+2]
-                break
-        
-        print(f"Identified path parts: participant={participant_dir}, word={word_dir}, stage={stage_dir}, file={file_name}")
+        print(f"Identified path parts: participant={participant}, word={word}, stage={stage}, attempt={attempt}")
         
         # Create or check word_label column
         if 'word_label' not in eeg_data.columns:
@@ -465,30 +730,56 @@ def process_file_with_segments(eeg_file_path, segments, word, output_dir=None):
             eeg_data.loc[mask, 'word_label'] = word
             eeg_data.loc[mask, event_column] = True
         
-        # Create output directory structure that matches original
-        final_output_dir = output_dir
+        # Get standardized output path using helper function
+        if output_dir and participant and word and stage and attempt:
+            output_path = get_processed_eeg_path(output_dir, participant, word, stage, attempt)
+        else:
+            # Fallback to stage directory if metadata extraction failed
+            output_path = os.path.join(os.path.dirname(eeg_file_path), f"processed_{os.path.basename(eeg_file_path)}")
         
-        if participant_dir and word_dir and stage_dir:
-            # Create subdirectories to match original structure
-            participant_output = os.path.join(output_dir, participant_dir)
-            word_output = os.path.join(participant_output, word_dir)
-            stage_output = os.path.join(word_output, stage_dir)
-            final_output_dir = stage_output
+        # Check if file already exists and we're not reprocessing
+        if os.path.exists(output_path) and not reprocess:
+            print(f"Processed file already exists. Skipping: {output_path}")
             
-            # Create the directory structure
-            os.makedirs(final_output_dir, exist_ok=True)
-            print(f"Created output directory structure: {final_output_dir}")
+            # Create visualization anyway since it might be missing
+            if participant and word and stage and attempt:
+                media_dir = get_media_directory(output_dir)
+                output_viz = get_visualization_path(media_dir, 'eeg', participant, word, stage, attempt)
+                
+                # Only create visualization if it doesn't exist
+                if not os.path.exists(output_viz) or reprocess:
+                    visualize_eeg_data(eeg_data, word, output_viz)
+                
+                return output_path, output_viz
+            else:
+                # Fallback path for visualization
+                output_viz = os.path.join(os.path.dirname(output_path), f"viz_{os.path.splitext(os.path.basename(eeg_file_path))[0]}.png")
+                
+                # Only create visualization if it doesn't exist
+                if not os.path.exists(output_viz) or reprocess:
+                    visualize_eeg_data(eeg_data, word, output_viz)
+                
+                return output_path, output_viz
+        
+        # Create necessary directories
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
         
         # Save the processed data
-        output_path = os.path.join(final_output_dir, f"processed_{file_name}")
         eeg_data.to_csv(output_path, index=False)
         print(f"Saved processed data to {output_path}")
         
-        # Create visualization
-        output_viz = os.path.join(final_output_dir, f"viz_{os.path.splitext(file_name)[0]}.png")
+        # Create visualization using centralized approach
+        if participant and word and stage and attempt:
+            media_dir = get_media_directory(output_dir)
+            output_viz = get_visualization_path(media_dir, 'eeg', participant, word, stage, attempt)
+        else:
+            # Fallback to stage directory if metadata extraction failed
+            output_viz = os.path.join(os.path.dirname(output_path), f"viz_{os.path.splitext(os.path.basename(eeg_file_path))[0]}.png")
+        
+        # Ensure output directory exists for visualization
+        os.makedirs(os.path.dirname(output_viz), exist_ok=True)
         
         # Call visualization function
-        from .process_eeg import visualize_eeg_data
         visualize_eeg_data(eeg_data, word, output_viz)
         
         return output_path, output_viz
@@ -617,182 +908,6 @@ def read_timestamp_file(timestamp_file_path, padding=1):
         traceback.print_exc()
         return []
 
-def visualize_speech_detection(audio_file_path, speech_timestamps, output_dir=None):
-    """
-    Enhanced visualization of speech detection results with spectrograms.
-    
-    Parameters:
-    ----------
-    audio_file_path : str
-        Path to the audio file
-    speech_timestamps : list
-        List of (start_time, end_time) tuples
-    output_dir : str, optional
-        Directory to save visualization, defaults to same dir as input
-    
-    Returns:
-    -------
-    str
-        Path to the visualization file
-    """
-    if not speech_timestamps:
-        print("No speech timestamps to visualize")
-        return None
-        
-    if output_dir is None:
-        output_dir = os.path.dirname(audio_file_path)
-        
-    base_name = os.path.basename(audio_file_path)
-    viz_path = os.path.join(output_dir, f"speech_detection_{os.path.splitext(base_name)[0]}.png")
-    
-    try:
-        # Load audio
-        y, sr = librosa.load(audio_file_path, sr=None)
-        
-        # Create a more comprehensive visualization
-        plt.figure(figsize=(15, 10))
-        
-        # Plot waveform with speech segments highlighted
-        plt.subplot(2, 1, 1)
-        times = np.linspace(0, len(y)/sr, len(y))
-        
-        # Plot full waveform in light gray
-        plt.plot(times, y, color='gray', alpha=0.5, linewidth=1)
-        
-        # Highlight speech segments in blue
-        for start, end in speech_timestamps:
-            start_idx = int(start * sr)
-            end_idx = min(int(end * sr), len(y))
-            
-            # Plot speech segment
-            segment_times = np.linspace(start, end, end_idx - start_idx)
-            plt.plot(segment_times, y[start_idx:end_idx], color='blue', linewidth=1.5)
-            
-            # Add vertical lines to indicate segment boundaries
-            plt.axvline(x=start, color='green', linestyle='-', alpha=0.7)
-            plt.axvline(x=end, color='red', linestyle='-', alpha=0.7)
-            
-            # Add text label with segment number
-            segment_num = speech_timestamps.index((start, end)) + 1
-            mid_point = (start + end) / 2
-            y_pos = plt.ylim()[1] * 0.8  # Position text at 80% of the y-axis height
-            plt.text(mid_point, y_pos, str(segment_num), 
-                     horizontalalignment='center', backgroundcolor='white',
-                     bbox=dict(facecolor='white', alpha=0.7, boxstyle='round'))
-        
-        plt.title('Speech Detection Results: Waveform View')
-        plt.xlabel('Time (s)')
-        plt.ylabel('Amplitude')
-        plt.grid(True, alpha=0.3)
-        
-        # Add a legend
-        from matplotlib.lines import Line2D
-        legend_elements = [
-            Line2D([0], [0], color='gray', alpha=0.5, label='Audio Waveform'),
-            Line2D([0], [0], color='blue', label='Detected Speech'),
-            Line2D([0], [0], color='green', label='Segment Start'),
-            Line2D([0], [0], color='red', label='Segment End')
-        ]
-        plt.legend(handles=legend_elements, loc='upper right')
-        
-        # Add spectrogram view with speech segments marked
-        plt.subplot(2, 1, 2)
-        
-        # Create spectrogram
-        D = librosa.amplitude_to_db(np.abs(librosa.stft(y)), ref=np.max)
-        librosa.display.specshow(D, sr=sr, x_axis='time', y_axis='log')
-        plt.colorbar(format='%+2.0f dB')
-        
-        # Mark speech segments on spectrogram
-        for start, end in speech_timestamps:
-            # Add vertical lines to indicate segment boundaries
-            plt.axvline(x=start, color='green', linestyle='-', alpha=0.7)
-            plt.axvline(x=end, color='red', linestyle='-', alpha=0.7)
-            
-            # Add horizontal line to mark the speech segment
-            plt.axhline(y=1000, xmin=start/times[-1], xmax=end/times[-1], 
-                        color='yellow', linewidth=3, alpha=0.5)
-            
-            # Add text label with segment number
-            segment_num = speech_timestamps.index((start, end)) + 1
-            plt.text(start + 0.1, 2000, str(segment_num), 
-                     color='white', fontweight='bold', 
-                     bbox=dict(facecolor='blue', alpha=0.7))
-        
-        plt.title('Speech Detection Results: Spectrogram View')
-        
-        # Save the figure
-        plt.tight_layout()
-        plt.savefig(viz_path, dpi=150)
-        plt.close()
-        
-        print(f"Enhanced speech detection visualization saved to: {viz_path}")
-        return viz_path
-        
-    except Exception as e:
-        print(f"Error generating speech detection visualization: {e}")
-        return None
-
-def add_word_event_to_eeg(eeg_file_path, speech_timestamps, word):
-    """
-    Adds a word label column to the EEG data CSV file based on speech timestamps.
-    Fixed to avoid 'bool' object is not callable error.
-    """
-    try:
-        print(f"Processing EEG file: {eeg_file_path}")
-
-        # Load EEG data
-        eeg_data = pd.read_csv(eeg_file_path)
-
-        # Print data summary
-        print(f"EEG data shape: {eeg_data.shape}")
-        print(f"EEG timestamp range: {eeg_data['Timestamp'].min()} - {eeg_data['Timestamp'].max()}")
-
-        # Create/check word_label column
-        if 'word_label' not in eeg_data.columns:
-            eeg_data['word_label'] = 'sil'  # Initialize with silence
-        
-        # Create word-specific event column for backward compatibility
-        event_column = f"{word}_event"
-        # Make sure not to use boolean values as functions
-        # Initialize all rows to False first
-        eeg_data[event_column] = False
-
-        # Set word_label and event column for timestamps within speech segments
-        for start_time, end_time in speech_timestamps:
-            print(f"Marking '{word}' event from {start_time:.3f}s to {end_time:.3f}s")
-            # Create the mask using comparison operators - not function calls
-            # This is the key fix - ensuring we're using boolean operators properly
-            mask = (eeg_data['Timestamp'] >= start_time) & (eeg_data['Timestamp'] <= end_time)
-            eeg_data.loc[mask, 'word_label'] = word
-            eeg_data.loc[mask, event_column] = True
-
-        # Summarize results
-        true_count = eeg_data[event_column].sum()
-        total_count = len(eeg_data)
-        print(f"Marked {true_count} of {total_count} samples as '{word}' events ({true_count/total_count*100:.2f}%)")
-
-        return eeg_data
-
-    except Exception as e:
-        print(f"Error processing EEG file {eeg_file_path}: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-def get_stage_number(stage_dir):
-    """
-    Extracts the stage number from the stage directory name.
-    """
-    try:
-        # Find any digit in the string
-        digits = re.findall(r'\d+', stage_dir)
-        if digits:
-            return int(digits[0])
-        return None
-    except Exception:
-        return None
-
 def visualize_eeg_data(eeg_data, word, output_path, speech_timestamps=None, channels_to_show=None, highlight_color='red'):
     """
     Creates an enhanced visualization of EEG data with speech events highlighted.
@@ -818,14 +933,6 @@ def visualize_eeg_data(eeg_data, word, output_path, speech_timestamps=None, chan
         True if visualization was created successfully, False otherwise
     """
     try:
-        # Import visualization libraries
-        import matplotlib.pyplot as plt
-        import matplotlib.gridspec as gridspec
-        import matplotlib.patches as patches
-        from matplotlib.collections import LineCollection
-        import numpy as np
-        import pandas as pd
-        
         # Check if timestamps column exists
         if 'Timestamp' not in eeg_data.columns:
             print(f"Error: No 'Timestamp' column found in EEG data")
@@ -913,6 +1020,10 @@ def visualize_eeg_data(eeg_data, word, output_path, speech_timestamps=None, chan
         fig = plt.figure(figsize=(15, max(8, num_sensors * 0.75)))
         
         # Use GridSpec for more flexible layout
+        import matplotlib.gridspec as gridspec
+        import matplotlib.patches as patches
+        from matplotlib.collections import LineCollection
+        
         gs = gridspec.GridSpec(num_sensors + 1, 1, height_ratios=[1] + [3] * num_sensors)
         
         # Create a channel to show speech events at the top
@@ -1004,6 +1115,9 @@ def visualize_eeg_data(eeg_data, word, output_path, speech_timestamps=None, chan
         )
         fig.text(0.01, 0.01, summary_text, fontsize=8, ha='left')
         
+        # Ensure output directory exists
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        
         # Save the figure
         plt.savefig(output_path, dpi=300, bbox_inches='tight')
         plt.close()
@@ -1025,7 +1139,8 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                       preprocess_audio=True,
                       noise_reduction_strength=0.5,
                       silence_thresh=-40,
-                      min_silence_len=300):
+                      min_silence_len=300,
+                      reprocess=False):
     """
     Processes all trial data in the given directory structure.
 
@@ -1043,14 +1158,11 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
     test_size (float): Proportion of data to use for testing (0.0 to 1.0)
     random_state (int): Random seed for train-test split
     stratify_by_word (bool): Whether to stratify train-test split by word
-    prepare_for_transformer (bool): Whether to prepare data specifically for CNN-Transformer
-    segment_duration (float): Duration of each segment in seconds (for transformer preparation)
-    window_overlap (float): Percentage of overlap between consecutive windows (for transformer preparation)
-    create_labels_column (bool): Create a single "word" column instead of multiple event columns (for transformer preparation)
     preprocess_audio (bool): Whether to apply audio preprocessing (noise reduction, filtering)
     noise_reduction_strength (float): Strength of noise reduction (0 to 1)
     silence_thresh (int): Threshold for silence detection in dB
     min_silence_len (int): Minimum silence length in ms
+    reprocess (bool): Whether to reprocess files even if they already exist
 
     Returns:
     dict: Statistics about the processing
@@ -1060,6 +1172,12 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
     
     if selected_stages is None:
         selected_stages = []  # Default to empty list (no stages selected)
+        
+    # If reprocessing is enabled, clean the media directory
+    if reprocess:
+        media_dir = get_media_directory(output_dir)
+        clean_media_files(media_dir)
+        print(f"Cleaned media directory for reprocessing: {media_dir}")
 
     maintain_structure=True
     stats = {
@@ -1108,9 +1226,8 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
     print(f"Found {len(trials)} trial directories")
     print(f"Processing participants: {', '.join([t.replace('trial_', '') for t in trials])}")
 
-    # Create the visualization directory in the output directory
-    viz_dir = os.path.join(output_dir, 'visualizations')
-    os.makedirs(viz_dir, exist_ok=True)
+    # Get media directory
+    media_dir = get_media_directory(output_dir)
 
     # Walk through directory structure
     for participant_dir in trials:
@@ -1175,8 +1292,8 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                     print(f"Skipping stage {stage_num} (not selected).")
                     continue
 
-                # Create output directories for this participant/word/stage
-                participant_output_dir = os.path.join(output_dir, participant_name)
+                # Create output directories using standardized helper function
+                participant_output_dir = os.path.join(output_dir, f"trial_{participant_name}")
                 word_output_dir = os.path.join(participant_output_dir, word)
                 stage_output_dir = os.path.join(word_output_dir, stage_dir)
                 os.makedirs(stage_output_dir, exist_ok=True)
@@ -1201,7 +1318,7 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                         else:
                             #Try to extract from filename
                             parts = eeg_file.split('_')
-                            attempt_num = next((p for p in parts if p.isdigit()),None)
+                            attempt_num = next((p for p in parts if p.isdigit()), None)
                             if attempt_num is None:
                                 print(f"Could not extract attempt number from {eeg_file}")
                                 stats['files_with_errors'].append(eeg_file)
@@ -1209,6 +1326,48 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
 
                         if verbose:
                             print(f"\nProcessing attempt: {attempt_num} (File: {eeg_file})")
+
+                        # Get standardized output path for this processed EEG file
+                        output_path = get_processed_eeg_path(output_dir, participant_name, word, stage_num, attempt_num)
+                        
+                        # Check if file already exists and we're not reprocessing
+                        if os.path.exists(output_path) and not reprocess:
+                            print(f"Processed file already exists. Skipping: {output_path}")
+                            # Still include in dataset if needed
+                            if generate_dataset:
+                                try:
+                                    existing_data = pd.read_csv(output_path)
+                                    
+                                    # Define the fixed set of sensor columns
+                                    sensor_columns = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+                                    # Get all event columns
+                                    event_columns = [col for col in existing_data.columns if col.endswith('_event')]
+                                    # Build the list of relevant columns to keep
+                                    relevant_cols = ['Timestamp'] + [col for col in sensor_columns if col in existing_data.columns] + event_columns
+                                    
+                                    # Add word_label column if present
+                                    if 'word_label' in existing_data.columns:
+                                        relevant_cols.append('word_label')
+                                    
+                                    # Create the subset DataFrame
+                                    dataset_subset = existing_data[relevant_cols].copy()
+                                    
+                                    # Add metadata columns for better organization and filtering
+                                    dataset_subset['participant_id'] = participant_name
+                                    dataset_subset['word'] = word
+                                    dataset_subset['stage'] = stage_num
+                                    dataset_subset['attempt'] = attempt_num
+                                    
+                                    all_processed_data.append(dataset_subset)
+                                    stats['dataset_rows'] += len(dataset_subset)
+                                    
+                                    # Update participant-word mapping for stratification
+                                    if participant_name not in participant_word_mapping:
+                                        participant_word_mapping[participant_name] = set()
+                                    participant_word_mapping[participant_name].add(word)
+                                except Exception as e:
+                                    print(f"Error adding existing data to dataset: {e}")
+                            continue
 
                         # Determine if we should use audio file or timestamp file based on stage number
                         use_audio = stage_num in [1, 4]
@@ -1229,7 +1388,12 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                                     min_silence_len=min_silence_len,
                                     silence_thresh=silence_thresh,
                                     preprocess=preprocess_audio,
-                                    noise_reduction_strength=noise_reduction_strength
+                                    noise_reduction_strength=noise_reduction_strength,
+                                    reprocess=reprocess,
+                                    participant=participant_name,
+                                    word=word,
+                                    stage=stage_num,
+                                    attempt=attempt_num
                                 )
                                 stats['audio_processed'] += 1
 
@@ -1251,15 +1415,13 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                             stats['timestamp_processed'] += 1
 
                         if not speech_timestamps:
-                            print(f"No valid timestamps found in {os.path.basename(timestamp_path)}")
+                            print(f"No valid timestamps found for {os.path.basename(eeg_file)}")
                             stats['files_with_errors'].append(eeg_file)
                             continue
 
-                        # Add word-specific event column and word_label to EEG data using our fixed function
-                        eeg_path = os.path.join(stage_path, eeg_file)
-                        
                         # Load EEG data directly
                         try:
+                            eeg_path = os.path.join(stage_path, eeg_file)
                             # Read the EEG data
                             eeg_data = pd.read_csv(eeg_path)
                             
@@ -1298,8 +1460,8 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
                             stats['files_with_errors'].append(eeg_file)
                             continue
 
-                        # Save updated EEG data to the stage output directory
-                        output_path = os.path.join(stage_output_dir, f"processed_{eeg_file}")
+                        # Save updated EEG data to the standardized path
+                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
                         updated_eeg.to_csv(output_path, index=False)
                         print(f"Successfully processed {eeg_file}")
                         print(f"Saved processed data to {output_path}")
@@ -1309,8 +1471,8 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
 
                         # Create visualization if requested
                         if create_visualizations:
-                            # Save visualization to the visualization directory
-                            viz_path = os.path.join(viz_dir, f"{participant_name}_{word}_{stage_dir}_attempt{attempt_num}.png")
+                            # Create visualization using standardized path
+                            viz_path = get_visualization_path(media_dir, 'eeg', participant_name, word, stage_num, attempt_num)
                             if visualize_eeg_data(updated_eeg, word, viz_path):
                                 stats['visualizations_created'] += 1
 
@@ -1456,3 +1618,16 @@ def process_trial_data(root_dir, output_dir=None, verbose=True, create_visualiza
     stats['dataset_links'] = dataset_links
 
     return stats
+
+def get_stage_number(stage_dir):
+    """
+    Extracts the stage number from the stage directory name.
+    """
+    try:
+        # Find any digit in the string
+        digits = re.findall(r'\d+', stage_dir)
+        if digits:
+            return int(digits[0])
+        return None
+    except Exception:
+        return None

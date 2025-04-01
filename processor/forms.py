@@ -26,6 +26,14 @@ class ProcessingForm(forms.Form):
         help_text='Create a combined CSV file with all processed data'
     )
     
+    # NEW: Reprocessing option
+    reprocess = forms.BooleanField(
+        required=False, 
+        label='Force Reprocessing', 
+        initial=False,
+        help_text='Process files again even if they already exist (slower but ensures latest processing settings are used)'
+    )
+    
     # Manual Processing Option
     manual_processing = forms.BooleanField(
         required=False, 

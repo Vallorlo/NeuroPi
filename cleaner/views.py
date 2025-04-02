@@ -1,3 +1,4 @@
+# cleaner/views.py
 from django.shortcuts import render, redirect
 from django.http import HttpResponse, JsonResponse
 from django.conf import settings
@@ -6,6 +7,12 @@ from django.utils.html import mark_safe
 
 from .forms import CleaningForm
 from .clean_eeg import clean_eeg_data
+
+# Import our shared utilities
+from .eeg_utils import (
+    parse_processed_filename,
+    load_processing_config
+)
 
 import os
 import io
@@ -16,6 +23,7 @@ import zipfile
 from datetime import datetime
 import csv
 import pandas as pd
+import numpy as np
 
 def clean_data_view(request):
     """Main view for the EEG cleaning tool."""
@@ -87,7 +95,7 @@ def clean_data_view(request):
                 input_file = form.cleaned_data['input_file']
                 output_file_name = form.cleaned_data['output_file_name']
                 
-                # Get columns_to_drop from form - UPDATED to handle the new way
+                # Get columns_to_drop from form
                 columns_to_drop = form.cleaned_data.get('columns_to_drop', [])
                 # Make sure it's a list
                 if not isinstance(columns_to_drop, list):
@@ -124,18 +132,11 @@ def clean_data_view(request):
                 extract_features = form.cleaned_data.get('extract_features', False)
                 regions_of_interest = form.cleaned_data.get('regions_of_interest', ['all'])
                 
-
                 create_train_test_split = form.cleaned_data.get('create_train_test_split', False)
                 test_size = form.cleaned_data.get('test_size', 0.2)
                 random_state = form.cleaned_data.get('random_state', 42)
                 stratify_by_word = form.cleaned_data.get('stratify_by_word', True)
                 
-                prepare_for_transformer = form.cleaned_data.get('prepare_for_transformer', False)
-                use_structured_format = form.cleaned_data.get('use_structured_format', True)
-                sequence_length = form.cleaned_data.get('sequence_length', 40)
-                min_segment_length = form.cleaned_data.get('min_segment_length', 20)
-                balance_classes = form.cleaned_data.get('balance_classes', False)
-
                 include_channels = form.cleaned_data.get('include_channels', None)
                 compute_band_powers = form.cleaned_data.get('compute_band_powers', False)
                 normalize_data = form.cleaned_data.get('normalize_data', False)
@@ -193,16 +194,12 @@ def clean_data_view(request):
                         stratify_by_word=stratify_by_word,
                         include_channels=include_channels,
                         compute_band_powers=compute_band_powers,
-                        normalize_data=normalize_data,
-                        remove_outliers=remove_outliers,
+                        normalize_data_flag=normalize_data,
+                        remove_outliers_flag=remove_outliers,
                         outlier_threshold=outlier_threshold,
-                        prepare_for_transformer=prepare_for_transformer,
-                        sequence_length=sequence_length,
-                        min_segment_length=min_segment_length,
-                        use_structured_format=use_structured_format,
-                        balance_classes=balance_classes,
                         columns_to_drop=columns_to_drop
                     )
+
                     
                     print(f"clean_eeg_data returned: {result}")  # Debug: Check return value
                     
@@ -226,11 +223,29 @@ def clean_data_view(request):
                         plots = result.get('plots')
                         features = result.get('features', False)
                         
+                        # Try to load the processing configuration file for additional information
+                        config_path = os.path.join(output_dir, 'processing_config.json')
+                        processing_config = None
+                        if os.path.exists(config_path):
+                            try:
+                                processing_config = load_processing_config(config_path)
+                                # Add to result for display
+                                result['processing_config'] = processing_config
+                            except Exception as e:
+                                print(f"Error loading processing config: {e}")
+                        
                         # Create a ZIP file with all outputs for the user to download
                         zip_filename = os.path.join(output_dir, 'cleaned_data_package.zip')
                         with zipfile.ZipFile(zip_filename, 'w') as zipf:
                             # Add the cleaned CSV file
-                            zipf.write(output_file_path, os.path.basename(output_file_path))
+                            output_file = result.get('output_file_name')
+                            output_path = os.path.join(output_dir, output_file)
+                            if os.path.exists(output_path):
+                                zipf.write(output_path, os.path.basename(output_path))
+                            
+                            # Add the processing configuration
+                            if os.path.exists(config_path):
+                                zipf.write(config_path, os.path.basename(config_path))
                             
                             # Add diagnostic plots if generated
                             if plots:
@@ -239,7 +254,7 @@ def clean_data_view(request):
                                         zipf.write(plot_path, os.path.basename(plot_path))
                             
                             # Add features file if extracted
-                            feature_file = os.path.join(os.path.dirname(output_file_path), 'speech_features.npz')
+                            feature_file = os.path.join(output_dir, 'speech_features.npz')
                             if features and os.path.exists(feature_file):
                                 zipf.write(feature_file, os.path.basename(feature_file))
                                 
@@ -252,11 +267,17 @@ def clean_data_view(request):
                                     f.write("**This report is based on the INPUT data before any filtering**\n\n")
                                     
                                     stats = result['signal_stats']
-                                    f.write(f"Min value: {stats.get('min', 'N/A')}\n")
-                                    f.write(f"Max value: {stats.get('max', 'N/A')}\n")
-                                    f.write(f"Mean value: {stats.get('mean', 'N/A')}\n")
-                                    f.write(f"Standard deviation: {stats.get('std', 'N/A')}\n")
-                                    f.write(f"Zero values: {stats.get('zeros_percent', 'N/A')}%\n\n")
+                                    min_val = np.min(stats.get('min', [0])) if 'min' in stats and isinstance(stats['min'], list) else stats.get('min', 'N/A')
+                                    max_val = np.max(stats.get('max', [0])) if 'max' in stats and isinstance(stats['max'], list) else stats.get('max', 'N/A')
+                                    mean_val = np.mean(stats.get('mean', [0])) if 'mean' in stats and isinstance(stats['mean'], list) else stats.get('mean', 'N/A')
+                                    std_val = np.mean(stats.get('std_dev', [0])) if 'std_dev' in stats and isinstance(stats['std_dev'], list) else stats.get('std', 'N/A')
+                                    zeros_percent = np.mean(stats.get('zeros_percent', [0])) if 'zeros_percent' in stats and isinstance(stats['zeros_percent'], list) else stats.get('zeros_percent', 'N/A')
+                                    
+                                    f.write(f"Min value: {min_val}\n")
+                                    f.write(f"Max value: {max_val}\n")
+                                    f.write(f"Mean value: {mean_val}\n")
+                                    f.write(f"Standard deviation: {std_val}\n")
+                                    f.write(f"Zero values: {zeros_percent}%\n\n")
                                     
                                     if stats.get('warnings'):
                                         f.write("Warnings:\n")
@@ -265,10 +286,15 @@ def clean_data_view(request):
                                             
                                     if 'min_scaled' in stats:
                                         f.write("\nAfter auto-scaling:\n")
-                                        f.write(f"Min value: {stats.get('min_scaled', 'N/A')}\n")
-                                        f.write(f"Max value: {stats.get('max_scaled', 'N/A')}\n")
-                                        f.write(f"Mean value: {stats.get('mean_scaled', 'N/A')}\n")
-                                        f.write(f"Standard deviation: {stats.get('std_scaled', 'N/A')}\n")
+                                        min_scaled = np.min(stats.get('min_scaled', [0])) if isinstance(stats['min_scaled'], list) else stats.get('min_scaled', 'N/A')
+                                        max_scaled = np.max(stats.get('max_scaled', [0])) if isinstance(stats['max_scaled'], list) else stats.get('max_scaled', 'N/A')
+                                        mean_scaled = np.mean(stats.get('mean_scaled', [0])) if isinstance(stats['mean_scaled'], list) else stats.get('mean_scaled', 'N/A')
+                                        std_scaled = np.mean(stats.get('std_scaled', [0])) if isinstance(stats['std_scaled'], list) else stats.get('std_scaled', 'N/A')
+                                        
+                                        f.write(f"Min value: {min_scaled}\n")
+                                        f.write(f"Max value: {max_scaled}\n")
+                                        f.write(f"Mean value: {mean_scaled}\n")
+                                        f.write(f"Standard deviation: {std_scaled}\n")
                                 
                                 zipf.write(report_path, os.path.basename(report_path))
                         
@@ -302,13 +328,19 @@ def clean_data_view(request):
                                     zipf.write(result['transformer_test_file'], os.path.basename(result['transformer_test_file']))
                                     
                                 result['transformer_test_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(result['transformer_test_file'])}"
+                        
+                        # Add zip file download link
+                        result['zip_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(zip_filename)}"
 
                         # Prepare data for the clean_complete.html template
                         # Read a sample of the cleaned data for preview
                         data_preview = []
                         try:
+                            # Get the path to the cleaned file
+                            clean_file_path = output_path
+                            
                             # Read the first 10 rows of the cleaned file
-                            with open(output_file_path, 'r') as f:
+                            with open(clean_file_path, 'r') as f:
                                 reader = csv.reader(f)
                                 headers = next(reader)  # Get header row
                                 
@@ -343,7 +375,7 @@ def clean_data_view(request):
                                     has_event = False
                                     
                                     if event_cols:
-                                        has_event = any(row[col].lower() == 'true' for col in event_cols if col < len(row))
+                                        has_event = any(col < len(row) and row[col].lower() == 'true' for col in event_cols)
                                     elif word_label_col >= 0:
                                         # If we have word_label column, check if it's not 'sil'
                                         if word_label_col < len(row) and row[word_label_col] != 'sil':
@@ -359,7 +391,10 @@ def clean_data_view(request):
                                     # Add sensor values
                                     for col in sensor_cols:
                                         if col < len(row) and row[col] and row[col] != 'nan':
-                                            preview_row['values'].append(int(float(row[col])))
+                                            try:
+                                                preview_row['values'].append(float(row[col]))
+                                            except ValueError:
+                                                preview_row['values'].append(0)
                                         else:
                                             preview_row['values'].append(0)
                                     
@@ -373,16 +408,9 @@ def clean_data_view(request):
                             traceback.print_exc()
                             data_preview = []
                         
-                        # Add file URLs for downloading
-                        result['output_file_name'] = os.path.basename(output_file_path)
-                        result['output_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(output_file_path)}"
-
-                        # For any train/test files:
-                        if result.get('train_file'):
-                            result['train_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(result['train_file'])}"
-
-                        if result.get('test_file'):
-                            result['test_file_url'] = f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(result['test_file'])}"
+                        # Add filter code information from the filename
+                        if 'output_file_name' in result:
+                            result['filter_code'] = parse_processed_filename(result['output_file_name'])
                         
                         # Fix plots URLs if they exist
                         if plots:
@@ -524,6 +552,8 @@ def download_file_view(request, filepath):
                 response['Content-Type'] = 'application/octet-stream'
             elif file_ext == '.zip':
                 response['Content-Type'] = 'application/zip'
+            elif file_ext == '.json':
+                response['Content-Type'] = 'application/json'
             else:
                 response['Content-Type'] = 'application/octet-stream'
             

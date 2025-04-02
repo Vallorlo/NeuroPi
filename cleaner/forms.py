@@ -16,7 +16,7 @@ class CleaningForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'form-control'})
     )
 
-    # Column selection and dropping - MODIFIED to use CharField instead of MultipleChoiceField
+    # Column selection and dropping
     columns_to_drop = forms.CharField(
         required=False,
         label="Columns to Drop",
@@ -24,7 +24,7 @@ class CleaningForm(forms.Form):
         help_text="Select columns to exclude from processing"
     )
 
-    # NEW: Advanced data organization
+    # Advanced data organization
     create_train_test_split = forms.BooleanField(
         required=False, 
         label='Create Train/Test Split', 
@@ -186,7 +186,7 @@ class CleaningForm(forms.Form):
         widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'})
     )
     
-    # NEW: Channel selection
+    # Channel selection
     include_channels = forms.MultipleChoiceField(
         required=False,
         label="Include Channels",
@@ -210,7 +210,7 @@ class CleaningForm(forms.Form):
         widget=forms.SelectMultiple(attrs={'class': 'form-control select2', 'size': '6'})
     )
     
-    # NEW: Feature engineering options
+    # Feature engineering options
     compute_band_powers = forms.BooleanField(
         required=False,
         label="Compute Frequency Band Powers",
@@ -239,56 +239,6 @@ class CleaningForm(forms.Form):
         min_value=1.0,
         max_value=10.0,
         widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.5'})
-    )
-    prepare_for_transformer = forms.BooleanField(
-        required=False, 
-        label='Optimize for CNN-Transformer', 
-        initial=False,
-        help_text='Apply preprocessing specifically for CNN-Transformer model',
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
-
-    use_structured_format = forms.BooleanField(
-        required=False, 
-        label='Use Structured Format', 
-        initial=True,
-        help_text='Create a structured format with clear word labels (recommended)',
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
-
-    sequence_length = forms.IntegerField(
-        required=False, 
-        label='Sequence Length', 
-        initial=40,
-        min_value=10, 
-        max_value=100,
-        help_text='Length of sequence in samples for CNN-Transformer (typically 30-60)',
-        widget=forms.NumberInput(attrs={'class': 'form-control'})
-    )
-
-    min_segment_length = forms.IntegerField(
-        required=False, 
-        label='Minimum Segment Length', 
-        initial=20,
-        min_value=5, 
-        max_value=50,
-        help_text='Minimum length of a valid segment in samples',
-        widget=forms.NumberInput(attrs={'class': 'form-control'})
-    )
-    
-    balance_classes = forms.BooleanField(
-        required=False, 
-        label='Balance Classes', 
-        initial=False,
-        help_text='Create a balanced dataset with equal samples per class',
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
-    regenerate_event_columns = forms.BooleanField(
-    required=False, 
-    label='Regenerate Event Columns in Transformer', 
-    initial=False,
-    help_text='If unchecked, dropped event columns will not be recreated in the transformer dataset',
-    widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
 
     def __init__(self, *args, **kwargs):
@@ -324,7 +274,6 @@ class CleaningForm(forms.Form):
         
         processed_datasets = []
         combined_datasets = []
-        transformer_datasets = []
         train_datasets = []
         test_datasets = []
         other_datasets = []
@@ -334,31 +283,6 @@ class CleaningForm(forms.Form):
             for item in os.listdir(trials_data_path):
                 item_path = os.path.join(trials_data_path, item)
                 if os.path.isdir(item_path) and item.startswith('processed_'):
-
-                    transformer_file = os.path.join(item_path, 'transformer_dataset.csv')
-                    if os.path.exists(transformer_file):
-                        transformer_datasets.append((
-                            transformer_file, 
-                            f'🤖 {item}/transformer_dataset.csv'
-                        ))
-                    
-                    # Check for transformer train dataset
-                    transformer_train_file = os.path.join(item_path, 'transformer_train_dataset.csv')
-                    if os.path.exists(transformer_train_file):
-                        transformer_datasets.append((
-                            transformer_train_file, 
-                            f'🤖 {item}/transformer_train_dataset.csv'
-                        ))
-                    
-                    # Check for transformer test dataset
-                    transformer_test_file = os.path.join(item_path, 'transformer_test_dataset.csv')
-                    if os.path.exists(transformer_test_file):
-                        transformer_datasets.append((
-                            transformer_test_file, 
-                            f'🤖 {item}/transformer_test_dataset.csv'
-                        ))
-
-
                     # Check for combined dataset in this processed directory
                     combined_file = os.path.join(item_path, 'combined_eeg_dataset.csv')
                     if os.path.exists(combined_file):
@@ -388,10 +312,7 @@ class CleaningForm(forms.Form):
                     filepath = os.path.join(trials_data_path, filename)
                     
                     # Categorize the file
-                    if 'transformer' in filename.lower():
-                        # Add transformer datasets to their own category
-                        transformer_datasets.append((filepath, f'🤖 {filename}'))
-                    elif 'combined' in filename.lower() or 'dataset' in filename.lower():
+                    if 'combined' in filename.lower() or 'dataset' in filename.lower():
                         combined_datasets.append((filepath, f'📊 {filename}'))
                     elif 'train' in filename.lower():
                         train_datasets.append((filepath, f'🧠 {filename}'))
@@ -412,7 +333,6 @@ class CleaningForm(forms.Form):
                                 choices.append((filepath, f'🧹 {item}/{file}'))
         
         # Add the datasets in order of importance
-        choices.extend(transformer_datasets)
         choices.extend(processed_datasets)
         choices.extend(combined_datasets)
         choices.extend(train_datasets)  
@@ -424,7 +344,7 @@ class CleaningForm(forms.Form):
     def clean(self):
         cleaned_data = super().clean()
 
-        # Handle columns_to_drop - NEW way of handling it
+        # Handle columns_to_drop
         columns_to_drop = self.data.getlist('columns_to_drop')
         if columns_to_drop:
             cleaned_data['columns_to_drop'] = columns_to_drop
@@ -495,22 +415,5 @@ class CleaningForm(forms.Form):
                 self.add_error('outlier_threshold', "Outlier threshold is required when removing outliers")
             elif outlier_threshold < 1.0:
                 self.add_error('outlier_threshold', "Outlier threshold must be at least 1.0")
-
-        # Validate transformer parameters
-        if cleaned_data.get('prepare_for_transformer'):
-            sequence_length = cleaned_data.get('sequence_length')
-            min_segment_length = cleaned_data.get('min_segment_length')
-            
-            if sequence_length is None:
-                self.add_error('sequence_length', "Sequence length is required for CNN-Transformer preparation")
-            elif sequence_length < 10:
-                self.add_error('sequence_length', "Sequence length must be at least 10")
-                
-            if min_segment_length is None:
-                self.add_error('min_segment_length', "Minimum segment length is required for CNN-Transformer preparation")
-            elif min_segment_length < 5:
-                self.add_error('min_segment_length', "Minimum segment length must be at least 5")
-            elif min_segment_length > sequence_length:
-                self.add_error('min_segment_length', "Minimum segment length cannot be greater than sequence length")
 
         return cleaned_data

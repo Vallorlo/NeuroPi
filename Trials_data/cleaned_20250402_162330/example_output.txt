@@ -1,0 +1,81 @@
+POST request received
+Form is valid
+Columns to drop: ['account_event', 'goodbye_event', 'hello_event', 'no_event', 'yes_event', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt']
+Output file path: C:\Users\Admin\Documents\GitHub\NeuroPi\NeuroPi\Trials_data\cleaned_20250402_162330\cleaned_eeg_data.csv
+Columns to drop: ['account_event', 'goodbye_event', 'hello_event', 'no_event', 'yes_event', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt']
+Event columns to drop: ['account_event', 'goodbye_event', 'hello_event', 'no_event', 'yes_event']
+Other columns to drop: ['COUNTER', 'participant_id', 'word', 'stage', 'attempt']
+Cleaning EEG data: C:\Users\Admin\Documents\GitHub\NeuroPi\NeuroPi\Trials_data\processed_20250401_160234\combined_eeg_dataset.csv -> C:\Users\Admin\Documents\GitHub\NeuroPi\NeuroPi\Trials_data\cleaned_20250402_162330\cleaned_eeg_data.csv
+Dataframe shape: (205812, 26)
+Original event columns: 5
+Dropping columns: ['account_event', 'goodbye_event', 'hello_event', 'no_event', 'yes_event', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt']
+Dropping 5 event columns: ['account_event', 'goodbye_event', 'hello_event', 'no_event', 'yes_event']
+Dropping 5 other columns: ['COUNTER', 'participant_id', 'word', 'stage', 'attempt']
+Dataframe shape after dropping columns: (205812, 16)
+Remaining event columns after dropping: 0
+Sensor columns: ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+Event columns: []
+Filtering to include only specified channels: ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+Checking signal quality...
+Signal statistics: Min=812, Max=15299, Mean=8161.20, StdDev=73.07, Zeros=0.00%
+Applying filters based on configuration...
+Applying ICA with method: picard
+Applying ICA with method: picard
+Creating RawArray with float64 data, n_channels=14, n_times=205812
+    Range : 0 ... 205811 =      0.000 ...  1607.898 secs
+Ready.
+RawArray created successfully.
+Pre-ICA SNR range: 0.91 to 9.86 dB
+Filtering raw data in 1 contiguous segment
+Setting up band-pass filter from 4 - 50 Hz
+
+FIR filter parameters
+---------------------
+Designing a one-pass, zero-phase, non-causal bandpass filter:
+- Windowed time-domain design (firwin) method
+- Hamming window with 0.0194 passband ripple and 53 dB stopband attenuation
+- Lower passband edge: 4.00
+- Lower transition bandwidth: 2.00 Hz (-6 dB cutoff frequency: 3.00 Hz)
+- Upper passband edge: 50.00 Hz
+- Upper transition bandwidth: 12.50 Hz (-6 dB cutoff frequency: 56.25 Hz)
+- Filter length: 213 samples (1.664 s)
+
+Fitting ICA to data using 14 channels (please be patient, this may take a while)
+Selecting by number: 8 components
+Fitting ICA took 4.1s.
+ICA fit successful.
+Unexpected error in apply_mne_ica: No EOG channel(s) found
+Normalizing data (z-score)...
+Generating diagnostic plots...
+Extracting speech-related features...
+Found 47230 speech events from word_labels
+Speech features saved to: C:\Users\Admin\Documents\GitHub\NeuroPi\NeuroPi\Trials_data\cleaned_20250402_162330\speech_features.npz
+Computing frequency band powers...
+Band powers computed and added to the dataframe
+Cleaned data saved to: C:\Users\Admin\Documents\GitHub\NeuroPi\NeuroPi\Trials_data\cleaned_20250402_162330\cleaned_eeg_data_BP4.0-50.0o5_N50.0_ICA-pic_Norm_Split_T20_Str_S2556_20250402_162336.csv
+Processing configuration saved to: C:\Users\Admin\Documents\GitHub\NeuroPi\NeuroPi\Trials_data\cleaned_20250402_162330\processing_config.json
+Creating train-test split...
+Identified 1311 continuous word sequences
+Found 655 non-silence sequences
+Word distribution: account: 128, goodbye: 132, hello: 147, no: 121, yes: 127
+Word 'account': 103 sequences in train, 25 sequences in test
+Word 'goodbye': 106 sequences in train, 26 sequences in test
+Word 'hello': 118 sequences in train, 29 sequences in test
+Word 'no': 97 sequences in train, 24 sequences in test
+Word 'yes': 102 sequences in train, 25 sequences in test
+Distributing 656 silence sequences
+Train set: 165580 rows
+Test set: 40232 rows
+Train dataset saved to: C:\Users\Admin\Documents\GitHub\NeuroPi\NeuroPi\Trials_data\cleaned_20250402_162330\train_cleaned_eeg_data_BP4.0-50.0o5_N50.0_ICA-pic_Norm_Split_T20_Str_S2556_20250402_162336.csv (165580 rows)
+Test dataset saved to: C:\Users\Admin\Documents\GitHub\NeuroPi\NeuroPi\Trials_data\cleaned_20250402_162330\test_cleaned_eeg_data_BP4.0-50.0o5_N50.0_ICA-pic_Norm_Split_T20_Str_S2556_20250402_162336.csv (40232 rows)
+clean_eeg_data returned: {'status': 'success', 'message': 'Data cleaned and saved successfully! Note: Low signal-to-noise ratio detected in some channels.', 'output_file_name': 'cleaned_eeg_data_BP4.0-50.0o5_N50.0_ICA-pic_Norm_Split_T20_Str_S2556_20250402_162336.csv', 'output_file_url': '/cleaner/download/cleaned_20250402_162330/cleaned_eeg_data_BP4.0-50.0o5_N50.0_ICA-pic_Norm_Split_T20_Str_S2556_20250402_162336.csv', 'plots': {'psd_plot': 'C:\\Users\\Admin\\Documents\\GitHub\\NeuroPi\\NeuroPi\\Trials_data\\cleaned_20250402_162330\\diagnostics\\power_spectrum.png', 'signal_plot': 'C:\\Users\\Admin\\Documents\\GitHub\\NeuroPi\\NeuroPi\\Trials_data\\cleaned_20250402_162330\\diagnostics\\time_course.png'}, 'features': True, 'band_powers': True, 'train_test_split': True, 'train_file': 'C:\\Users\\Admin\\Documents\\GitHub\\NeuroPi\\NeuroPi\\Trials_data\\cleaned_20250402_162330\\train_cleaned_eeg_data_BP4.0-50.0o5_N50.0_ICA-pic_Norm_Split_T20_Str_S2556_20250402_162336.csv', 'test_file': 'C:\\Users\\Admin\\Documents\\GitHub\\NeuroPi\\NeuroPi\\Trials_data\\cleaned_20250402_162330\\test_cleaned_eeg_data_BP4.0-50.0o5_N50.0_ICA-pic_Norm_Split_T20_Str_S2556_20250402_162336.csv', 'signal_stats': {'std_dev': array([149.99436848,  31.35020887, 154.51155432,  48.08353317,
+       125.86818876,  63.63013498,  50.75354502,  28.9545844 ,
+        80.67915998,  52.9030863 , 135.95326178,  33.27160902,
+        17.96672223,  49.06424637]), 'snr': array([13.25256554,  2.98250368, 11.73146403,  2.98489081, 10.97361491,
+        7.54732687,  2.73004755,  4.23024188,  2.67354761,  3.44491543,
+       15.16491306,  2.41201774,  6.10587215,  1.76754745]), 'min': array([ 812, 7832, 1481, 7662,  954, 6082, 6883, 7646, 6464, 6786, 7108,
+       6901, 7755, 7566], dtype=int64), 'max': array([ 9844,  8515, 15299,  8606, 12264,  9414,  8889,  8667, 10100,
+        8908, 14589,  8828,  8664,  8806], dtype=int64), 'mean': array([8163.65311061, 8165.18734087, 8165.9230074 , 8164.62532311,
+       8164.93845354, 8165.40736206, 8164.26318679, 8164.79674169,
+       8162.86097992, 8165.38951567, 8164.68486288, 8164.19627621,
+       8163.03613978, 8117.7762424 ]), 'zeros_percent': array([0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]), 'warnings': ['Low signal-to-noise ratio detected in some channels.']}, 'channels_processed': ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4'], 'total_samples': 205812, 'event_types': [], 'zip_file_url': '/cleaner/download/cleaned_20250402_162330/cleaned_data_package.zip', 'train_file_url': '/cleaner/download/cleaned_20250402_162330/train_cleaned_eeg_data_BP4.0-50.0o5_N50.0_ICA-pic_Norm_Split_T20_Str_S2556_20250402_162336.csv', 'test_file_url': '/cleaner/download/cleaned_20250402_162330/test_cleaned_eeg_data_BP4.0-50.0o5_N50.0_ICA-pic_Norm_Split_T20_Str_S2556_20250402_162336.csv'}

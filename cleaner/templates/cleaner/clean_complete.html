@@ -14,6 +14,145 @@
                         <p>{{ message }}</p>
                     </div>
                     
+                    <!-- Processing Configuration -->
+                    {% if result.processing_config %}
+                    <div class="card mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="card-title mb-0">Processing Configuration</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">Filter Settings</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <ul class="list-group list-group-flush">
+                                                {% with filter_config=result.processing_config.filter_config %}
+                                                    {% if filter_config.apply_bandpass %}
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <span><i class="bi bi-filter me-2"></i>Bandpass Filter</span>
+                                                            <span class="badge bg-primary rounded-pill">{{ filter_config.lowcut|floatformat:1 }}-{{ filter_config.highcut|floatformat:1 }}Hz (Order: {{ filter_config.bandpass_order }})</span>
+                                                        </li>
+                                                    {% elif filter_config.apply_highpass %}
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <span><i class="bi bi-filter me-2"></i>Highpass Filter</span>
+                                                            <span class="badge bg-primary rounded-pill">{{ filter_config.highpass_cutoff|floatformat:1 }}Hz (Order: {{ filter_config.highpass_order }})</span>
+                                                        </li>
+                                                    {% elif filter_config.apply_lowpass %}
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <span><i class="bi bi-filter me-2"></i>Lowpass Filter</span>
+                                                            <span class="badge bg-primary rounded-pill">{{ filter_config.lowpass_cutoff|floatformat:1 }}Hz (Order: {{ filter_config.lowpass_order }})</span>
+                                                        </li>
+                                                    {% else %}
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <span><i class="bi bi-filter me-2"></i>Frequency Filter</span>
+                                                            <span class="badge bg-secondary rounded-pill">None</span>
+                                                        </li>
+                                                    {% endif %}
+                                                
+                                                    {% if filter_config.apply_notch %}
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <span><i class="bi bi-slash-circle me-2"></i>Notch Filter</span>
+                                                            <span class="badge bg-primary rounded-pill">{{ filter_config.notch_freq|floatformat:1 }}Hz (Q: {{ filter_config.notch_quality }})</span>
+                                                        </li>
+                                                    {% endif %}
+                                                
+                                                    {% if filter_config.apply_ica %}
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <span><i class="bi bi-eyeglasses me-2"></i>ICA Artifact Removal</span>
+                                                            <span class="badge bg-primary rounded-pill">{{ filter_config.ica_method }}</span>
+                                                        </li>
+                                                    {% endif %}
+                                                
+                                                    {% if filter_config.normalize_data %}
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <span><i class="bi bi-distribute-vertical me-2"></i>Normalization</span>
+                                                            <span class="badge bg-primary rounded-pill">Z-score</span>
+                                                        </li>
+                                                    {% endif %}
+                                                
+                                                    {% if filter_config.remove_outliers %}
+                                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                            <span><i class="bi bi-scissors me-2"></i>Outlier Removal</span>
+                                                            <span class="badge bg-primary rounded-pill">Threshold: {{ filter_config.outlier_threshold|floatformat:1 }}</span>
+                                                        </li>
+                                                    {% endif %}
+                                                {% endwith %}
+                                            </ul>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    {% with transformer_config=result.processing_config.transformer_config %}
+                                    {% if transformer_config.prepare_for_transformer %}
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">CNN-Transformer Configuration</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><i class="bi bi-bezier me-2"></i>Sequence Length</span>
+                                                    <span class="badge bg-primary rounded-pill">{{ transformer_config.sequence_length }} samples</span>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><i class="bi bi-segmented-nav me-2"></i>Min Segment Length</span>
+                                                    <span class="badge bg-primary rounded-pill">{{ transformer_config.min_segment_length }} samples</span>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><i class="bi bi-file-earmark-text me-2"></i>Structured Format</span>
+                                                    <span class="badge {% if transformer_config.use_structured_format %}bg-success{% else %}bg-warning{% endif %} rounded-pill">
+                                                        {% if transformer_config.use_structured_format %}Enabled{% else %}Disabled{% endif %}
+                                                    </span>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><i class="bi bi-distribute-horizontal me-2"></i>Class Balancing</span>
+                                                    <span class="badge {% if transformer_config.balance_classes %}bg-success{% else %}bg-warning{% endif %} rounded-pill">
+                                                        {% if transformer_config.balance_classes %}Enabled{% else %}Disabled{% endif %}
+                                                    </span>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% endwith %}
+                                    
+                                    {% with split_config=result.processing_config.split_config %}
+                                    {% if split_config.create_train_test_split %}
+                                    <div class="card mb-3">
+                                        <div class="card-header bg-light">
+                                            <h6 class="mb-0">Train-Test Split Configuration</h6>
+                                        </div>
+                                        <div class="card-body">
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><i class="bi bi-pie-chart me-2"></i>Test Size</span>
+                                                    <span class="badge bg-primary rounded-pill">{{ split_config.test_size|floatformat:2 }}</span>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><i class="bi bi-layers me-2"></i>Stratification</span>
+                                                    <span class="badge {% if split_config.stratify_by_word %}bg-success{% else %}bg-warning{% endif %} rounded-pill">
+                                                        {% if split_config.stratify_by_word %}By Word{% else %}Random{% endif %}
+                                                    </span>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><i class="bi bi-dice-6 me-2"></i>Random Seed</span>
+                                                    <span class="badge bg-primary rounded-pill">{{ split_config.random_state }}</span>
+                                                </li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    {% endwith %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
                     <!-- Signal Statistics -->
                     <div class="row mt-4">
                         <div class="col-md-6">
@@ -179,7 +318,7 @@
                                         <tr>
                                             <td>{{ row.timestamp|floatformat:4 }}</td>
                                             {% for value in row.values|slice:":8" %}
-                                                <td>{{ value }}</td>
+                                                <td>{{ value|floatformat:2 }}</td>
                                             {% endfor %}
                                             {% if result.event_types %}
                                                 <td><span class="badge {% if row.event %}bg-success{% else %}bg-secondary{% endif %}">{% if row.event %}Yes{% else %}No{% endif %}</span></td>
@@ -205,6 +344,17 @@
                         </div>
                         <div class="card-body">
                             <div class="list-group">
+                                {% if result.zip_file_url %}
+                                <a href="{{ result.zip_file_url }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center list-group-item-success">
+                                    <div>
+                                        <i class="bi bi-file-earmark-zip me-2"></i> 
+                                        <strong>Complete Data Package</strong>
+                                        <span class="text-muted ms-2">All files, configuration and metadata in one ZIP</span>
+                                    </div>
+                                    <span class="badge bg-success rounded-pill">Download All</span>
+                                </a>
+                                {% endif %}
+                            
                                 <a href="{{ result.output_file_url }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
                                     <div>
                                         <i class="bi bi-file-earmark-spreadsheet me-2"></i> 

@@ -38,7 +38,7 @@
                                         <div class="mb-3">
                                             <label for="{{ form.output_file_name.id_for_label }}" class="form-label">{{ form.output_file_name.label }}</label>
                                             {{ form.output_file_name }}
-                                            <div class="form-text">Name for the cleaned output file.</div>
+                                            <div class="form-text">Base name for the output file. Processing parameters will be appended automatically.</div>
                                         </div>
                                         
                                         <div class="mb-3">
@@ -89,6 +89,9 @@
                                                         <label for="{{ form.bandpass_order.id_for_label }}" class="form-label">{{ form.bandpass_order.label }}</label>
                                                         {{ form.bandpass_order }}
                                                     </div>
+                                                </div>
+                                                <div class="form-text">
+                                                    <i class="bi bi-info-circle"></i> Recommended for speech: 4-50 Hz
                                                 </div>
                                             </div>
                                         </div>
@@ -156,6 +159,9 @@
                                                     <div class="col-md-6">
                                                         <label for="{{ form.notch_freq.id_for_label }}" class="form-label">{{ form.notch_freq.label }}</label>
                                                         {{ form.notch_freq }}
+                                                        <div class="form-text">
+                                                            <i class="bi bi-lightbulb"></i> Use 50Hz (Europe/Asia) or 60Hz (US)
+                                                        </div>
                                                     </div>
                                                     <div class="col-md-6">
                                                         <label for="{{ form.notch_quality.id_for_label }}" class="form-label">{{ form.notch_quality.label }}</label>
@@ -163,70 +169,6 @@
                                                     </div>
                                                 </div>
                                             </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div class="card mt-4 shadow">
-                                <div class="card-header bg-primary text-white">
-                                    <h5 class="mb-0">CNN-Transformer Optimization</h5>
-                                </div>
-                                <div class="card-body">
-                                    <div class="alert alert-info">
-                                        <i class="bi bi-info-circle me-2"></i> 
-                                        These options optimize the data specifically for CNN-Transformer models, creating a structured format that improves training performance.
-                                    </div>
-                                    
-                                    <div class="form-check mb-3">
-                                        {{ form.prepare_for_transformer }}
-                                        <label class="form-check-label" for="{{ form.prepare_for_transformer.id_for_label }}">
-                                            {{ form.prepare_for_transformer.label }}
-                                        </label>
-                                        <small class="form-text text-muted d-block">{{ form.prepare_for_transformer.help_text }}</small>
-                                    </div>
-                                    
-                                    <div id="transformerOptions" class="ms-4">
-                                        <div class="form-check mb-3">
-                                            {{ form.use_structured_format }}
-                                            <label class="form-check-label" for="{{ form.use_structured_format.id_for_label }}">
-                                                {{ form.use_structured_format.label }}
-                                            </label>
-                                            <small class="form-text text-muted d-block">{{ form.use_structured_format.help_text }}</small>
-                                        </div>
-                                        
-                                        <div class="form-check mb-3">
-                                            {{ form.balance_classes }}
-                                            <label class="form-check-label" for="{{ form.balance_classes.id_for_label }}">
-                                                {{ form.balance_classes.label }}
-                                            </label>
-                                            <small class="form-text text-muted d-block">{{ form.balance_classes.help_text }}</small>
-                                        </div>
-                                        
-                                        <div class="row">
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label for="{{ form.sequence_length.id_for_label }}" class="form-label">{{ form.sequence_length.label }}</label>
-                                                    {{ form.sequence_length }}
-                                                    <small class="form-text text-muted d-block">{{ form.sequence_length.help_text }}</small>
-                                                </div>
-                                            </div>
-                                            <div class="col-md-6">
-                                                <div class="mb-3">
-                                                    <label for="{{ form.min_segment_length.id_for_label }}" class="form-label">{{ form.min_segment_length.label }}</label>
-                                                    {{ form.min_segment_length }}
-                                                    <small class="form-text text-muted d-block">{{ form.min_segment_length.help_text }}</small>
-                                                </div>
-                                            </div>
-                                        </div>
-                                        
-                                        <div class="alert alert-warning">
-                                            <i class="bi bi-exclamation-triangle me-2"></i>
-                                            <strong>Note:</strong> When using CNN-Transformer optimization, it's recommended to also:
-                                            <ul>
-                                                <li>Apply bandpass filtering (4-50Hz)</li>
-                                                <li>Enable normalization</li>
-                                                <li>Consider applying ICA for artifact removal</li>
-                                            </ul>
                                         </div>
                                     </div>
                                 </div>
@@ -256,6 +198,9 @@
                                                     <div class="col-md-6">
                                                         <label for="{{ form.ica_method.id_for_label }}" class="form-label">{{ form.ica_method.label }}</label>
                                                         {{ form.ica_method }}
+                                                        <div class="form-text">
+                                                            <i class="bi bi-info-circle"></i> Infomax is recommended for speech tasks
+                                                        </div>
                                                     </div>
                                                     <div class="col-md-6">
                                                         <label for="{{ form.random_seed.id_for_label }}" class="form-label">{{ form.random_seed.label }}</label>
@@ -305,7 +250,7 @@
                                             <label class="form-check-label" for="{{ form.normalize_data.id_for_label }}">
                                                 {{ form.normalize_data.label }}
                                             </label>
-                                            <div class="form-text">Standardize each channel to zero mean and unit variance</div>
+                                            <div class="form-text">Standardize each channel to zero mean and unit variance. <strong>Recommended for most models.</strong></div>
                                         </div>
                                         
                                         <div class="form-check mb-3">
@@ -315,19 +260,15 @@
                                             </label>
                                             <div class="form-text">Calculate power in delta, theta, alpha, beta, and gamma bands</div>
                                         </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- Speech Feature Extraction Section -->
-                            <div class="accordion-item">
-                                <h2 class="accordion-header" id="headingFeatures">
-                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFeatures" aria-expanded="false" aria-controls="collapseFeatures">
-                                        Speech Feature Extraction
-                                    </button>
-                                </h2>
-                                <div id="collapseFeatures" class="accordion-collapse collapse" aria-labelledby="headingFeatures">
-                                    <div class="accordion-body">
+
+                                        <div class="form-check mb-3">
+                                            {{ form.generate_plots }}
+                                            <label class="form-check-label" for="{{ form.generate_plots.id_for_label }}">
+                                                {{ form.generate_plots.label }}
+                                            </label>
+                                            <div class="form-text">Create time-series and spectral plots of the data</div>
+                                        </div>
+                                        
                                         <div class="form-check mb-3">
                                             {{ form.extract_features }}
                                             <label class="form-check-label" for="{{ form.extract_features.id_for_label }}">
@@ -348,14 +289,6 @@
                                                     </div>
                                                 {% endfor %}
                                             </div>
-                                        </div>
-                                        
-                                        <div class="form-check mb-3">
-                                            {{ form.generate_plots }}
-                                            <label class="form-check-label" for="{{ form.generate_plots.id_for_label }}">
-                                                {{ form.generate_plots.label }}
-                                            </label>
-                                            <div class="form-text">Create time-series and spectral plots of the data</div>
                                         </div>
                                     </div>
                                 </div>
@@ -404,10 +337,29 @@
                                 </div>
                             </div>
                         </div>
+                        
+                        <div class="alert alert-info mt-4">
+                            <h5><i class="bi bi-info-circle me-2"></i>Model-Specific Processing</h5>
+                            <p>This cleaner focuses on basic signal processing and cleaning. For model-specific dataset preparation:</p>
+                            <ul>
+                                <li><strong>CNN-Transformer dataset creation</strong> is available in the EEG Transformer app</li>
+                                <li><strong>RNN sequence preparation</strong> is available in the RNN module</li>
+                            </ul>
+                            <p>This separation ensures each model gets exactly the data format it needs.</p>
+                        </div>
                     </div>
                 </div>
                 
                 <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle me-2"></i>
+                            <strong>Processing Configuration:</strong> Filtering and processing parameters will be encoded in the output filename and stored in a configuration file. This ensures the same processing can be applied during model training and prediction.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mt-3">
                     <div class="col-12 d-flex justify-content-center">
                         <button type="submit" class="btn btn-primary btn-lg" id="cleanButton">
                             <i class="bi bi-gear-fill me-2"></i>Clean and Process Data
@@ -456,8 +408,6 @@
         const inputFile = document.getElementById('{{ form.input_file.id_for_label }}');
         const columnsToDrop = document.getElementById('{{ form.columns_to_drop.id_for_label }}');
         const columnsInfo = document.getElementById('columnsInfo');
-        const prepareTransformer = document.getElementById('{{ form.prepare_for_transformer.id_for_label }}');
-        const transformerOptions = document.getElementById('transformerOptions');
         
         const bandpassSettings = document.querySelector('.bandpass-settings');
         const highpassSettings = document.querySelector('.highpass-settings');
@@ -475,7 +425,6 @@
             icaSettings.style.display = applyIca.checked ? 'block' : 'none';
             outlierSettings.style.display = removeOutliers.checked ? 'block' : 'none';
             trainTestSettings.style.display = createTrainTest.checked ? 'block' : 'none';
-            transformerOptions.style.display = prepareTransformer.checked ? 'block' : 'none';
             
             if (applyBandpass.checked) {
                 applyHighpass.disabled = true;
@@ -499,10 +448,10 @@
         applyIca.addEventListener('change', toggleVisibility);
         removeOutliers.addEventListener('change', toggleVisibility);
         createTrainTest.addEventListener('change', toggleVisibility);
-        prepareTransformer.addEventListener('change', toggleVisibility);
         
         toggleVisibility();
         protectEssentialColumns();
+        
         // Function to get columns from the selected file
         function getColumnsFromFile() {
             const selectedFile = inputFile.value;
@@ -571,6 +520,9 @@
                     // Set info text
                     const totalColumns = data.columns ? data.columns.length : 0;
                     columnsInfo.textContent = `(${totalColumns} columns found)`;
+                    
+                    // Refresh protection for essential columns
+                    protectEssentialColumns();
                     
                     // Re-initialize select2 if available
                     if (typeof $.fn.select2 !== 'undefined') {
@@ -650,7 +602,6 @@
             }
         });
 
-
         // Function to disable essential columns in the dropdown
         function protectEssentialColumns() {
             // Essential columns that should not be dropped
@@ -673,7 +624,6 @@
                 $(columnsToDrop).select2();
             }
         }
-
     });
 </script>
 {% endblock %}

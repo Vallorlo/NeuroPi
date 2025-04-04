@@ -336,8 +336,80 @@
                                     </div>
                                 </div>
                             </div>
+
+                            <div class="accordion-item">
+                                <h2 class="accordion-header" id="headingClassBalance">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
+                                            data-bs-target="#collapseClassBalance" aria-expanded="false" aria-controls="collapseClassBalance">
+                                        Class Balancing
+                                    </button>
+                                </h2>
+                                <div id="collapseClassBalance" class="accordion-collapse collapse" aria-labelledby="headingClassBalance">
+                                    <div class="accordion-body">
+                                        <div class="card mb-3">
+                                            <div class="card-header">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="checkbox" id="balanceClasses" name="balance_classes">
+                                                    <label class="form-check-label" for="balanceClasses">
+                                                        Balance Word Classes
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="card-body class-balance-settings">
+                                                <div class="alert alert-info">
+                                                    <i class="bi bi-info-circle me-2"></i>
+                                                    <strong>Why balance classes?</strong> EEG datasets typically contain much more silence ('sil') 
+                                                    than actual word data. This imbalance can cause models to overfit and predict only silence.
+                                                    Balancing ensures a more even distribution of classes for better model training.
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <label for="balanceMethod" class="form-label">Balancing Method</label>
+                                                    <select class="form-select" id="balanceMethod" name="balance_method">
+                                                        <option value="downsample">Downsample (reduce majority class)</option>
+                                                        <option value="upsample">Upsample (increase minority classes)</option>
+                                                        <option value="hybrid">Hybrid (balance all classes)</option>
+                                                    </select>
+                                                    <div class="form-text">
+                                                        <span class="fw-bold">Downsample:</span> Reduces silence samples (preserves data quality but loses samples)<br>
+                                                        <span class="fw-bold">Upsample:</span> Increases non-silence samples by duplicating (keeps all data but may introduce repetition)<br>
+                                                        <span class="fw-bold">Hybrid:</span> Combination of both methods for optimal balance
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <label for="balanceRatio" class="form-label">Balance Ratio (silence:non-silence)</label>
+                                                    <input type="range" class="form-range" id="balanceRatio" name="balance_ratio" 
+                                                           min="0.5" max="2" step="0.1" value="1.0">
+                                                    <div class="d-flex justify-content-between">
+                                                        <small>0.5 (More speech)</small>
+                                                        <small id="balanceRatioValue">1.0 (Equal)</small>
+                                                        <small>2.0 (More silence)</small>
+                                                    </div>
+                                                    <div class="form-text">
+                                                        Controls the target ratio between silence and speech samples.
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <label for="targetWordsSelect" class="form-label">Target Words (Optional)</label>
+                                                    <select id="targetWordsSelect" name="targetWordsSelect" class="form-select" multiple size="5">
+                                                        <!-- Will be populated via JavaScript based on dataset -->
+                                                    </select>
+                                                    <!-- Hidden field to store the actual values -->
+                                                    {{ form.target_words }}
+                                                    <div class="form-text">
+                                                        Optionally specify which words to focus on for balancing. Leave empty to use all words.
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        
+
+
                         <div class="alert alert-info mt-4">
                             <h5><i class="bi bi-info-circle me-2"></i>Model-Specific Processing</h5>
                             <p>This cleaner focuses on basic signal processing and cleaning. For model-specific dataset preparation:</p>
@@ -393,9 +465,10 @@
     </div>
 </div>
 
+
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-
+        // Get existing form elements
         const form = document.getElementById('cleaningForm');
         const applyBandpass = document.getElementById('{{ form.apply_bandpass.id_for_label }}');
         const applyHighpass = document.getElementById('{{ form.apply_highpass.id_for_label }}');
@@ -409,6 +482,15 @@
         const columnsToDrop = document.getElementById('{{ form.columns_to_drop.id_for_label }}');
         const columnsInfo = document.getElementById('columnsInfo');
         
+        // Get class balancing elements - using new naming
+        const balanceClasses = document.getElementById('balanceClasses');
+        const balanceMethod = document.getElementById('balanceMethod');
+        const balanceRatio = document.getElementById('balanceRatio');
+        const balanceRatioValue = document.getElementById('balanceRatioValue');
+        const targetWordsSelect = document.getElementById('targetWordsSelect');
+        const targetWordsHidden = document.getElementById('{{ form.target_words.id_for_label }}');
+        
+        // Get all setting sections
         const bandpassSettings = document.querySelector('.bandpass-settings');
         const highpassSettings = document.querySelector('.highpass-settings');
         const lowpassSettings = document.querySelector('.lowpass-settings');
@@ -416,41 +498,135 @@
         const icaSettings = document.querySelector('.ica-settings');
         const outlierSettings = document.querySelector('.outlier-settings');
         const trainTestSettings = document.querySelector('.train-test-settings');
+        const classBalanceSettings = document.querySelector('.class-balance-settings');
+
+        // Update hidden field when selections change in the dropdown
+        if (targetWordsSelect && targetWordsHidden) {
+            targetWordsSelect.addEventListener('change', function() {
+                // Get all selected options
+                const selectedWords = Array.from(this.selectedOptions).map(opt => opt.value);
+                // Update the hidden field with comma-separated values
+                targetWordsHidden.value = selectedWords.join(',');
+                console.log('Updated target words hidden field:', targetWordsHidden.value);
+            });
+        }
 
         function toggleVisibility() {
-            bandpassSettings.style.display = applyBandpass.checked ? 'block' : 'none';
-            highpassSettings.style.display = applyHighpass.checked ? 'block' : 'none';
-            lowpassSettings.style.display = applyLowpass.checked ? 'block' : 'none';
-            notchSettings.style.display = applyNotch.checked ? 'block' : 'none';
-            icaSettings.style.display = applyIca.checked ? 'block' : 'none';
-            outlierSettings.style.display = removeOutliers.checked ? 'block' : 'none';
-            trainTestSettings.style.display = createTrainTest.checked ? 'block' : 'none';
+            // Filter settings
+            if (bandpassSettings) bandpassSettings.style.display = applyBandpass && applyBandpass.checked ? 'block' : 'none';
+            if (highpassSettings) highpassSettings.style.display = applyHighpass && applyHighpass.checked ? 'block' : 'none';
+            if (lowpassSettings) lowpassSettings.style.display = applyLowpass && applyLowpass.checked ? 'block' : 'none';
+            if (notchSettings) notchSettings.style.display = applyNotch && applyNotch.checked ? 'block' : 'none';
+            if (icaSettings) icaSettings.style.display = applyIca && applyIca.checked ? 'block' : 'none';
+            if (outlierSettings) outlierSettings.style.display = removeOutliers && removeOutliers.checked ? 'block' : 'none';
+            if (trainTestSettings) trainTestSettings.style.display = createTrainTest && createTrainTest.checked ? 'block' : 'none';
             
-            if (applyBandpass.checked) {
-                applyHighpass.disabled = true;
-                applyLowpass.disabled = true;
-            } else {
-                applyHighpass.disabled = false;
-                applyLowpass.disabled = false;
+            // Class balance settings
+            if (classBalanceSettings && balanceClasses) {
+                classBalanceSettings.style.display = balanceClasses.checked ? 'block' : 'none';
             }
             
-            if (applyHighpass.checked || applyLowpass.checked) {
-                applyBandpass.disabled = true;
-            } else {
-                applyBandpass.disabled = false;
+            if (applyBandpass && applyHighpass && applyLowpass) {
+                // Handle filter conflicts
+                if (applyBandpass.checked) {
+                    applyHighpass.disabled = true;
+                    applyLowpass.disabled = true;
+                } else {
+                    applyHighpass.disabled = false;
+                    applyLowpass.disabled = false;
+                }
+                
+                if (applyHighpass.checked || applyLowpass.checked) {
+                    applyBandpass.disabled = true;
+                } else {
+                    applyBandpass.disabled = false;
+                }
             }
         }
         
-        applyBandpass.addEventListener('change', toggleVisibility);
-        applyHighpass.addEventListener('change', toggleVisibility);
-        applyLowpass.addEventListener('change', toggleVisibility);
-        applyNotch.addEventListener('change', toggleVisibility);
-        applyIca.addEventListener('change', toggleVisibility);
-        removeOutliers.addEventListener('change', toggleVisibility);
-        createTrainTest.addEventListener('change', toggleVisibility);
+        // Set up event listeners for filter toggles
+        if (applyBandpass) applyBandpass.addEventListener('change', toggleVisibility);
+        if (applyHighpass) applyHighpass.addEventListener('change', toggleVisibility);
+        if (applyLowpass) applyLowpass.addEventListener('change', toggleVisibility);
+        if (applyNotch) applyNotch.addEventListener('change', toggleVisibility);
+        if (applyIca) applyIca.addEventListener('change', toggleVisibility);
+        if (removeOutliers) removeOutliers.addEventListener('change', toggleVisibility);
+        if (createTrainTest) createTrainTest.addEventListener('change', toggleVisibility);
         
+        // Set up event listeners for class balancing
+        if (balanceClasses) {
+            console.log('Setting up balance classes listener');
+            balanceClasses.addEventListener('change', function() {
+                console.log('Balance classes changed:', this.checked);
+                toggleVisibility();
+            });
+        }
+        
+        if (balanceRatio) {
+            balanceRatio.addEventListener('input', function() {
+                if (balanceRatioValue) {
+                    let label = this.value;
+                    if (parseFloat(this.value) == 1.0) {
+                        label += ' (Equal)';
+                    } else if (parseFloat(this.value) < 1.0) {
+                        label += ' (More speech)';
+                    } else {
+                        label += ' (More silence)';
+                    }
+                    balanceRatioValue.textContent = label;
+                }
+            });
+            
+            // Initialize the ratio text
+            if (balanceRatioValue) {
+                let value = balanceRatio.value || "1.0";
+                let label = value;
+                if (parseFloat(value) == 1.0) {
+                    label += ' (Equal)';
+                } else if (parseFloat(value) < 1.0) {
+                    label += ' (More speech)';
+                } else {
+                    label += ' (More silence)';
+                }
+                balanceRatioValue.textContent = label;
+            }
+        }
+        
+        // Function to update target words from dataset
+        function updateTargetWordsSelect(data) {
+            if (!targetWordsSelect) {
+                console.log('Target words select element not found');
+                return;
+            }
+            
+            console.log('Updating target words dropdown');
+            // Clear existing options
+            targetWordsSelect.innerHTML = '';
+            
+            // Add options for each word from event columns
+            if (data.event_columns && data.event_columns.length > 0) {
+                console.log('Adding words from event columns:', data.event_columns);
+                data.event_columns.forEach(col => {
+                    const word = col.replace('_event', '');
+                    if (word !== 'sil') {  // Skip silence
+                        const option = document.createElement('option');
+                        option.value = word;
+                        option.textContent = word;
+                        targetWordsSelect.appendChild(option);
+                    }
+                });
+            } else {
+                console.log('No event columns found in data');
+            }
+            
+            // Clear the hidden field initially
+            if (targetWordsHidden) {
+                targetWordsHidden.value = '';
+            }
+        }
+        
+        // Apply initial visibility settings
         toggleVisibility();
-        protectEssentialColumns();
         
         // Function to get columns from the selected file
         function getColumnsFromFile() {
@@ -521,6 +697,9 @@
                     const totalColumns = data.columns ? data.columns.length : 0;
                     columnsInfo.textContent = `(${totalColumns} columns found)`;
                     
+                    // Update target words dropdown with the data
+                    updateTargetWordsSelect(data);
+                    
                     // Refresh protection for essential columns
                     protectEssentialColumns();
                     
@@ -542,32 +721,40 @@
         }
         
         // Listen for file selection change
-        inputFile.addEventListener('change', getColumnsFromFile);
-        
-        // If a file is already selected on page load, fetch its columns
-        if (inputFile.value) {
-            getColumnsFromFile();
-            protectEssentialColumns();
+        if (inputFile) {
+            inputFile.addEventListener('change', getColumnsFromFile);
+            
+            // If a file is already selected on page load, fetch its columns
+            if (inputFile.value) {
+                getColumnsFromFile();
+            }
         }
         
-        form.addEventListener('submit', function(e) {
-            let isValid = true;
-            
-            // Check filter conflicts
-            if (applyBandpass.checked && (applyHighpass.checked || applyLowpass.checked)) {
-                alert('Cannot apply bandpass filter together with highpass or lowpass filters. Please choose one approach.');
-                isValid = false;
-            }
-            
-            if (!isValid) {
-                e.preventDefault();
-                return;
-            }
-            
-            // Show processing overlay
-            document.getElementById('processing-overlay').style.display = 'block';
-            document.getElementById('cleanButton').disabled = true;
-        });
+        // Form submission handler
+        if (form) {
+            form.addEventListener('submit', function(e) {
+                let isValid = true;
+                
+                // Check filter conflicts
+                if (applyBandpass && applyHighpass && applyLowpass && 
+                    applyBandpass.checked && (applyHighpass.checked || applyLowpass.checked)) {
+                    alert('Cannot apply bandpass filter together with highpass or lowpass filters. Please choose one approach.');
+                    isValid = false;
+                }
+                
+                if (!isValid) {
+                    e.preventDefault();
+                    return;
+                }
+                
+                // Show processing overlay
+                document.getElementById('processing-overlay').style.display = 'block';
+                const cleanButton = document.getElementById('cleanButton');
+                if (cleanButton) {
+                    cleanButton.disabled = true;
+                }
+            });
+        }
         
         // Initialize Select2 for better dropdown experience if available
         if (typeof $.fn.select2 !== 'undefined') {
@@ -576,34 +763,11 @@
                 allowClear: true
             });
         }
-
-        // Handle redirect after form submission
-        window.addEventListener('beforeunload', function() {
-            // When navigating away from the page, make sure the overlay remains visible
-            // This ensures it doesn't disappear during page transitions
-            const overlay = document.getElementById('processing-overlay');
-            if (overlay && overlay.style.display === 'block') {
-                sessionStorage.setItem('showProcessingOverlay', 'true');
-            }
-        });
-
-        // Check if we need to hide the overlay (if we returned to this page after an error)
-        document.addEventListener('DOMContentLoaded', function() {
-            const overlay = document.getElementById('processing-overlay');
-            
-            // If we're back on the form page, hide the overlay
-            if (overlay && window.location.href.includes('processor') || window.location.href.includes('cleaner')) {
-                overlay.style.display = 'none';
-                const submitButton = document.querySelector('button[type="submit"]');
-                if (submitButton) {
-                    submitButton.disabled = false;
-                }
-                sessionStorage.removeItem('showProcessingOverlay');
-            }
-        });
-
+        
         // Function to disable essential columns in the dropdown
         function protectEssentialColumns() {
+            if (!columnsToDrop) return;
+            
             // Essential columns that should not be dropped
             const essentialColumns = ['Timestamp', 'word_label'];
             
@@ -623,6 +787,16 @@
             if (typeof $.fn.select2 !== 'undefined') {
                 $(columnsToDrop).select2();
             }
+        }
+        
+        // Initial calls to setup UI
+        protectEssentialColumns();
+        toggleVisibility();
+        
+        // Log initial state for debugging
+        if (balanceClasses && classBalanceSettings) {
+            console.log('Initial balance classes state:', balanceClasses.checked);
+            console.log('Initial settings display:', classBalanceSettings.style.display);
         }
     });
 </script>

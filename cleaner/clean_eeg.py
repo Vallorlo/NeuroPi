@@ -214,11 +214,27 @@ def clean_eeg_data(input_file, output_file,
                    create_train_test_split=False, test_size=0.2, random_state=42, stratify_by_word=True,
                    include_channels=None, compute_band_powers=False, normalize_data_flag=False,
                    remove_outliers_flag=False, outlier_threshold=3.0,
-                   columns_to_drop=None):
+                   columns_to_drop=None, 
+                   # Class balancing parameters
+                   balance_classes=False, 
+                   balance_method='downsample',
+                   balance_ratio=1.0,
+                   target_words=None):
     """
     Cleans EEG data optimized for speech detection, applying appropriate filters and ICA.
     Uses the shared eeg_utils for consistent processing between cleaning, training, and prediction.
     
+    Parameters added:
+    ----------------
+    balance_classes : bool
+        Whether to balance class distributions to prevent 'sil' from overwhelming the dataset
+    balance_method : str
+        Method to use for balancing ('downsample', 'upsample', or 'hybrid')
+    balance_ratio : float
+        Target ratio of silence to non-silence samples (e.g. 1.0 means equal distribution)
+    target_words : list
+        List of specific words to focus on when balancing (None means all words)
+        
     Returns:
     --------
     dict
@@ -226,6 +242,11 @@ def clean_eeg_data(input_file, output_file,
     """
     try:
         print(f"Cleaning EEG data: {input_file} -> {output_file}")
+        print(f"Class balancing: {'Enabled' if balance_classes else 'Disabled'}")
+        if balance_classes:
+            print(f"  - Method: {balance_method}")
+            print(f"  - Ratio: {balance_ratio}")
+            print(f"  - Target words: {target_words if target_words else 'All words'}")
         
         # Create output directory if needed
         output_dir = os.path.dirname(output_file)
@@ -313,6 +334,147 @@ def clean_eeg_data(input_file, output_file,
             sensor_columns = [col for col in sensor_columns if col in include_channels]
             if not sensor_columns:
                 return {'status': 'error', 'message': "No matching channels found. Please check channel names."}
+
+        # Apply class balancing if enabled
+        class_distribution_before = {}
+        class_distribution_after = {}
+        
+        if balance_classes and 'word_label' in df.columns:
+            print("Applying class balancing...")
+            
+            # Get word distribution before balancing
+            class_distribution_before = df['word_label'].value_counts().to_dict()
+            print(f"Class distribution before balancing: {class_distribution_before}")
+            
+            # Filter to target words if specified
+            if target_words:
+                target_words = [w.strip() for w in target_words if w.strip()]
+                if target_words:
+                    print(f"Focusing on target words for balancing: {target_words}")
+                    # Make sure 'sil' is included for balancing
+                    if 'sil' not in target_words:
+                        target_words.append('sil')
+                    # Filter dataframe to only include rows with these words
+                    df = df[df['word_label'].isin(target_words)]
+                    print(f"Filtered to {len(df)} rows containing target words")
+            
+            # Get all unique words and counts
+            word_counts = df['word_label'].value_counts()
+            unique_words = word_counts.index.tolist()
+            
+            # Separate silence and non-silence
+            sil_rows = df[df['word_label'] == 'sil']
+            non_sil_rows = df[df['word_label'] != 'sil']
+            
+            sil_count = len(sil_rows)
+            non_sil_count = len(non_sil_rows)
+            print(f"Before balancing: {sil_count} silence samples, {non_sil_count} non-silence samples")
+            
+            if sil_count > 0 and non_sil_count > 0:
+                # Determine target counts based on balance_ratio
+                # balance_ratio is the target ratio of silence to non-silence
+                if balance_method == 'downsample':
+                    # Downsample the majority class (usually silence)
+                    if sil_count > non_sil_count * balance_ratio:
+                        # Silence is the majority class
+                        target_sil_count = int(non_sil_count * balance_ratio)
+                        print(f"Downsampling silence from {sil_count} to {target_sil_count}")
+                        # Randomly sample silence rows
+                        sil_rows = sil_rows.sample(n=target_sil_count, random_state=random_state)
+                        # Combine with non-silence rows
+                        df = pd.concat([sil_rows, non_sil_rows])
+                    elif non_sil_count > sil_count * (1/balance_ratio):
+                        # Non-silence is the majority class
+                        target_non_sil_count = int(sil_count * (1/balance_ratio))
+                        print(f"Downsampling non-silence from {non_sil_count} to {target_non_sil_count}")
+                        # First, ensure balanced representation of each word
+                        balanced_non_sil = []
+                        non_sil_words = non_sil_rows['word_label'].unique()
+                        samples_per_word = target_non_sil_count // len(non_sil_words)
+                        
+                        for word in non_sil_words:
+                            word_rows = non_sil_rows[non_sil_rows['word_label'] == word]
+                            # If we have fewer rows than needed, use all of them
+                            if len(word_rows) <= samples_per_word:
+                                balanced_non_sil.append(word_rows)
+                            else:
+                                # Otherwise sample the required number
+                                balanced_non_sil.append(word_rows.sample(n=samples_per_word, random_state=random_state))
+                        
+                        # Combine all balanced non-silence rows
+                        non_sil_rows = pd.concat(balanced_non_sil)
+                        # Combine with silence rows
+                        df = pd.concat([sil_rows, non_sil_rows])
+                
+                elif balance_method == 'upsample':
+                    # Upsample minority classes
+                    if sil_count < non_sil_count * balance_ratio:
+                        # Silence is the minority class
+                        target_sil_count = int(non_sil_count * balance_ratio)
+                        print(f"Upsampling silence from {sil_count} to {target_sil_count}")
+                        # Resample silence rows with replacement
+                        if sil_count > 0:
+                            sil_rows = sil_rows.sample(n=target_sil_count, replace=True, random_state=random_state)
+                            # Combine with non-silence rows
+                            df = pd.concat([sil_rows, non_sil_rows])
+                    else:
+                        # Non-silence classes are minority
+                        # Balance each non-silence word individually
+                        target_count_per_word = int(sil_count * (1/balance_ratio) / (len(unique_words) - 1))
+                        print(f"Upsampling each non-silence word to approximately {target_count_per_word} samples")
+                        
+                        balanced_non_sil = []
+                        for word in unique_words:
+                            if word != 'sil':
+                                word_rows = df[df['word_label'] == word]
+                                # If we have fewer rows than target, upsample with replacement
+                                if len(word_rows) < target_count_per_word and len(word_rows) > 0:
+                                    word_rows = word_rows.sample(n=target_count_per_word, replace=True, random_state=random_state)
+                                balanced_non_sil.append(word_rows)
+                        
+                        # Combine all balanced non-silence rows
+                        non_sil_rows = pd.concat(balanced_non_sil)
+                        # Combine with silence rows
+                        df = pd.concat([sil_rows, non_sil_rows])
+                
+                elif balance_method == 'hybrid':
+                    # Use both downsampling and upsampling to achieve balance
+                    # Determine target count somewhere between current counts
+                    target_count = int((sil_count + non_sil_count) / (1 + len(unique_words)) * balance_ratio)
+                    print(f"Hybrid balancing targeting approximately {target_count} samples per class")
+                    
+                    balanced_rows = []
+                    # For silence
+                    if sil_count > target_count:
+                        # Downsample silence
+                        balanced_rows.append(sil_rows.sample(n=target_count, random_state=random_state))
+                    else:
+                        # Upsample silence
+                        balanced_rows.append(sil_rows.sample(n=target_count, replace=True, random_state=random_state))
+                    
+                    # For each non-silence word
+                    for word in unique_words:
+                        if word != 'sil':
+                            word_rows = df[df['word_label'] == word]
+                            word_count = len(word_rows)
+                            
+                            if word_count > target_count:
+                                # Downsample this word
+                                balanced_rows.append(word_rows.sample(n=target_count, random_state=random_state))
+                            elif word_count > 0:
+                                # Upsample this word
+                                balanced_rows.append(word_rows.sample(n=target_count, replace=True, random_state=random_state))
+                    
+                    # Combine all balanced rows
+                    df = pd.concat(balanced_rows)
+            
+            # Shuffle the dataset to mix classes
+            df = df.sample(frac=1, random_state=random_state).reset_index(drop=True)
+            
+            # Get word distribution after balancing
+            class_distribution_after = df['word_label'].value_counts().to_dict()
+            print(f"Class distribution after balancing: {class_distribution_after}")
+            print(f"Total samples after balancing: {len(df)}")
         
         # For standard format, extract sensor data for processing
         if not is_structured_transformer:
@@ -470,6 +632,14 @@ def clean_eeg_data(input_file, output_file,
                 
                 print("Band powers computed and added to the dataframe")
         
+        # Create balance configuration
+        balance_config = {
+            'balance_classes': balance_classes,
+            'balance_method': balance_method,
+            'balance_ratio': balance_ratio,
+            'target_words': target_words if target_words else []
+        }
+        
         # Create split configuration for consistent processing
         split_config = {
             'create_train_test_split': create_train_test_split,
@@ -483,7 +653,8 @@ def clean_eeg_data(input_file, output_file,
         clean_filename = generate_output_filename(
             base_name, 
             filter_config,
-            split_config=split_config
+            split_config=split_config,
+            balance_config=balance_config
         )
         
         # Save the clean data to the processed filename
@@ -495,7 +666,8 @@ def clean_eeg_data(input_file, output_file,
         config_path = save_processing_config(
             output_dir,
             filter_config,
-            split_config=split_config
+            split_config=split_config,
+            balance_config=balance_config
         )
         print(f"Processing configuration saved to: {config_path}")
         
@@ -618,8 +790,20 @@ def clean_eeg_data(input_file, output_file,
             'channels_processed': sensor_columns,
             'total_samples': data.shape[1] if 'data' in locals() else len(df_filtered),
             'event_types': event_columns,
-            'zip_file_url': f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(zip_filename)}"
+            'zip_file_url': f"/cleaner/download/{os.path.basename(output_dir)}/{os.path.basename(zip_filename)}",
+            'processing_config': {
+                'filter_config': filter_config,
+                'split_config': split_config,
+                'balance_config': balance_config
+            }
         }
+        
+        # Add class balancing info to the result
+        if balance_classes:
+            result['class_distribution'] = {
+                'before': class_distribution_before,
+                'after': class_distribution_after
+            }
         
         # Add train/test file URLs if available
         if train_file:

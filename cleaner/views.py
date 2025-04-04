@@ -142,6 +142,11 @@ def clean_data_view(request):
                 normalize_data = form.cleaned_data.get('normalize_data', False)
                 remove_outliers = form.cleaned_data.get('remove_outliers', False)
                 outlier_threshold = form.cleaned_data.get('outlier_threshold', 3.0)
+
+                balance_classes = form.cleaned_data.get('balance_classes', False)
+                balance_method = form.cleaned_data.get('balance_method', 'downsample')
+                balance_ratio = form.cleaned_data.get('balance_ratio', 1.0)
+                target_words = form.cleaned_data.get('target_words', [])
                 
                 # Automatically detect & fix signal issues
                 check_signal_quality = True
@@ -197,7 +202,11 @@ def clean_data_view(request):
                         normalize_data_flag=normalize_data,
                         remove_outliers_flag=remove_outliers,
                         outlier_threshold=outlier_threshold,
-                        columns_to_drop=columns_to_drop
+                        columns_to_drop=columns_to_drop,
+                        balance_classes=balance_classes,
+                        balance_method=balance_method,
+                        balance_ratio=balance_ratio,
+                        target_words=target_words
                     )
 
                     

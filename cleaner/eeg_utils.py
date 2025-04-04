@@ -144,6 +144,7 @@ def apply_filters(data, filter_config, fs=DEFAULT_FS):
     
     return filtered_data
 
+
 # ========== METADATA AND NAMING FUNCTIONS ==========
 
 def generate_filter_code(filter_config):
@@ -402,6 +403,41 @@ def generate_split_code(split_config):
     
     return f"Split_T{int(test_size*100)}_{stratify}_S{seed}"
 
+
+def generate_balance_code(balance_config):
+    """Generate a code to represent class balancing settings.
+    
+    Parameters:
+    -----------
+    balance_config : dict
+        Dictionary containing class balancing settings
+        
+    Returns:
+    --------
+    str: A code representing the class balancing settings
+    """
+    if not balance_config.get('balance_classes', False):
+        return ""
+    
+    parts = ["Bal"]  # Balance prefix
+    
+    # Method
+    method = balance_config.get('balance_method', 'downsample')
+    method_codes = {'downsample': 'Down', 'upsample': 'Up', 'hybrid': 'Hyb'}
+    parts.append(method_codes.get(method, 'Down'))
+    
+    # Ratio
+    ratio = balance_config.get('balance_ratio', 1.0)
+    parts.append(f"R{int(ratio*10)}")
+    
+    # Target words
+    target_words = balance_config.get('target_words', [])
+    if target_words:
+        parts.append(f"W{len(target_words)}")
+    
+    return "_".join(parts)
+
+
 def parse_split_code(split_code):
     """Parse a split code to extract settings.
     
@@ -445,7 +481,56 @@ def parse_split_code(split_code):
     
     return split_config
 
-def generate_output_filename(base_filename, filter_config, transformer_config=None, split_config=None):
+
+def parse_balance_code(balance_code):
+    """Parse a balance code to extract settings.
+    
+    Parameters:
+    -----------
+    balance_code : str
+        Balance code string
+        
+    Returns:
+    --------
+    dict: Balance configuration dictionary
+    """
+    balance_config = {
+        'balance_classes': False,
+        'balance_method': 'downsample',
+        'balance_ratio': 1.0,
+        'target_words': []
+    }
+    
+    if not balance_code or not balance_code.startswith('Bal'):
+        return balance_config
+    
+    # Set balance_classes to True
+    balance_config['balance_classes'] = True
+    
+    # Split the code into parts
+    parts = balance_code.split('_')
+    
+    for part in parts:
+        # Method
+        if part in ['Down', 'Up', 'Hyb']:
+            method_map = {'Down': 'downsample', 'Up': 'upsample', 'Hyb': 'hybrid'}
+            balance_config['balance_method'] = method_map.get(part, 'downsample')
+        
+        # Ratio
+        elif part.startswith('R'):
+            ratio_match = re.match(r'R(\d+)', part)
+            if ratio_match:
+                balance_config['balance_ratio'] = int(ratio_match.group(1)) / 10.0
+        
+        # Target word count
+        elif part.startswith('W'):
+            # We can't recover the actual target words, just that some were specified
+            balance_config['target_words'] = []
+    
+    return balance_config
+
+
+def generate_output_filename(base_filename, filter_config, transformer_config=None, split_config=None, balance_config=None):
     """Generate an output filename that encodes the processing parameters.
     
     Parameters:
@@ -458,6 +543,8 @@ def generate_output_filename(base_filename, filter_config, transformer_config=No
         Dictionary of transformer parameters
     split_config : dict, optional
         Dictionary of train-test split parameters
+    balance_config : dict, optional
+        Dictionary of class balancing parameters
         
     Returns:
     --------
@@ -479,6 +566,11 @@ def generate_output_filename(base_filename, filter_config, transformer_config=No
     if split_config and split_config.get('create_train_test_split', False):
         split_code = generate_split_code(split_config)
     
+    # Generate balance code
+    balance_code = ""
+    if balance_config and balance_config.get('balance_classes', False):
+        balance_code = generate_balance_code(balance_config)
+    
     # Create timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
@@ -491,12 +583,16 @@ def generate_output_filename(base_filename, filter_config, transformer_config=No
     if split_code:
         parts.append(split_code)
     
+    if balance_code:
+        parts.append(balance_code)
+    
     parts.append(timestamp)
     
     # Join all parts with underscores
     filename = "_".join(parts) + ".csv"
     
     return filename
+
 
 def parse_processed_filename(filename):
     """Parse a processed filename to extract processing parameters.
@@ -564,7 +660,7 @@ def parse_processed_filename(filename):
     
     return config
 
-def save_processing_config(output_dir, filter_config, transformer_config=None, split_config=None):
+def save_processing_config(output_dir, filter_config, transformer_config=None, split_config=None, balance_config=None):
     """Save the processing configuration to a JSON file.
     
     Parameters:
@@ -577,12 +673,15 @@ def save_processing_config(output_dir, filter_config, transformer_config=None, s
         Dictionary of transformer parameters
     split_config : dict, optional
         Dictionary of train-test split parameters
+    balance_config : dict, optional
+        Dictionary of class balancing parameters
     """
     # Combine all configurations
     config = {
         'filter_config': filter_config,
         'transformer_config': transformer_config or {},
         'split_config': split_config or {},
+        'balance_config': balance_config or {},
         'version': VERSION,
         'timestamp': datetime.now().isoformat()
     }

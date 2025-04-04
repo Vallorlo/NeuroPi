@@ -241,6 +241,41 @@ class CleaningForm(forms.Form):
         widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.5'})
     )
 
+
+    balance_classes = forms.BooleanField(
+        required=False,
+        initial=False,
+        label="Balance Word Classes",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
+    balance_method = forms.ChoiceField(
+        choices=[
+            ('downsample', 'Downsample (reduce majority class)'),
+            ('upsample', 'Upsample (increase minority classes)'),
+            ('hybrid', 'Hybrid (balance all classes)')
+        ],
+        initial='downsample',
+        required=False,
+        label="Balancing Method",
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
+    
+    balance_ratio = forms.FloatField(
+        min_value=0.5,
+        max_value=2.0,
+        initial=1.0,
+        required=False,
+        label="Balance Ratio (silence:non-silence)",
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'type': 'range'})
+    )
+    
+    target_words = forms.CharField(
+        required=False,
+        widget=forms.HiddenInput(),  # Use hidden input - we'll populate via JavaScript
+        label="Target Words (Optional)"
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         # Populate input file choices
@@ -416,4 +451,13 @@ class CleaningForm(forms.Form):
             elif outlier_threshold < 1.0:
                 self.add_error('outlier_threshold', "Outlier threshold must be at least 1.0")
 
+
+
+        target_words_str = cleaned_data.get('target_words', '')
+        if target_words_str:
+            # Split by comma and strip whitespace
+            cleaned_data['target_words'] = [word.strip() for word in target_words_str.split(',') if word.strip()]
+        else:
+            cleaned_data['target_words'] = []
+        
         return cleaned_data

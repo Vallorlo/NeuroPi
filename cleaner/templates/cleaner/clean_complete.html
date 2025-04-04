@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-
+{% load custom_filters %}
 {% block content %}
 <div class="container mt-5 mb-5">
     <div class="row">
@@ -500,7 +500,76 @@
                         </div>
                     </div>
                     {% endif %}
-                    
+
+                    {% with balance_config=result.processing_config.balance_config %}
+                        {% if balance_config.balance_classes %}
+                        <div class="card mb-3">
+                            <div class="card-header bg-light">
+                                <h6 class="mb-0">Class Balancing Configuration</h6>
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-distribute-horizontal me-2"></i>Balancing Method</span>
+                                        <span class="badge bg-primary rounded-pill">
+                                            {% if balance_config.balance_method == 'downsample' %}
+                                                Downsampling
+                                            {% elif balance_config.balance_method == 'upsample' %}
+                                                Upsampling
+                                            {% else %}
+                                                Hybrid
+                                            {% endif %}
+                                        </span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                                        <span><i class="bi bi-graph-up me-2"></i>Balance Ratio</span>
+                                        <span class="badge bg-primary rounded-pill">{{ balance_config.balance_ratio|floatformat:1 }}</span>
+                                    </li>
+                                    {% if balance_config.target_words %}
+                                    <li class="list-group-item">
+                                        <span><i class="bi bi-tags me-2"></i>Target Words</span>
+                                        <div class="mt-2">
+                                            {% for word in balance_config.target_words %}
+                                                <span class="badge bg-info me-1">{{ word }}</span>
+                                            {% endfor %}
+                                        </div>
+                                    </li>
+                                    {% endif %}
+                                    {% if result.class_distribution %}
+                                    <li class="list-group-item">
+                                        <span><i class="bi bi-bar-chart me-2"></i>Final Class Distribution</span>
+                                        <div class="table-responsive mt-2">
+                                            <table class="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Word</th>
+                                                        <th>Count</th>
+                                                        <th>Percentage</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for word, count in result.class_distribution.items %}
+                                                    <tr>
+                                                        <td>{{ word }}</td>
+                                                        <td>{{ count }}</td>
+                                                        <td>
+                                                            {% with percentage=count|mul:100 %}
+                                                                {% widthratio percentage 1 result.total_samples %}%
+                                                            {% endwith %}
+                                                        </td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </li>
+                                    {% endif %}
+                                </ul>
+                            </div>
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+                                            
                     <!-- Processing Output -->
                     <div class="card mt-3">
                         <div class="card-header bg-secondary text-white">

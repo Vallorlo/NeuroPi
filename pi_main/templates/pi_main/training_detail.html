@@ -91,6 +91,10 @@
                                             <span><strong>Recurrent Dropout:</strong></span>
                                             <span>{{ job.recurrent_dropout|floatformat:2 }}</span>
                                         </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Apply Filtering:</strong></span>
+                                            <span>{{ job.apply_filtering|yesno:"Yes,No" }}</span>
+                                        </li>
                                     </ul>
                                 </div>
                             </div>
@@ -132,11 +136,47 @@
                             {% elif job.status == 'failed' %}
                                 <div class="alert alert-danger">
                                     <i class="bi bi-exclamation-circle"></i> Training failed with the following error:
-                                    <pre class="mt-2 bg-light p-3 rounded">{{ job.error_message }}</pre>
+                                    <div class="mt-2 bg-light p-3 rounded overflow-auto" style="max-height: 300px;">
+                                        <pre class="mb-0">{{ job.error_message }}</pre>
+                                    </div>
                                 </div>
-                                <div class="text-center">
+                                
+                                <!-- Error analysis and suggestions -->
+                                <div class="alert alert-warning mt-3">
+                                    <h5><i class="bi bi-lightbulb"></i> Possible Solutions:</h5>
+                                    {% if 'zero-size array to reduction operation maximum' in job.error_message %}
+                                        <p><strong>Issue:</strong> Your dataset contains only one word class. The model needs at least two different word classes to train properly.</p>
+                                        <ul>
+                                            <li>Try using a dataset with at least two different words</li>
+                                            <li>If using word filtering, make sure you're selecting at least two different words</li>
+                                            <li>Check that your dataset has proper word_label entries</li>
+                                        </ul>
+                                    {% elif 'No word event columns found' in job.error_message or 'Dataset must contain either a word_label column' in job.error_message %}
+                                        <p><strong>Issue:</strong> Your dataset is missing required event columns or word_label information.</p>
+                                        <ul>
+                                            <li>Make sure you're using a properly cleaned dataset with word_label column</li>
+                                            <li>Try using a dataset from the cleaned_* directories</li>
+                                        </ul>
+                                    {% elif 'Memory' in job.error_message or 'memory' in job.error_message or 'OOM' in job.error_message %}
+                                        <p><strong>Issue:</strong> Your system ran out of memory during training.</p>
+                                        <ul>
+                                            <li>Try reducing the batch size</li>
+                                            <li>Use a smaller dataset or reduce sequence length</li>
+                                            <li>Close other applications to free up memory</li>
+                                        </ul>
+                                    {% else %}
+                                        <p>There was an unexpected error. Try the following:</p>
+                                        <ul>
+                                            <li>Check that your dataset is properly formatted</li>
+                                            <li>Try a different dataset</li>
+                                            <li>Reduce the model complexity or batch size</li>
+                                        </ul>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="text-center mt-3">
                                     <a href="{% url 'pi_main:train_model' %}?retry={{ job.id }}" class="btn btn-primary">
-                                        <i class="bi bi-arrow-repeat"></i> Retry Training
+                                        <i class="bi bi-arrow-repeat"></i> Retry Training with Adjustments
                                     </a>
                                 </div>
                             {% endif %}

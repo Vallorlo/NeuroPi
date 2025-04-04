@@ -26,6 +26,8 @@ from django.views.decorators.csrf import csrf_exempt
 import base64
 from django.contrib import messages
 
+
+
 # Global predictor instance to maintain EEG connection across requests
 _eeg_predictor = LiveEEGPredictor()
 
@@ -345,8 +347,9 @@ def model_detail(request, model_id):
     
     return render(request, 'pi_main/model_detail.html', {'model': model, 'job': job})
 
-def live_prediction(request):
-    """Interface for live EEG prediction."""
+
+def prediction(request):
+    """Interface for EEG prediction (both live and post-recording)."""
     # Get available models
     models = EEGModel.objects.filter(status='active').order_by('-created_at')
     
@@ -360,13 +363,107 @@ def live_prediction(request):
     # Create prediction form
     form = PredictionForm(participants=participants)
     
+    # Default to empty context
     context = {
         'models': models,
         'participants': participants,
-        'form': form
+        'form': form,
+        'prediction_results': None,
+        'recording_status': None
     }
     
-    return render(request, 'pi_main/live_prediction.html', context)
+    # Check if this is a post request (post-recording prediction)
+    if request.method == 'POST':
+        form = PredictionForm(request.POST, participants=participants)
+        
+        if form.is_valid():
+            try:
+                # Get form data
+                model_id = form.cleaned_data['model'].id
+                duration = form.cleaned_data['sample_duration']
+                participant = form.cleaned_data['participant']
+                
+                # Get the model
+                model = get_object_or_404(EEGModel, id=model_id)
+                
+                # Initialize EEG headset
+                eeg_predictor = get_eeg_predictor()
+                if not eeg_predictor.initialized:
+                    success = eeg_predictor.initialize()
+                    if not success:
+                        context['recording_status'] = "error"
+                        context['prediction_results'] = {
+                            'error': 'Failed to initialize EEG headset. Please check the connection.'
+                        }
+                        return render(request, 'pi_main/prediction.html', context)
+                
+                # Collect EEG data
+                context['recording_status'] = "recording"
+                data, timestamps = eeg_predictor.collect_eeg_data(duration)
+                
+                if data is None or not data:
+                    context['recording_status'] = "error"
+                    context['prediction_results'] = {
+                        'error': 'Failed to collect EEG data. Please check the headset connection.'
+                    }
+                    return render(request, 'pi_main/prediction.html', context)
+                
+                # Convert data to DataFrame
+                np_data = np.array(data, dtype=float)
+                
+                # Expected column order for EPOC+ headset
+                sensor_columns = ["COUNTER", 'F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 
+                                'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+                
+                # Extract only EEG channels (exclude COUNTER)
+                eeg_data = pd.DataFrame(np_data[:, 1:], columns=sensor_columns[1:])
+                
+                # Add timestamp column
+                eeg_data['Timestamp'] = timestamps
+                
+                # Load the model predictor
+                model_predictor = RNNPredictor(model_path=model.model_path)
+                
+                # Make prediction
+                context['recording_status'] = "processing"
+                predictions = model_predictor.predict(eeg_data)
+                
+                if 'error' in predictions:
+                    context['recording_status'] = "error"
+                    context['prediction_results'] = {
+                        'error': predictions['error']
+                    }
+                else:
+                    context['recording_status'] = "success"
+                    context['prediction_results'] = {
+                        'predicted_word': predictions['predicted_word'],
+                        'confidence': predictions['confidence'],
+                        'predictions': predictions['predictions'],
+                        'samples_collected': len(data)
+                    }
+                    
+                    # Save the prediction to database
+                    try:
+                        prediction = Prediction(
+                            model=model,
+                            predicted_word=predictions['predicted_word'],
+                            confidence=predictions['confidence'],
+                            participant=participant,
+                            session_id=f"post_recording_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                        )
+                        prediction.save()
+                        context['prediction_results']['prediction_id'] = prediction.id
+                    except Exception as e:
+                        print(f"Error saving prediction to database: {e}")
+            
+            except Exception as e:
+                traceback.print_exc()
+                context['recording_status'] = "error"
+                context['prediction_results'] = {
+                    'error': f"An error occurred: {str(e)}"
+                }
+    
+    return render(request, 'pi_main/prediction.html', context)
 
 def start_training_api(request):
     """API endpoint to start model training."""
@@ -690,6 +787,7 @@ def delete_job(request, job_id):
         print(f"Error deleting job: {e}")
         return redirect('pi_main:model_dashboard')
 
+
 def model_evaluate(request, model_id):
     """View for evaluating a model on a test dataset."""
     model = get_object_or_404(EEGModel, id=model_id)
@@ -700,6 +798,9 @@ def model_evaluate(request, model_id):
     # Check if we're processing an evaluation
     if request.method == 'POST':
         test_dataset = request.POST.get('test_dataset')
+        # Get apply_filters parameter
+        apply_filters = request.POST.get('apply_filters') == 'on'
+        
         if not test_dataset:
             # If no dataset selected, redirect with error
             messages.error(request, "Please select a test dataset")
@@ -709,8 +810,8 @@ def model_evaluate(request, model_id):
             # Load the model
             predictor = RNNPredictor(model_path=model.model_path)
             
-            # Evaluate the model
-            results = predictor.evaluate(test_dataset)
+            # Evaluate the model with apply_filters parameter
+            results = predictor.evaluate(test_dataset, apply_filters=apply_filters)
             
             if not results.get('success', False):
                 error_message = results.get('error', 'Unknown error during evaluation')
@@ -722,7 +823,7 @@ def model_evaluate(request, model_id):
                 model=model,
                 dataset_path=test_dataset,
                 accuracy=results['metrics']['accuracy'],
-                eval_data=json.dumps(results['metrics'])
+                eval_data=json.dumps(results['metrics'])  # This should now work with the convert_numpy_types function
             )
             evaluation.save()
             
@@ -745,58 +846,80 @@ def model_evaluate(request, model_id):
     
     return render(request, 'pi_main/model_evaluate.html', context)
 
+
 def evaluation_detail(request, evaluation_id):
     """View details of a specific model evaluation."""
     evaluation = get_object_or_404(ModelEvaluation, id=evaluation_id)
     
     try:
         # Parse evaluation data
-        eval_data = json.loads(evaluation.eval_data)
+        eval_data = json.loads(evaluation.eval_data) if evaluation.eval_data else {}
         
-        # Get charts from the evaluation files
+        # Create charts dict (will be populated either from disk or re-generated)
         charts = {}
-        eval_dir = os.path.join(settings.BASE_DIR, evaluation.model.model_path, 'evaluation')
         
-        # Look for evaluation files matching this evaluation
-        chart_files = {}
-        for filename in os.listdir(eval_dir):
-            if filename.startswith('evaluation_') and filename.endswith('.json'):
-                try:
-                    with open(os.path.join(eval_dir, filename), 'r') as f:
-                        file_data = json.load(f)
+        # Check if we have charts in the eval_data
+        if 'charts' in eval_data:
+            charts = eval_data['charts']
+        else:
+            # Try to find chart files on disk (legacy support)
+            try:
+                eval_dir = os.path.join(settings.BASE_DIR, evaluation.model.model_path, 'evaluation')
+                
+                if os.path.exists(eval_dir):
+                    # Look for evaluation files matching this evaluation
+                    chart_files = {}
+                    for filename in os.listdir(eval_dir):
+                        if filename.startswith('evaluation_') and filename.endswith('.json'):
+                            try:
+                                with open(os.path.join(eval_dir, filename), 'r') as f:
+                                    file_data = json.load(f)
+                                
+                                # Check if this is the right evaluation
+                                if file_data.get('dataset_path') == evaluation.dataset_path:
+                                    # Get PNG files with matching timestamp
+                                    timestamp = filename.replace('evaluation_', '').replace('.json', '')
+                                    
+                                    for img_file in os.listdir(eval_dir):
+                                        if img_file.startswith(f'chart_{timestamp}_'):
+                                            chart_type = img_file.replace(f'chart_{timestamp}_', '').replace('.png', '')
+                                            chart_files[chart_type] = os.path.join(eval_dir, img_file)
+                            except:
+                                continue
                     
-                    # Check if this is the right evaluation
-                    if file_data.get('dataset_path') == evaluation.dataset_path:
-                        # Get PNG files with matching timestamp
-                        timestamp = filename.replace('evaluation_', '').replace('.json', '')
-                        
-                        for img_file in os.listdir(eval_dir):
-                            if img_file.startswith(f'chart_{timestamp}_'):
-                                chart_type = img_file.replace(f'chart_{timestamp}_', '').replace('.png', '')
-                                chart_files[chart_type] = os.path.join(eval_dir, img_file)
-                except:
-                    continue
-        
-        # If we found chart files, use them
-        for chart_type, file_path in chart_files.items():
-            with open(file_path, 'rb') as f:
-                chart_data = base64.b64encode(f.read()).decode('utf-8')
-                charts[chart_type] = chart_data
-        
-        # If no chart files found, regenerate them
-        if not charts:
-            # Load the model and dataset
-            predictor = RNNPredictor(model_path=evaluation.model.model_path)
-            results = predictor.evaluate(evaluation.dataset_path)
+                    # If we found chart files, use them
+                    for chart_type, file_path in chart_files.items():
+                        with open(file_path, 'rb') as f:
+                            chart_data = base64.b64encode(f.read()).decode('utf-8')
+                            charts[chart_type] = chart_data
+            except Exception as e:
+                print(f"Error looking for chart files: {e}")
             
-            if results.get('success', False):
-                charts = results['charts']
+            # If no chart files were found, we'll regenerate them
+            if not charts:
+                try:
+                    # Load the model and regenerate the charts
+                    predictor = RNNPredictor(model_path=evaluation.model.model_path)
+                    results = predictor.evaluate(evaluation.dataset_path)
+                    
+                    if results.get('success', False):
+                        charts = results.get('charts', {})
+                        
+                        # Store charts in eval_data for future use
+                        if charts:
+                            eval_data['charts'] = charts
+                            evaluation.eval_data = json.dumps(eval_data)
+                            evaluation.save()
+                except Exception as e:
+                    print(f"Error regenerating charts: {e}")
+    
     except Exception as e:
         traceback.print_exc()
         messages.error(request, f"Error loading evaluation details: {str(e)}")
-        charts = {}
         eval_data = {}
+        charts = {}
     
+    # Prepare data for template - ensure charts are available
     context = {
         'evaluation': evaluation,
         'charts': charts,
@@ -805,6 +928,7 @@ def evaluation_detail(request, evaluation_id):
     }
     
     return render(request, 'pi_main/evaluation_detail.html', context)
+
 
 def delete_evaluation(request, evaluation_id):
     """Delete a model evaluation."""

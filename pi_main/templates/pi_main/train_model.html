@@ -13,6 +13,16 @@
                     <h1 class="mb-0">Train EEG Neural Network</h1>
                 </div>
                 <div class="card-body">
+                    <div class="alert alert-info">
+                        <h5><i class="bi bi-info-circle"></i> Important Notes:</h5>
+                        <ul>
+                            <li>Your dataset should contain a <strong>word_label</strong> column or word event columns</li>
+                            <li>The model needs <strong>at least two different word classes</strong> to train properly</li>
+                            <li>If you select specific words, make sure to choose at least two different words</li>
+                            <li>The model will detect and use frequency band features if available in the dataset</li>
+                        </ul>
+                    </div>
+                    
                     <form method="post" id="trainingForm">
                         {% csrf_token %}
                         
@@ -72,6 +82,9 @@
                                             </label>
                                             {{ form.selected_words }}
                                             <small class="form-text text-muted">{{ form.selected_words.help_text }}</small>
+                                            <div id="wordSelectionWarning" class="alert alert-warning mt-2 d-none">
+                                                <i class="bi bi-exclamation-triangle"></i> Please select at least 2 different words for training
+                                            </div>
                                         </div>
                                         
                                         <div class="form-check mb-3">
@@ -197,6 +210,31 @@
         <p>This may take a moment. Please wait.</p>
     </div>
 </div>
+
+<!-- Dataset Preview Modal -->
+<div class="modal fade" id="datasetPreviewModal" tabindex="-1" aria-labelledby="datasetPreviewModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="datasetPreviewModalLabel">Dataset Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div id="datasetInfo" class="mb-3"></div>
+                <div id="wordDistribution" class="mb-3"></div>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered" id="datasetPreviewTable">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock content %}
 
 {% block extra_js %}
@@ -208,6 +246,23 @@
         const trainingForm = document.getElementById('trainingForm');
         const submitBtn = document.getElementById('submitBtn');
         const trainingOverlay = document.getElementById('trainingOverlay');
+        const wordSelectionWarning = document.getElementById('wordSelectionWarning');
+        
+        // Function to check if at least 2 words are selected
+        function validateWordSelection() {
+            const selectedWords = Array.from(wordSelect.selectedOptions).map(option => option.value);
+            
+            if (selectedWords.length < 2 && selectedWords.length > 0) {
+                wordSelectionWarning.classList.remove('d-none');
+                return false;
+            } else {
+                wordSelectionWarning.classList.add('d-none');
+                return true;
+            }
+        }
+        
+        // Add validation to the word select
+        wordSelect.addEventListener('change', validateWordSelection);
         
         // Function to fetch available words for the selected dataset
         function updateWordOptions() {
@@ -223,6 +278,12 @@
             // Show loading indicator
             wordSelect.disabled = true;
             
+            // Display "loading" option
+            const loadingOption = document.createElement('option');
+            loadingOption.textContent = "Loading words...";
+            loadingOption.disabled = true;
+            wordSelect.appendChild(loadingOption);
+            
             // Fetch available words via AJAX
             fetch(`/pi_main/api/dataset-words/?dataset=${selectedDataset}`, {
                 headers: {
@@ -231,6 +292,9 @@
             })
             .then(response => response.json())
             .then(data => {
+                // Clear loading indicator
+                wordSelect.innerHTML = '';
+                
                 if (data.words && Array.isArray(data.words)) {
                     // Add options for each word
                     data.words.forEach(word => {
@@ -240,12 +304,31 @@
                         wordSelect.appendChild(option);
                     });
                     
+                    // Add warning if fewer than 2 words
+                    if (data.words.length < 2) {
+                        const alertEl = document.createElement('div');
+                        alertEl.className = 'alert alert-danger mt-2';
+                        alertEl.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Warning: This dataset contains only ' + data.words.length + ' word(s). Models require at least 2 different words to train properly.';
+                        wordSelect.parentNode.appendChild(alertEl);
+                    }
+                    
                     // Enable select
                     wordSelect.disabled = false;
+                } else {
+                    // No words found
+                    const option = document.createElement('option');
+                    option.textContent = "No words found in dataset";
+                    option.disabled = true;
+                    wordSelect.appendChild(option);
                 }
             })
             .catch(error => {
                 console.error('Error fetching words:', error);
+                wordSelect.innerHTML = '';
+                const option = document.createElement('option');
+                option.textContent = "Error loading words";
+                option.disabled = true;
+                wordSelect.appendChild(option);
                 wordSelect.disabled = false;
             });
             
@@ -277,6 +360,18 @@
                     existingHint.remove();
                 }
             }
+            
+            // Load dataset preview information
+            loadDatasetPreview(selectedDataset);
+        }
+        
+        // Function to load dataset preview
+        function loadDatasetPreview(dataset) {
+            // Could implement this to fetch and display a preview of the dataset
+            // This would help users understand the content before training
+            console.log("Preview requested for dataset:", dataset);
+            // This would be an API endpoint that returns basic dataset info
+            // fetch(`/pi_main/api/dataset-preview/?dataset=${dataset}`)...
         }
         
         // Update word options when dataset changes
@@ -284,6 +379,13 @@
         
         // Handle form submission
         trainingForm.addEventListener('submit', function(e) {
+            // Validate word selection if words are selected
+            if (wordSelect.selectedOptions.length > 0 && !validateWordSelection()) {
+                e.preventDefault();
+                alert("Please select at least 2 different words for training");
+                return false;
+            }
+            
             // Show loading overlay
             trainingOverlay.classList.remove('d-none');
             submitBtn.disabled = true;

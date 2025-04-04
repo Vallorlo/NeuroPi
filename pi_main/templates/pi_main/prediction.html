@@ -1,0 +1,409 @@
+{% extends "layout.html" %}
+{% load custom_filters %}
+{% block title %}
+    EEG Prediction
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row">
+        <div class="col-lg-10 offset-lg-1">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h1 class="mb-0">EEG Prediction</h1>
+                </div>
+                <div class="card-body">
+                    <ul class="nav nav-tabs mb-4" id="predictionTypeTab" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="post-recording-tab" data-bs-toggle="tab" data-bs-target="#post-recording" type="button" role="tab" aria-controls="post-recording" aria-selected="true">
+                                <i class="bi bi-record-btn"></i> Post-Recording Prediction
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="live-tab" data-bs-toggle="tab" data-bs-target="#live" type="button" role="tab" aria-controls="live" aria-selected="false">
+                                <i class="bi bi-lightning-charge"></i> Live Prediction
+                            </button>
+                        </li>
+                    </ul>
+                    
+                    <div class="tab-content" id="predictionTypeTabContent">
+                        <!-- Post-Recording Prediction Tab -->
+                        <div class="tab-pane fade show active" id="post-recording" role="tabpanel" aria-labelledby="post-recording-tab">
+                            <div class="row">
+                                <div class="col-md-5">
+                                    <div class="card mb-4">
+                                        <div class="card-header bg-info text-white">
+                                            <h5 class="mb-0">Record EEG Data</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <form method="post" id="postRecordingForm">
+                                                {% csrf_token %}
+                                                <div class="mb-3">
+                                                    <label for="modelSelect" class="form-label">Select Model</label>
+                                                    <select id="modelSelect" name="model" class="form-select" required>
+                                                        <option value="">-- Select Model --</option>
+                                                        {% for model in models %}
+                                                            <option value="{{ model.id }}" 
+                                                                    data-accuracy="{{ model.accuracy|floatformat:2 }}">
+                                                                {{ model.name }} ({{ model.accuracy|floatformat:2|mul:100 }}%)
+                                                            </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <label for="participantSelect" class="form-label">Participant</label>
+                                                    <select id="participantSelect" name="participant" class="form-select">
+                                                        <option value="">-- Select Participant --</option>
+                                                        {% for participant in participants %}
+                                                            <option value="{{ participant }}">{{ participant }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <label for="sampleDuration" class="form-label">Recording Duration (seconds)</label>
+                                                    <input type="number" id="sampleDuration" name="sample_duration" class="form-control" 
+                                                           min="1" max="30" value="10" step="1">
+                                                </div>
+                                                
+                                                <div class="mb-3">
+                                                    <label for="targetWord" class="form-label">Target Word (Optional)</label>
+                                                    <input type="text" id="targetWord" name="target_word" class="form-control" 
+                                                           placeholder="Word to think/speak">
+                                                </div>
+                                                
+                                                <div class="d-grid gap-2">
+                                                    <button type="button" id="connectEEGBtn" class="btn btn-secondary">
+                                                        <i class="bi bi-hdd-network"></i> Connect EEG Headset
+                                                    </button>
+                                                    <button type="submit" id="startRecordingBtn" class="btn btn-success" disabled>
+                                                        <i class="bi bi-record-circle"></i> Record & Predict
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="card mb-4">
+                                        <div class="card-header bg-secondary text-white">
+                                            <h5 class="mb-0">Connection Status</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <div class="d-flex align-items-center mb-3">
+                                                <div id="eegStatus" class="status-indicator bg-danger me-2"></div>
+                                                <span>EEG Headset</span>
+                                            </div>
+                                            
+                                            <div class="d-flex align-items-center mb-3">
+                                                <div id="modelStatus" class="status-indicator bg-danger me-2"></div>
+                                                <span>Model Loaded</span>
+                                            </div>
+                                            
+                                            <div id="statusMessage" class="alert alert-info mt-3">
+                                                Select a model and connect your EEG headset to begin.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-7">
+                                    <div class="card mb-4">
+                                        <div class="card-header bg-success text-white">
+                                            <h5 class="mb-0">Prediction Results</h5>
+                                        </div>
+                                        <div class="card-body text-center">
+                                            {% if recording_status == "recording" %}
+                                                <div id="recordingIndicator" class="alert alert-warning">
+                                                    <i class="bi bi-record-circle text-danger"></i> Recording EEG Data...
+                                                    <div class="progress mt-2">
+                                                        <div id="recordingProgress" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                                             role="progressbar" style="width: 50%" 
+                                                             aria-valuenow="50" aria-valuemin="0" aria-valuemax="100">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            {% elif recording_status == "processing" %}
+                                                <div id="processingIndicator" class="alert alert-info">
+                                                    <i class="bi bi-cpu"></i> Processing EEG Data...
+                                                    <div class="progress mt-2">
+                                                        <div class="progress-bar progress-bar-striped progress-bar-animated bg-info" 
+                                                             role="progressbar" style="width: 100%" 
+                                                             aria-valuenow="100" aria-valuemin="0" aria-valuemax="100">
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            {% elif recording_status == "error" %}
+                                                <div class="alert alert-danger">
+                                                    <i class="bi bi-exclamation-triangle"></i> Error: {{ prediction_results.error }}
+                                                </div>
+                                            {% elif recording_status == "success" and prediction_results %}
+                                                <div class="prediction-container mb-4">
+                                                    <h2 id="predictedWord">{{ prediction_results.predicted_word }}</h2>
+                                                    <div class="progress mb-3">
+                                                        <div id="confidenceBar" class="progress-bar 
+                                                            {% if prediction_results.confidence >= 0.7 %}bg-success{% elif prediction_results.confidence >= 0.4 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                             role="progressbar" 
+                                                             style="width: {{ prediction_results.confidence|mul:100 }}%" 
+                                                             aria-valuenow="{{ prediction_results.confidence|mul:100 }}" 
+                                                             aria-valuemin="0" 
+                                                             aria-valuemax="100">
+                                                        </div>
+                                                    </div>
+                                                    <p id="confidenceValue">Confidence: {{ prediction_results.confidence|mul:100|floatformat:1 }}%</p>
+                                                    
+                                                    <div id="topPredictions" class="row prediction-grid mt-4">
+                                                        {% for prediction in prediction_results.predictions %}
+                                                            {% if forloop.counter <= 6 %}
+                                                                <div class="col-md-4 mb-2">
+                                                                    <div class="card h-100">
+                                                                        <div class="card-body p-2 text-center">
+                                                                            <h5 class="mb-1">{{ prediction.word }}</h5>
+                                                                            <div class="progress mt-1 mb-1">
+                                                                                <div class="progress-bar 
+                                                                                    {% if prediction.confidence >= 0.7 %}bg-success{% elif prediction.confidence >= 0.4 %}bg-warning{% else %}bg-danger{% endif %}" 
+                                                                                     role="progressbar" 
+                                                                                     style="width: {{ prediction.confidence|mul:100 }}%" 
+                                                                                     aria-valuenow="{{ prediction.confidence|mul:100 }}" 
+                                                                                     aria-valuemin="0" 
+                                                                                     aria-valuemax="100">
+                                                                                </div>
+                                                                            </div>
+                                                                            <small>{{ prediction.confidence|mul:100|floatformat:1 }}%</small>
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            {% endif %}
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                                
+                                                <div class="alert alert-success">
+                                                    <i class="bi bi-check-circle"></i> Successfully processed {{ prediction_results.samples_collected }} EEG samples
+                                                </div>
+                                            {% else %}
+                                                <div class="alert alert-info">
+                                                    <i class="bi bi-info-circle"></i> Record EEG data and get prediction results here.
+                                                </div>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="card">
+                                        <div class="card-header bg-warning text-dark">
+                                            <h5 class="mb-0">Instructions</h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <ol>
+                                                <li>Select a model from the dropdown</li>
+                                                <li>Connect your EEG headset</li>
+                                                <li>Set the recording duration (5-10 seconds recommended)</li>
+                                                <li>Optional: Enter the target word you'll think about</li>
+                                                <li>Click "Record & Predict" and focus on thinking about the word</li>
+                                                <li>Hold still during recording to minimize artifacts</li>
+                                                <li>View your prediction results when complete</li>
+                                            </ol>
+                                            <div class="alert alert-info">
+                                                <i class="bi bi-lightbulb"></i> <strong>Tip:</strong> For best results, try to clear your mind before recording and focus intently on the target word during recording.
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Live Prediction Tab -->
+                        <div class="tab-pane fade" id="live" role="tabpanel" aria-labelledby="live-tab">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> Live prediction mode is currently in development. Please use the Post-Recording Prediction tab for now.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{% url 'pi_main:model_dashboard' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-arrow-left"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Instructions Modal -->
+<div class="modal fade" id="instructionsModal" tabindex="-1" aria-labelledby="instructionsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="instructionsModalLabel">EEG Prediction Instructions</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-info">
+                    <h5>How to use the EEG Prediction tool:</h5>
+                    <ol>
+                        <li>Select a trained model from the dropdown</li>
+                        <li>Connect your EEG headset by clicking the "Connect EEG Headset" button</li>
+                        <li>Choose a participant (optional)</li>
+                        <li>Set the recording duration (5-10 seconds recommended)</li>
+                        <li>Enter a target word if you're testing specific words</li>
+                        <li>Click "Record & Predict"</li>
+                        <li>Think about or speak the word during the recording period</li>
+                        <li>View results when collection is complete</li>
+                    </ol>
+                </div>
+                
+                <h5>Tips for best results:</h5>
+                <ul class="ulguide">
+                    <li>Ensure the EEG headset is positioned correctly and has good contact</li>
+                    <li>Try to minimize movement and muscle tension</li>
+                    <li>Focus clearly on the word you're thinking about</li>
+                    <li>For vocal tests, speak clearly but naturally</li>
+                    <li>Try multiple attempts to improve accuracy</li>
+                </ul>
+                
+                <h5>Troubleshooting:</h5>
+                <ul class="ulguide">
+                    <li>If the EEG status indicator remains red, try reconnecting or reseating the headset</li>
+                    <li>If predictions seem random, try increasing the sample duration</li>
+                    <li>Different models may perform better with different participants</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Got it!</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // UI Elements
+        const modelSelect = document.getElementById('modelSelect');
+        const connectEEGBtn = document.getElementById('connectEEGBtn');
+        const startRecordingBtn = document.getElementById('startRecordingBtn');
+        const eegStatus = document.getElementById('eegStatus');
+        const modelStatus = document.getElementById('modelStatus');
+        const statusMessage = document.getElementById('statusMessage');
+        
+        // Show instructions modal on first load
+        const instructionsModal = new bootstrap.Modal(document.getElementById('instructionsModal'));
+        if (!localStorage.getItem('predictionInstructionsShown')) {
+            instructionsModal.show();
+            localStorage.setItem('predictionInstructionsShown', 'true');
+        }
+        
+        // Connect EEG button handler
+        connectEEGBtn.addEventListener('click', function() {
+            // Show connecting status
+            eegStatus.className = 'status-indicator bg-warning me-2';
+            statusMessage.className = 'alert alert-warning';
+            statusMessage.textContent = 'Connecting to EEG headset...';
+            connectEEGBtn.disabled = true;
+            
+            // Call the initialize endpoint
+            fetch('/pi_main/api/initialize-eeg/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Connection successful
+                    eegStatus.className = 'status-indicator bg-success me-2';
+                    statusMessage.className = 'alert alert-success';
+                    statusMessage.textContent = data.message;
+                    
+                    // Enable start button if model is selected
+                    if (modelSelect.value) {
+                        startRecordingBtn.disabled = false;
+                    }
+                } else {
+                    // Connection failed
+                    eegStatus.className = 'status-indicator bg-danger me-2';
+                    statusMessage.className = 'alert alert-danger';
+                    statusMessage.textContent = data.message || 'Failed to connect to EEG headset';
+                }
+                
+                // Re-enable connect button
+                connectEEGBtn.disabled = false;
+            })
+            .catch(error => {
+                console.error('Error connecting to EEG headset:', error);
+                eegStatus.className = 'status-indicator bg-danger me-2';
+                statusMessage.className = 'alert alert-danger';
+                statusMessage.textContent = 'Error connecting to EEG headset. Please try again.';
+                connectEEGBtn.disabled = false;
+            });
+        });
+        
+        // Model select change handler
+        modelSelect.addEventListener('change', function() {
+            if (this.value) {
+                modelStatus.className = 'status-indicator bg-success me-2';
+                // Enable start button if EEG is connected
+                if (eegStatus.className.includes('bg-success')) {
+                    startRecordingBtn.disabled = false;
+                }
+            } else {
+                modelStatus.className = 'status-indicator bg-danger me-2';
+                startRecordingBtn.disabled = true;
+            }
+        });
+        
+        // Clean up EEG connection when leaving the page
+        window.addEventListener('beforeunload', function() {
+            // Only try to disconnect if the EEG is connected (green status)
+            if (eegStatus.className.includes('bg-success')) {
+                // Use a synchronous request to ensure it completes before page unload
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', '/pi_main/api/close-eeg/', false);  // false makes it synchronous
+                xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr.setRequestHeader('X-CSRFToken', document.querySelector('[name=csrfmiddlewaretoken]').value);
+                xhr.send();
+            }
+        });
+        
+        // Initialize UI based on selected model (if any)
+        if (modelSelect.value) {
+            modelStatus.className = 'status-indicator bg-success me-2';
+        }
+    });
+</script>
+
+<style>
+    .status-indicator {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+    }
+    
+    .prediction-container {
+        border: 1px solid #eee;
+        border-radius: 10px;
+        padding: 15px;
+        background-color: #f8f9fa;
+    }
+    
+    .prediction-container h2 {
+        font-size: 2.5rem;
+        font-weight: bold;
+        margin-bottom: 15px;
+    }
+    
+    .prediction-grid .card {
+        transition: all 0.3s ease;
+    }
+    
+    .prediction-grid .card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+</style>
+{% endblock extra_js %}

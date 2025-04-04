@@ -162,14 +162,31 @@
                                 </div>
                             </div>
                             
+                            <div class="card mb-4">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">Applied Filters</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div id="filterInfo" class="alert alert-light">
+                                        <p class="mb-0">The model was trained on data with the following filters:</p>
+                                        <ul class="mt-2">
+                                            <li>Bandpass filter: <span class="badge bg-secondary">4-50Hz</span></li>
+                                            <li>ICA for artifact removal: <span class="badge bg-secondary">Applied</span></li>
+                                            <li>Normalization: <span class="badge bg-secondary">Z-score</span></li>
+                                        </ul>
+                                        <p class="small text-muted mt-2 mb-0">These same filters will be applied to any new data during prediction.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div class="card">
                                 <div class="card-header bg-primary text-white">
                                     <h5 class="mb-0">Actions</h5>
                                 </div>
                                 <div class="card-body">
                                     <div class="d-grid gap-2">
-                                        <a href="{% url 'pi_main:live_prediction' %}?model={{ model.id }}" class="btn btn-success">
-                                            <i class="bi bi-lightning-charge"></i> Use for Live Prediction
+                                        <a href="{% url 'pi_main:prediction' %}?model={{ model.id }}" class="btn btn-success">
+                                            <i class="bi bi-lightning-charge"></i> Use for Prediction
                                         </a>
                                         <a href="{% url 'pi_main:model_evaluate' model.id %}" class="btn btn-info">
                                             <i class="bi bi-bar-chart"></i> Evaluate Model
@@ -356,6 +373,52 @@
                 });
             });
         }
+        
+        // Get filter information from preprocessing_info.json
+        fetch(`/pi_main/api/model-info/?model_id={{ model.id }}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success' && data.filter_config) {
+                    const filterInfo = document.getElementById('filterInfo');
+                    let filterHtml = '<p class="mb-0">The model was trained on data with the following filters:</p><ul class="mt-2">';
+                    
+                    // Add filter details
+                    if (data.filter_config.apply_bandpass) {
+                        filterHtml += `<li>Bandpass filter: <span class="badge bg-secondary">${data.filter_config.lowcut}-${data.filter_config.highcut}Hz</span></li>`;
+                    }
+                    
+                    if (data.filter_config.apply_highpass) {
+                        filterHtml += `<li>Highpass filter: <span class="badge bg-secondary">${data.filter_config.highpass_cutoff}Hz</span></li>`;
+                    }
+                    
+                    if (data.filter_config.apply_lowpass) {
+                        filterHtml += `<li>Lowpass filter: <span class="badge bg-secondary">${data.filter_config.lowpass_cutoff}Hz</span></li>`;
+                    }
+                    
+                    if (data.filter_config.apply_notch) {
+                        filterHtml += `<li>Notch filter: <span class="badge bg-secondary">${data.filter_config.notch_freq}Hz</span></li>`;
+                    }
+                    
+                    if (data.filter_config.apply_ica) {
+                        filterHtml += `<li>ICA for artifact removal: <span class="badge bg-secondary">${data.filter_config.ica_method}</span></li>`;
+                    }
+                    
+                    if (data.filter_config.normalize_data) {
+                        filterHtml += `<li>Normalization: <span class="badge bg-secondary">Z-score</span></li>`;
+                    }
+                    
+                    if (data.filter_config.remove_outliers) {
+                        filterHtml += `<li>Outlier removal: <span class="badge bg-secondary">Threshold ${data.filter_config.outlier_threshold}</span></li>`;
+                    }
+                    
+                    filterHtml += '</ul><p class="small text-muted mt-2 mb-0">These same filters will be applied to any new data during prediction.</p>';
+                    
+                    filterInfo.innerHTML = filterHtml;
+                }
+            })
+            .catch(error => {
+                console.error('Error loading filter configuration:', error);
+            });
     });
 </script>
 {% endblock extra_js %}

@@ -83,7 +83,7 @@ class ModelTrainingForm(forms.ModelForm):
                 item_path = os.path.join(base_dir, item)
                 if os.path.isdir(item_path):
                     # Check for processed directories
-                    if item.startswith('processed_'):
+                    if item.startswith('processed_') or item.startswith('cleaned_'):
                         # Look for combined and train/test datasets
                         for file in os.listdir(item_path):
                             if file.endswith('.csv'):
@@ -101,14 +101,6 @@ class ModelTrainingForm(forms.ModelForm):
                                     display_name = f"📁 {item}/{file}"
                                 
                                 choices.append((rel_path, display_name))
-                    
-                    # Check for cleaned directories
-                    elif item.startswith('cleaned_'):
-                        # Look for cleaned datasets
-                        for file in os.listdir(item_path):
-                            if file.endswith('.csv') and ('clean' in file.lower() or 'dataset' in file.lower()):
-                                rel_path = os.path.join(item, file)
-                                choices.append((rel_path, f"🧹 {item}/{file}"))
             
             # Then look for CSV files directly in the base directory
             for file in os.listdir(base_dir):
@@ -144,7 +136,7 @@ class ModelTrainingForm(forms.ModelForm):
         return cleaned_data
 
 class PredictionForm(forms.Form):
-    """Form for making real-time predictions."""
+    """Form for recording and making EEG predictions."""
     
     model = forms.ModelChoiceField(
         queryset=EEGModel.objects.filter(status='active'),
@@ -159,10 +151,15 @@ class PredictionForm(forms.Form):
     )
     
     sample_duration = forms.IntegerField(
-        initial=5,
+        initial=10,
         min_value=1,
         max_value=30,
         widget=forms.NumberInput(attrs={'class': 'form-control'})
+    )
+    
+    target_word = forms.CharField(
+        required=False,
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Word to think/speak'})
     )
     
     def __init__(self, *args, **kwargs):

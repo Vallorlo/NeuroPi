@@ -80,6 +80,17 @@
                                             </small>
                                         </div>
                                         
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="checkbox" id="applyFilters" name="apply_filters" checked>
+                                            <label class="form-check-label" for="applyFilters">
+                                                Apply model filters to test data
+                                            </label>
+                                            <small class="form-text text-muted d-block">
+                                                Enable if your test data has not been pre-filtered with the same filters used in training.
+                                                Disable if your test data was already filtered in the cleaner app.
+                                            </small>
+                                        </div>
+                                        
                                         <div class="d-grid gap-2">
                                             <button type="submit" class="btn btn-primary" id="evaluateBtn">
                                                 <i class="bi bi-play-circle"></i> Start Evaluation
@@ -193,6 +204,36 @@
         const evaluateForm = document.getElementById('evaluationForm');
         const evaluateBtn = document.getElementById('evaluateBtn');
         const evaluationOverlay = document.getElementById('evaluationOverlay');
+        const testDatasetSelect = document.getElementById('testDatasetSelect');
+        const applyFiltersCheckbox = document.getElementById('applyFilters');
+        
+        // Toggle apply filters checkbox based on dataset name
+        testDatasetSelect.addEventListener('change', function() {
+            const datasetName = this.options[this.selectedIndex].text;
+            
+            // If dataset name contains BP, ICA, or filter codes, suggest to disable filters
+            if (datasetName.includes('BP') || datasetName.includes('ICA') || 
+                datasetName.includes('_N') || datasetName.includes('cleaned_')) {
+                applyFiltersCheckbox.checked = false;
+                
+                // Show info alert
+                if (!document.getElementById('filterInfoAlert')) {
+                    const alert = document.createElement('div');
+                    alert.id = 'filterInfoAlert';
+                    alert.className = 'alert alert-info mt-2';
+                    alert.innerHTML = '<i class="bi bi-info-circle"></i> This dataset appears to be already filtered. Filters have been disabled.';
+                    applyFiltersCheckbox.parentNode.appendChild(alert);
+                }
+            } else {
+                applyFiltersCheckbox.checked = true;
+                
+                // Remove info alert if exists
+                const alert = document.getElementById('filterInfoAlert');
+                if (alert) {
+                    alert.remove();
+                }
+            }
+        });
         
         // Handle form submission
         if (evaluateForm) {

@@ -158,14 +158,14 @@
                         <div class="col-md-6 mb-4">
                             <div class="card">
                                 <div class="card-header bg-light">
-                                    <h5 class="mb-0">ROC Curves</h5>
+                                    <h5 class="mb-0">Class Confidence</h5>
                                 </div>
                                 <div class="card-body text-center">
-                                    {% if charts.roc_curves %}
-                                        <img src="data:image/png;base64,{{ charts.roc_curves }}" alt="ROC Curves" class="img-fluid">
+                                    {% if charts.class_confidence %}
+                                        <img src="data:image/png;base64,{{ charts.class_confidence }}" alt="Class Confidence" class="img-fluid">
                                     {% else %}
                                         <div class="alert alert-warning">
-                                            <i class="bi bi-exclamation-triangle"></i> No ROC curves available.
+                                            <i class="bi bi-exclamation-triangle"></i> No class confidence plot available.
                                         </div>
                                     {% endif %}
                                 </div>
@@ -175,14 +175,32 @@
                         <div class="col-md-6 mb-4">
                             <div class="card">
                                 <div class="card-header bg-light">
-                                    <h5 class="mb-0">Precision-Recall Curves</h5>
+                                    <h5 class="mb-0">Model Details</h5>
                                 </div>
-                                <div class="card-body text-center">
-                                    {% if charts.pr_curves %}
-                                        <img src="data:image/png;base64,{{ charts.pr_curves }}" alt="Precision-Recall Curves" class="img-fluid">
+                                <div class="card-body">
+                                    <h6>Class Distribution</h6>
+                                    {% if metrics.class_distribution %}
+                                        <div class="table-responsive">
+                                            <table class="table table-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Word</th>
+                                                        <th>Count</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {% for class_name, count in metrics.class_distribution.items %}
+                                                        <tr>
+                                                            <td>{{ class_name }}</td>
+                                                            <td>{{ count }}</td>
+                                                        </tr>
+                                                    {% endfor %}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     {% else %}
                                         <div class="alert alert-warning">
-                                            <i class="bi bi-exclamation-triangle"></i> No precision-recall curves available.
+                                            <i class="bi bi-exclamation-triangle"></i> No class distribution data available.
                                         </div>
                                     {% endif %}
                                 </div>

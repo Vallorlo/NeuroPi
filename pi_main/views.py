@@ -199,6 +199,47 @@ def close_eeg_api(request):
             'message': str(e)
         }, status=500)
 
+def model_info_api(request):
+    """API endpoint to get model information including filter configuration."""
+    model_id = request.GET.get('model_id')
+    
+    if not model_id:
+        return JsonResponse({'error': 'No model ID provided'}, status=400)
+    
+    try:
+        model = EEGModel.objects.get(id=model_id)
+        
+        # Get model directory path
+        model_dir = os.path.join(settings.BASE_DIR, model.model_path)
+        
+        # Try to load preprocessing info
+        preprocessing_info = {}
+        preprocessing_path = os.path.join(model_dir, 'preprocessing_info.json')
+        
+        if os.path.exists(preprocessing_path):
+            with open(preprocessing_path, 'r') as f:
+                preprocessing_info = json.load(f)
+        
+        # Return filter configuration and other model info
+        return JsonResponse({
+            'status': 'success',
+            'model_id': model_id,
+            'model_name': model.name,
+            'filter_config': preprocessing_info.get('filter_config', {}),
+            'eeg_columns': preprocessing_info.get('eeg_columns', []),
+            'band_columns': preprocessing_info.get('band_columns', []),
+            'sequence_length': preprocessing_info.get('sequence_length', 40),
+            'words': preprocessing_info.get('words', []),
+            'has_band_features': preprocessing_info.get('has_band_features', False),
+            'silence_balance_ratio': preprocessing_info.get('silence_balance_ratio', 1.0)
+        })
+        
+    except EEGModel.DoesNotExist:
+        return JsonResponse({'error': 'Model not found'}, status=404)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
 def model_dashboard(request):
     """Main dashboard for the model training and prediction app."""
     # Get latest models
@@ -220,57 +261,8 @@ def model_dashboard(request):
     
     return render(request, 'pi_main/dashboard.html', context)
 
-def train_model(request):
-    """View for creating and starting model training."""
-    if request.method == 'POST':
-        form = ModelTrainingForm(request.POST)
-        if form.is_valid():
-            training_job = form.save(commit=False)
-            training_job.user = request.user.username if request.user.is_authenticated else 'anonymous'
-            training_job.status = 'queued'
-            training_job.save()
-            
-            # Start training in background thread
-            threading.Thread(target=train_model_background, args=(training_job.id,)).start()
-            
-            return redirect('pi_main:job_detail', job_id=training_job.id)
-    else:
-        # Check if we're retrying a failed job
-        retry_job_id = request.GET.get('retry')
-        if retry_job_id:
-            try:
-                job = TrainingJob.objects.get(id=retry_job_id)
-                form = ModelTrainingForm(instance=job)
-            except TrainingJob.DoesNotExist:
-                form = ModelTrainingForm()
-        else:
-            form = ModelTrainingForm()
-    
-    # Get available datasets
-    datasets = get_available_datasets()
-    
-    context = {
-        'form': form,
-        'datasets': datasets,
-    }
-    
-    return render(request, 'pi_main/train_model.html', context)
-
-def job_detail(request, job_id):
-    """View details of a specific training job."""
-    job = get_object_or_404(TrainingJob, id=job_id)
-    
-    # Check if this job has created a model
-    try:
-        model = EEGModel.objects.get(training_job=job)
-        return redirect('pi_main:model_detail', model_id=model.id)
-    except EEGModel.DoesNotExist:
-        pass
-    
-    return render(request, 'pi_main/training_detail.html', {'job': job})
-
 def train_model_background(job_id):
-    """Background process to train the model."""
+    """Background process to train the model with enhanced parameters."""
     job = TrainingJob.objects.get(id=job_id)
     job.status = 'training'
     job.save()
@@ -285,7 +277,16 @@ def train_model_background(job_id):
         else:
             dataset_path = os.path.join(settings.TRIAL_DIR, dataset_path)
         
-        # Create trainer with apply_filtering parameter
+        # Get enhanced parameters from job metadata or use defaults
+        job_metadata = json.loads(job.metadata) if hasattr(job, 'metadata') and job.metadata else {}
+        
+        # Extract enhanced parameters with defaults if not present
+        silence_balance_ratio = job_metadata.get('silence_balance_ratio', 0.5)
+        use_focal_loss = job_metadata.get('use_focal_loss', True)
+        use_transformer = job_metadata.get('use_transformer', True)
+        augmentation_factor = job_metadata.get('augmentation_factor', 0.3)
+        
+        # Create trainer with enhanced parameters
         trainer = RNNModelTrainer(
             dataset_path=dataset_path,
             model_name=job.model_name,
@@ -297,7 +298,12 @@ def train_model_background(job_id):
             hidden_units=job.hidden_units,
             dropout_rate=job.dropout_rate,
             recurrent_dropout=job.recurrent_dropout,
-            apply_filtering=job.apply_filtering  # Pass the filtering option
+            apply_filtering=job.apply_filtering,
+            # Enhanced parameters
+            silence_balance_ratio=silence_balance_ratio,
+            use_focal_loss=use_focal_loss,
+            use_transformer=use_transformer,
+            augmentation_factor=augmentation_factor
         )
         
         # Train model
@@ -335,21 +341,72 @@ def train_model_background(job_id):
         job.save()
         traceback.print_exc()
 
-def model_list(request):
-    """View all trained models."""
-    models = EEGModel.objects.all().order_by('-created_at')
-    return render(request, 'pi_main/model_list.html', {'models': models})
-
-def model_detail(request, model_id):
-    """View details of a specific model."""
-    model = get_object_or_404(EEGModel, id=model_id)
-    job = model.training_job
+def train_model(request):
+    """View for creating and starting model training with enhanced parameters."""
+    if request.method == 'POST':
+        form = ModelTrainingForm(request.POST)
+        if form.is_valid():
+            training_job = form.save(commit=False)
+            training_job.user = request.user.username if request.user.is_authenticated else 'anonymous'
+            training_job.status = 'queued'
+            
+            # Store enhanced parameters in metadata field
+            metadata = {
+                'silence_balance_ratio': form.cleaned_data.get('silence_balance_ratio', 0.5),
+                'use_focal_loss': form.cleaned_data.get('use_focal_loss', True),
+                'use_transformer': form.cleaned_data.get('use_transformer', True),
+                'augmentation_factor': form.cleaned_data.get('augmentation_factor', 0.3)
+            }
+            
+            # Check if the model has a metadata field, if so use it
+            if hasattr(training_job, 'metadata'):
+                training_job.metadata = json.dumps(metadata)
+            
+            training_job.save()
+            
+            # Start training in background thread
+            threading.Thread(target=train_model_background, args=(training_job.id,)).start()
+            
+            return redirect('pi_main:job_detail', job_id=training_job.id)
+    else:
+        # Check if we're retrying a failed job
+        retry_job_id = request.GET.get('retry')
+        if retry_job_id:
+            try:
+                job = TrainingJob.objects.get(id=retry_job_id)
+                form = ModelTrainingForm(instance=job)
+                
+                # Pre-populate enhanced parameters if available
+                if hasattr(job, 'metadata') and job.metadata:
+                    try:
+                        metadata = json.loads(job.metadata)
+                        if 'silence_balance_ratio' in metadata:
+                            form.fields['silence_balance_ratio'].initial = metadata['silence_balance_ratio']
+                        if 'use_focal_loss' in metadata:
+                            form.fields['use_focal_loss'].initial = metadata['use_focal_loss']
+                        if 'use_transformer' in metadata:
+                            form.fields['use_transformer'].initial = metadata['use_transformer']
+                        if 'augmentation_factor' in metadata:
+                            form.fields['augmentation_factor'].initial = metadata['augmentation_factor']
+                    except:
+                        pass
+            except TrainingJob.DoesNotExist:
+                form = ModelTrainingForm()
+        else:
+            form = ModelTrainingForm()
     
-    return render(request, 'pi_main/model_detail.html', {'model': model, 'job': job})
-
+    # Get available datasets
+    datasets = get_available_datasets()
+    
+    context = {
+        'form': form,
+        'datasets': datasets,
+    }
+    
+    return render(request, 'pi_main/train_model.html', context)
 
 def prediction(request):
-    """Interface for EEG prediction (both live and post-recording)."""
+    """Interface for EEG prediction with enhanced speech detection."""
     # Get available models
     models = EEGModel.objects.filter(status='active').order_by('-created_at')
     
@@ -382,6 +439,10 @@ def prediction(request):
                 model_id = form.cleaned_data['model'].id
                 duration = form.cleaned_data['sample_duration']
                 participant = form.cleaned_data['participant']
+                
+                # Get enhanced prediction settings
+                use_custom_thresholds = form.cleaned_data.get('use_custom_thresholds', True)
+                use_majority_voting = form.cleaned_data.get('use_majority_voting', True)
                 
                 # Get the model
                 model = get_object_or_404(EEGModel, id=model_id)
@@ -424,6 +485,12 @@ def prediction(request):
                 # Load the model predictor
                 model_predictor = RNNPredictor(model_path=model.model_path)
                 
+                # Store user-defined options - custom predictor properties
+                if hasattr(model_predictor, 'use_custom_thresholds'):
+                    model_predictor.use_custom_thresholds = use_custom_thresholds
+                if hasattr(model_predictor, 'use_majority_voting'):
+                    model_predictor.use_majority_voting = use_majority_voting
+                
                 # Make prediction
                 context['recording_status'] = "processing"
                 predictions = model_predictor.predict(eeg_data)
@@ -439,7 +506,12 @@ def prediction(request):
                         'predicted_word': predictions['predicted_word'],
                         'confidence': predictions['confidence'],
                         'predictions': predictions['predictions'],
-                        'samples_collected': len(data)
+                        'samples_collected': len(data),
+                        # Include enhanced prediction details
+                        'custom_thresholds_used': predictions.get('custom_thresholds_used', False),
+                        'majority_vote_applied': predictions.get('majority_vote_applied', False),
+                        'silence_margin': predictions.get('silence_margin', None),
+                        'silence_confidence_ratio': predictions.get('silence_confidence_ratio', None)
                     }
                     
                     # Save the prediction to database
@@ -464,6 +536,32 @@ def prediction(request):
                 }
     
     return render(request, 'pi_main/prediction.html', context)
+
+def job_detail(request, job_id):
+    """View details of a specific training job."""
+    job = get_object_or_404(TrainingJob, id=job_id)
+    
+    # Check if this job has created a model
+    try:
+        model = EEGModel.objects.get(training_job=job)
+        return redirect('pi_main:model_detail', model_id=model.id)
+    except EEGModel.DoesNotExist:
+        pass
+    
+    return render(request, 'pi_main/training_detail.html', {'job': job})
+
+def model_list(request):
+    """View all trained models."""
+    models = EEGModel.objects.all().order_by('-created_at')
+    return render(request, 'pi_main/model_list.html', {'models': models})
+
+def model_detail(request, model_id):
+    """View details of a specific model."""
+    model = get_object_or_404(EEGModel, id=model_id)
+    job = model.training_job
+    
+    return render(request, 'pi_main/model_detail.html', {'model': model, 'job': job})
+
 
 def start_training_api(request):
     """API endpoint to start model training."""
@@ -789,7 +887,7 @@ def delete_job(request, job_id):
 
 
 def model_evaluate(request, model_id):
-    """View for evaluating a model on a test dataset."""
+    """View for evaluating a model on a test dataset with robust error handling."""
     model = get_object_or_404(EEGModel, id=model_id)
     
     # Get available test datasets
@@ -807,11 +905,26 @@ def model_evaluate(request, model_id):
             return redirect('pi_main:model_evaluate', model_id=model_id)
         
         try:
-            # Load the model
-            predictor = RNNPredictor(model_path=model.model_path)
+            # Load the model with robust error handling
+            print(f"Loading model from {model.model_path}")
+            try:
+                predictor = RNNPredictor(model_path=model.model_path)
+                print("Model loaded successfully")
+            except Exception as e:
+                print(f"Error loading model: {e}")
+                messages.error(request, f"Error loading model: {str(e)}")
+                return redirect('pi_main:model_evaluate', model_id=model_id)
             
             # Evaluate the model with apply_filters parameter
-            results = predictor.evaluate(test_dataset, apply_filters=apply_filters)
+            print(f"Evaluating model on {test_dataset}")
+            try:
+                results = predictor.evaluate(test_dataset, apply_filters=apply_filters)
+                print("Evaluation completed successfully")
+            except Exception as e:
+                print(f"Error during evaluation: {e}")
+                traceback.print_exc()
+                messages.error(request, f"Error during evaluation: {str(e)}")
+                return redirect('pi_main:model_evaluate', model_id=model_id)
             
             if not results.get('success', False):
                 error_message = results.get('error', 'Unknown error during evaluation')
@@ -819,20 +932,27 @@ def model_evaluate(request, model_id):
                 return redirect('pi_main:model_evaluate', model_id=model_id)
             
             # Save the evaluation results to the model
-            evaluation = ModelEvaluation(
-                model=model,
-                dataset_path=test_dataset,
-                accuracy=results['metrics']['accuracy'],
-                eval_data=json.dumps(results['metrics'])  # This should now work with the convert_numpy_types function
-            )
-            evaluation.save()
+            try:
+                evaluation = ModelEvaluation(
+                    model=model,
+                    dataset_path=test_dataset,
+                    accuracy=results['metrics']['accuracy'],
+                    eval_data=json.dumps(results['metrics'])  # This should now work with the convert_numpy_types function
+                )
+                evaluation.save()
+                print(f"Evaluation saved with ID: {evaluation.id}")
+            except Exception as e:
+                print(f"Error saving evaluation: {e}")
+                traceback.print_exc()
+                messages.error(request, f"Error saving evaluation: {str(e)}")
+                return redirect('pi_main:model_evaluate', model_id=model_id)
             
             # Redirect to the evaluation detail view
             return redirect('pi_main:evaluation_detail', evaluation_id=evaluation.id)
             
         except Exception as e:
             traceback.print_exc()
-            messages.error(request, f"Error during evaluation: {str(e)}")
+            messages.error(request, f"Error during evaluation process: {str(e)}")
             return redirect('pi_main:model_evaluate', model_id=model_id)
     
     # Get previous evaluations for this model

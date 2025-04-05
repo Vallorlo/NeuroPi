@@ -32,6 +32,43 @@ class ModelTrainingForm(forms.ModelForm):
         widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
     
+    # Enhanced speech detection parameters
+    silence_balance_ratio = forms.FloatField(
+        min_value=0.1,
+        max_value=2.0,
+        initial=0.5,
+        required=False,
+        label="Silence:Speech Ratio",
+        help_text="Lower values (0.5) reduce silence samples, higher values (1.5) preserve more silence",
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'})
+    )
+    
+    use_focal_loss = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Use Focal Loss",
+        help_text="Specialized loss function for imbalanced classes (recommended)",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
+    use_transformer = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Use Transformer Architecture",
+        help_text="Modern architecture with attention mechanism (recommended for speech)",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
+    augmentation_factor = forms.FloatField(
+        min_value=0.0,
+        max_value=1.0,
+        initial=0.3,
+        required=False,
+        label="Data Augmentation Factor",
+        help_text="Amount of synthetic speech data to generate (0 = none, 1 = double the data)",
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'})
+    )
+    
     class Meta:
         model = TrainingJob
         fields = [
@@ -72,9 +109,10 @@ class ModelTrainingForm(forms.ModelForm):
         # Set up word choices (will be updated via JavaScript based on selected dataset)
         self.fields['selected_words'].choices = self.get_word_choices()
     
-    def get_dataset_choices(self):
+    @staticmethod
+    def get_dataset_choices():
         """Get choices for dataset selection."""
-        choices = [('', '-- Select Dataset --')]
+        choices = [('', '-- Select Dataset --')]  # Add a default option
         base_dir = settings.TRIAL_DIR
         
         if os.path.exists(base_dir):
@@ -160,6 +198,23 @@ class PredictionForm(forms.Form):
     target_word = forms.CharField(
         required=False,
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Word to think/speak'})
+    )
+    
+    # Enhanced prediction settings
+    use_custom_thresholds = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Use Custom Decision Thresholds",
+        help_text="Applies different thresholds for silence vs. speech (recommended)",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
+    )
+    
+    use_majority_voting = forms.BooleanField(
+        required=False,
+        initial=True,
+        label="Use Majority Voting",
+        help_text="Combines predictions across time windows for better accuracy",
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
     
     def __init__(self, *args, **kwargs):

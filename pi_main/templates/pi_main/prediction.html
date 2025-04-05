@@ -73,6 +73,34 @@
                                                            placeholder="Word to think/speak">
                                                 </div>
                                                 
+                                                <!-- Enhanced Prediction Options -->
+                                                <div class="card mb-3 border-danger">
+                                                    <div class="card-header bg-danger text-white">
+                                                        <h6 class="mb-0">Enhanced Speech Detection</h6>
+                                                    </div>
+                                                    <div class="card-body">
+                                                        <div class="form-check mb-2">
+                                                            <input class="form-check-input" type="checkbox" id="useCustomThresholds" name="use_custom_thresholds" checked>
+                                                            <label class="form-check-label" for="useCustomThresholds">
+                                                                Use Custom Decision Thresholds
+                                                            </label>
+                                                            <small class="form-text text-muted d-block">
+                                                                Applies different thresholds for silence vs. speech (recommended)
+                                                            </small>
+                                                        </div>
+                                                        
+                                                        <div class="form-check">
+                                                            <input class="form-check-input" type="checkbox" id="useMajorityVoting" name="use_majority_voting" checked>
+                                                            <label class="form-check-label" for="useMajorityVoting">
+                                                                Use Majority Voting
+                                                            </label>
+                                                            <small class="form-text text-muted d-block">
+                                                                Combines predictions across time windows for better accuracy
+                                                            </small>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                
                                                 <div class="d-grid gap-2">
                                                     <button type="button" id="connectEEGBtn" class="btn btn-secondary">
                                                         <i class="bi bi-hdd-network"></i> Connect EEG Headset
@@ -152,6 +180,25 @@
                                                     </div>
                                                     <p id="confidenceValue">Confidence: {{ prediction_results.confidence|mul:100|floatformat:1 }}%</p>
                                                     
+                                                    <!-- Enhanced prediction info -->
+                                                    {% if prediction_results.custom_thresholds_used or prediction_results.majority_vote_applied %}
+                                                      <div class="alert alert-info mb-3">
+                                                        <h6><i class="bi bi-info-circle"></i> Enhanced Detection Details:</h6>
+                                                        <ul class="mb-0 text-start">
+                                                            {% if prediction_results.custom_thresholds_used %}
+                                                                <li>Custom decision thresholds applied</li>
+                                                            {% endif %}
+                                                            {% if prediction_results.majority_vote_applied %}
+                                                                <li>Majority voting across {{ prediction_results.window_count }} windows</li>
+                                                            {% endif %}
+                                                            {% if prediction_results.predicted_word == 'sil' and prediction_results.silence_margin != None %}
+                                                                <li>Confidence margin: {{ prediction_results.silence_margin|mul:100|floatformat:1 }}% above next word</li>
+                                                                <li>Confidence ratio: {{ prediction_results.silence_confidence_ratio|floatformat:2 }}x</li>
+                                                            {% endif %}
+                                                        </ul>
+                                                      </div>
+                                                    {% endif %}
+                                                    
                                                     <div id="topPredictions" class="row prediction-grid mt-4">
                                                         {% for prediction in prediction_results.predictions %}
                                                             {% if forloop.counter <= 6 %}
@@ -170,6 +217,22 @@
                                                                                 </div>
                                                                             </div>
                                                                             <small>{{ prediction.confidence|mul:100|floatformat:1 }}%</small>
+                                                                            
+                                                                            <!-- Display votes if available -->
+                                                                            {% if prediction.votes %}
+                                                                                <div class="mt-1">
+                                                                                    <small class="text-muted">{{ prediction.votes }} votes 
+                                                                                    ({{ prediction.vote_percentage|mul:100|floatformat:0 }}%)</small>
+                                                                                </div>
+                                                                            {% endif %}
+                                                                            
+                                                                            <!-- Threshold indicator -->
+                                                                            {% if prediction.is_threshold_met %}
+                                                                                <div class="mt-1">
+                                                                                    <i class="bi bi-check-circle-fill text-success" 
+                                                                                       title="Meets threshold"></i>
+                                                                                </div>
+                                                                            {% endif %}
                                                                         </div>
                                                                     </div>
                                                                 </div>
@@ -248,10 +311,25 @@
                         <li>Choose a participant (optional)</li>
                         <li>Set the recording duration (5-10 seconds recommended)</li>
                         <li>Enter a target word if you're testing specific words</li>
+                        <li>Enable enhanced detection options (recommended)</li>
                         <li>Click "Record & Predict"</li>
                         <li>Think about or speak the word during the recording period</li>
                         <li>View results when collection is complete</li>
                     </ol>
+                </div>
+                
+                <div class="card mb-3 border-danger">
+                    <div class="card-header bg-danger text-white">
+                        <h6 class="mb-0">About Enhanced Speech Detection</h6>
+                    </div>
+                    <div class="card-body">
+                        <p>The enhanced speech detection features help the model better distinguish between actual speech and silence in EEG signals:</p>
+                        <ul>
+                            <li><strong>Custom Decision Thresholds</strong> - Uses different confidence thresholds for silence vs. speech classes, making the model less likely to default to silence</li>
+                            <li><strong>Majority Voting</strong> - Combines predictions from multiple time windows to improve stability and accuracy</li>
+                        </ul>
+                        <p class="mb-0">These features are enabled by default and recommended for most users.</p>
+                    </div>
                 </div>
                 
                 <h5>Tips for best results:</h5>
@@ -268,6 +346,7 @@
                     <li>If the EEG status indicator remains red, try reconnecting or reseating the headset</li>
                     <li>If predictions seem random, try increasing the sample duration</li>
                     <li>Different models may perform better with different participants</li>
+                    <li>If you consistently get "silence" predictions, try a model trained with enhanced speech detection</li>
                 </ul>
             </div>
             <div class="modal-footer">
@@ -288,6 +367,10 @@
         const eegStatus = document.getElementById('eegStatus');
         const modelStatus = document.getElementById('modelStatus');
         const statusMessage = document.getElementById('statusMessage');
+        
+        // Enhanced options elements
+        const useCustomThresholds = document.getElementById('useCustomThresholds');
+        const useMajorityVoting = document.getElementById('useMajorityVoting');
         
         // Show instructions modal on first load
         const instructionsModal = new bootstrap.Modal(document.getElementById('instructionsModal'));

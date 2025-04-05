@@ -28,6 +28,517 @@ from .eeg_utils import (
     calculate_signal_quality, get_sensor_columns
 )
 
+
+def sequence_aware_balance_classes(df, balance_method='downsample', balance_ratio=1.0, random_state=42, target_words=None):
+    """
+    Balance classes in an EEG dataset while preserving sequences of the same word label.
+    Maintains original temporal ordering of sequences.
+    
+    Parameters:
+    -----------
+    df : DataFrame
+        DataFrame with a 'word_label' column
+    balance_method : str
+        Method to use: 'downsample', 'upsample', or 'hybrid'
+    balance_ratio : float
+        Target ratio of silence to non-silence samples
+    random_state : int
+        Random seed for reproducibility
+    target_words : list
+        Optional list of specific words to focus on
+        
+    Returns:
+    --------
+    DataFrame: Balanced dataframe with preserved sequences in original order
+    """
+    import pandas as pd
+    import numpy as np
+    import random
+    
+    print("Applying sequence-aware class balancing...")
+    
+    if 'word_label' not in df.columns:
+        print("No word_label column found, skipping balancing")
+        return df
+    
+    # Filter to target words if specified
+    if target_words:
+        target_words = [w.strip() for w in target_words if w.strip()]
+        if target_words:
+            print(f"Focusing on target words for balancing: {target_words}")
+            # Make sure 'sil' is included for balancing
+            if 'sil' not in target_words:
+                target_words.append('sil')
+            # Filter dataframe to only include rows with these words
+            df = df[df['word_label'].isin(target_words)]
+            print(f"Filtered to {len(df)} rows containing target words")
+    
+    # Get initial distribution
+    class_distribution = df['word_label'].value_counts().to_dict()
+    print(f"Initial class distribution: {class_distribution}")
+    
+    # Reset index to make sure we can identify rows uniquely
+    df = df.reset_index(drop=True)
+    
+    # Check if we have enough data points for each class
+    if len(class_distribution) < 2:
+        print("Not enough word categories for balancing, need at least 2 different words")
+        return df
+    
+    # Identify continuous sequences of the same word
+    # We'll create a new column that marks sequence boundaries
+    df['sequence_id'] = -1
+    
+    current_word = None
+    current_seq_id = 0
+    
+    sequences = []
+    seq_indices = []
+    
+    # First pass: identify sequence boundaries
+    for i, (idx, row) in enumerate(df.iterrows()):
+        word = row['word_label']
+        
+        # If word changes, start a new sequence
+        if word != current_word:
+            # Save the previous sequence if it exists
+            if seq_indices:
+                sequences.append({
+                    'word': current_word,
+                    'indices': seq_indices.copy(),
+                    'length': len(seq_indices),
+                    'seq_id': current_seq_id,
+                    'original_position': i - len(seq_indices)  # Track original position
+                })
+                seq_indices = []
+            
+            # Start new sequence
+            current_word = word
+            current_seq_id += 1
+            seq_indices = [idx]
+            df.at[idx, 'sequence_id'] = current_seq_id
+        else:
+            # Continue current sequence
+            seq_indices.append(idx)
+            df.at[idx, 'sequence_id'] = current_seq_id
+    
+    # Add the last sequence
+    if seq_indices:
+        sequences.append({
+            'word': current_word,
+            'indices': seq_indices.copy(),
+            'length': len(seq_indices),
+            'seq_id': current_seq_id,
+            'original_position': len(df) - len(seq_indices)  # Track original position
+        })
+    
+    print(f"Identified {len(sequences)} continuous sequences")
+    
+    # Group sequences by word
+    word_sequences = {}
+    for seq in sequences:
+        word = seq['word']
+        if word not in word_sequences:
+            word_sequences[word] = []
+        word_sequences[word].append(seq)
+    
+    # Print sequence statistics
+    for word, seqs in word_sequences.items():
+        total_samples = sum(seq['length'] for seq in seqs)
+        avg_length = total_samples / len(seqs) if seqs else 0
+        print(f"Word '{word}': {len(seqs)} sequences, {total_samples} samples, avg length: {avg_length:.1f}")
+    
+    # Calculate statistics for silence vs non-silence
+    has_sil = 'sil' in word_sequences
+    non_sil_words = [word for word in word_sequences if word != 'sil']
+    has_non_sil = len(non_sil_words) > 0
+    
+    # If we don't have both silence and non-silence, no balancing is needed
+    if not (has_sil and has_non_sil):
+        print("Either silence or non-silence categories missing, no balancing needed")
+        return df
+    
+    # Calculate current stats
+    sil_samples = sum(seq['length'] for seq in word_sequences.get('sil', []))
+    non_sil_samples = sum(
+        sum(seq['length'] for seq in word_sequences[word]) 
+        for word in non_sil_words
+    )
+    
+    if sil_samples == 0 or non_sil_samples == 0:
+        print("Either silence or non-silence has zero samples, can't balance")
+        return df
+    
+    current_ratio = sil_samples / non_sil_samples
+    print(f"Current ratio: {current_ratio:.2f} (silence:non-silence)")
+    print(f"Target ratio: {balance_ratio:.2f}")
+    
+    # Set random seed for reproducibility
+    random.seed(random_state)
+    
+    # Initialize containers for balanced data
+    sequences_to_keep = []  # We'll store entire sequence objects
+    sequences_to_duplicate = []  # Sequences to duplicate
+    
+    if balance_method == 'downsample':
+        # Downsample whichever class is majority
+        if current_ratio > balance_ratio:
+            # Silence is majority, downsample it
+            target_sil_samples = int(non_sil_samples * balance_ratio)
+            print(f"Downsampling silence from {sil_samples} to ~{target_sil_samples} samples")
+            
+            # First, keep all non-silence sequences
+            for word in non_sil_words:
+                sequences_to_keep.extend(word_sequences[word])
+            
+            # Then select silence sequences randomly until we reach target
+            silence_seqs = word_sequences['sil'].copy()
+            random.shuffle(silence_seqs)  # Shuffle but will restore order later
+            
+            sil_samples_kept = 0
+            sil_seqs_kept = []
+            
+            for seq in silence_seqs:
+                if sil_samples_kept < target_sil_samples:
+                    sil_seqs_kept.append(seq)
+                    sil_samples_kept += seq['length']
+                else:
+                    break
+            
+            # Add silence sequences to keep list
+            sequences_to_keep.extend(sil_seqs_kept)
+            
+            print(f"Kept {sil_samples_kept} silence samples in {len(sil_seqs_kept)} sequences")
+        
+        elif current_ratio < balance_ratio:
+            # Non-silence is majority, downsample it
+            target_non_sil_samples = int(sil_samples / balance_ratio)
+            print(f"Downsampling non-silence from {non_sil_samples} to ~{target_non_sil_samples} samples")
+            
+            # First, keep all silence sequences
+            sequences_to_keep.extend(word_sequences.get('sil', []))
+            
+            # We need to distribute the target among non-silence classes
+            # Let's keep the same relative proportions
+            word_samples = {word: sum(seq['length'] for seq in seqs) 
+                           for word, seqs in word_sequences.items() 
+                           if word != 'sil'}
+            
+            word_proportions = {word: samples / non_sil_samples for word, samples in word_samples.items()}
+            
+            # Calculate target samples for each non-silence word
+            word_targets = {word: int(target_non_sil_samples * prop) for word, prop in word_proportions.items()}
+            
+            # Select sequences for each word
+            for word in non_sil_words:
+                word_target = word_targets[word]
+                seqs = word_sequences[word].copy()
+                random.shuffle(seqs)  # Shuffle but will restore order later
+                
+                word_samples_kept = 0
+                word_seqs_kept = []
+                
+                for seq in seqs:
+                    if word_samples_kept < word_target:
+                        word_seqs_kept.append(seq)
+                        word_samples_kept += seq['length']
+                    else:
+                        break
+                
+                # Add word sequences to keep list
+                sequences_to_keep.extend(word_seqs_kept)
+                
+                print(f"Kept {word_samples_kept} '{word}' samples in {len(word_seqs_kept)} sequences")
+        
+        else:
+            # Already balanced within threshold
+            print("Data already balanced at target ratio, keeping all sequences")
+            for word, seqs in word_sequences.items():
+                sequences_to_keep.extend(seqs)
+    
+    elif balance_method == 'upsample':
+        # Keep all original data
+        for word, seqs in word_sequences.items():
+            sequences_to_keep.extend(seqs)
+        
+        # Upsample whichever class is minority
+        if current_ratio < balance_ratio:
+            # Silence is minority, upsample it
+            target_sil_samples = int(non_sil_samples * balance_ratio)
+            samples_to_add = target_sil_samples - sil_samples
+            
+            if samples_to_add <= 0:
+                print("Already balanced, no upsampling needed")
+            else:
+                print(f"Upsampling silence from {sil_samples} to ~{target_sil_samples} samples")
+                
+                # Add silence sequences until we reach target
+                sil_seqs = word_sequences['sil']
+                
+                samples_added = 0
+                seqs_added = 0
+                
+                while samples_added < samples_to_add:
+                    seq = random.choice(sil_seqs)
+                    # Create a copy to avoid modifying the original
+                    seq_copy = seq.copy()
+                    seq_copy['is_duplicate'] = True  # Mark as duplicate for ordering
+                    sequences_to_duplicate.append(seq_copy)
+                    samples_added += seq['length']
+                    seqs_added += 1
+                
+                print(f"Added {samples_added} silence samples by duplicating {seqs_added} sequences")
+        
+        elif current_ratio > balance_ratio:
+            # Non-silence is minority, upsample it
+            target_non_sil_samples = int(sil_samples / balance_ratio)
+            samples_to_add = target_non_sil_samples - non_sil_samples
+            
+            if samples_to_add <= 0:
+                print("Already balanced, no upsampling needed")
+            else:
+                print(f"Upsampling non-silence from {non_sil_samples} to ~{target_non_sil_samples} samples")
+                
+                # Distribute the upsampling across non-silence words
+                word_samples = {word: sum(seq['length'] for seq in seqs) 
+                               for word, seqs in word_sequences.items() 
+                               if word != 'sil'}
+                
+                word_proportions = {word: samples / non_sil_samples for word, samples in word_samples.items()}
+                
+                # Calculate samples to add for each word
+                word_additions = {word: int(samples_to_add * prop) for word, prop in word_proportions.items()}
+                
+                # Upsample each word
+                for word in non_sil_words:
+                    to_add = word_additions[word]
+                    seqs = word_sequences[word]
+                    
+                    if to_add <= 0 or not seqs:
+                        continue
+                    
+                    word_added = 0
+                    word_seqs_added = 0
+                    
+                    while word_added < to_add:
+                        seq = random.choice(seqs)
+                        # Create a copy to avoid modifying the original
+                        seq_copy = seq.copy()
+                        seq_copy['is_duplicate'] = True  # Mark as duplicate for ordering
+                        sequences_to_duplicate.append(seq_copy)
+                        word_added += seq['length']
+                        word_seqs_added += 1
+                    
+                    print(f"Added {word_added} '{word}' samples by duplicating {word_seqs_added} sequences")
+        
+        else:
+            # Already balanced
+            print("Data already balanced at target ratio, no upsampling needed")
+    
+    elif balance_method == 'hybrid':
+        # Hybrid approach: calculate balanced targets and both downsample and upsample
+        # First, determine the target sample count for silence and non-silence
+        total_samples = sil_samples + non_sil_samples
+        avg_per_class = total_samples / (1 + len(non_sil_words))
+        
+        # Target counts (adjusted for balance ratio)
+        sil_target = int(avg_per_class * balance_ratio)
+        non_sil_target = int(avg_per_class * len(non_sil_words) * (1/balance_ratio))
+        
+        # For non-silence words, distribute evenly
+        word_targets = {word: int(non_sil_target / len(non_sil_words)) for word in non_sil_words}
+        
+        print(f"Hybrid balancing targets: silence={sil_target}, non-silence total={non_sil_target}")
+        for word, target in word_targets.items():
+            print(f"  '{word}' target: {target}")
+        
+        # Process silence first
+        if sil_samples > sil_target:
+            # Downsample silence
+            print(f"Downsampling silence from {sil_samples} to ~{sil_target} samples")
+            
+            silence_seqs = word_sequences['sil'].copy()
+            random.shuffle(silence_seqs)  # Shuffle but will restore order later
+            
+            sil_samples_kept = 0
+            sil_seqs_kept = []
+            
+            for seq in silence_seqs:
+                if sil_samples_kept < sil_target:
+                    sil_seqs_kept.append(seq)
+                    sil_samples_kept += seq['length']
+                else:
+                    break
+            
+            # Add silence sequences to keep list
+            sequences_to_keep.extend(sil_seqs_kept)
+            
+            print(f"Kept {sil_samples_kept} silence samples")
+        
+        else:
+            # Keep all silence and potentially upsample
+            sequences_to_keep.extend(word_sequences['sil'])
+            
+            # Upsample if needed
+            samples_to_add = sil_target - sil_samples
+            if samples_to_add > 0:
+                print(f"Upsampling silence from {sil_samples} to ~{sil_target} samples")
+                
+                sil_seqs = word_sequences['sil']
+                
+                samples_added = 0
+                seqs_added = 0
+                
+                while samples_added < samples_to_add:
+                    seq = random.choice(sil_seqs)
+                    # Create a copy to avoid modifying the original
+                    seq_copy = seq.copy()
+                    seq_copy['is_duplicate'] = True  # Mark as duplicate for ordering
+                    sequences_to_duplicate.append(seq_copy)
+                    samples_added += seq['length']
+                    seqs_added += 1
+                
+                print(f"Added {samples_added} silence samples by duplicating {seqs_added} sequences")
+        
+        # Process each non-silence word
+        for word in non_sil_words:
+            word_samples = sum(seq['length'] for seq in word_sequences[word])
+            word_target = word_targets[word]
+            
+            if word_samples > word_target:
+                # Downsample this word
+                print(f"Downsampling '{word}' from {word_samples} to ~{word_target} samples")
+                
+                word_seqs = word_sequences[word].copy()
+                random.shuffle(word_seqs)  # Shuffle but will restore order later
+                
+                word_samples_kept = 0
+                word_seqs_kept = []
+                
+                for seq in word_seqs:
+                    if word_samples_kept < word_target:
+                        word_seqs_kept.append(seq)
+                        word_samples_kept += seq['length']
+                    else:
+                        break
+                
+                # Add word sequences to keep list
+                sequences_to_keep.extend(word_seqs_kept)
+                
+                print(f"Kept {word_samples_kept} '{word}' samples")
+            
+            else:
+                # Keep all and potentially upsample
+                sequences_to_keep.extend(word_sequences[word])
+                
+                # Upsample if needed
+                samples_to_add = word_target - word_samples
+                if samples_to_add > 0:
+                    print(f"Upsampling '{word}' from {word_samples} to ~{word_target} samples")
+                    
+                    word_seqs = word_sequences[word]
+                    
+                    samples_added = 0
+                    seqs_added = 0
+                    
+                    while samples_added < samples_to_add:
+                        seq = random.choice(word_seqs)
+                        # Create a copy to avoid modifying the original
+                        seq_copy = seq.copy()
+                        seq_copy['is_duplicate'] = True  # Mark as duplicate for ordering
+                        sequences_to_duplicate.append(seq_copy)
+                        samples_added += seq['length']
+                        seqs_added += 1
+                    
+                    print(f"Added {samples_added} '{word}' samples by duplicating {seqs_added} sequences")
+    
+    else:
+        # Invalid method
+        print(f"Invalid balance method: {balance_method}, defaulting to keeping all data")
+        for word, seqs in word_sequences.items():
+            sequences_to_keep.extend(seqs)
+    
+    # Combine all sequences to keep and duplicate
+    all_sequences = sequences_to_keep + sequences_to_duplicate
+    
+    # Sort sequences by their original position to preserve temporal order
+    all_sequences.sort(key=lambda x: x.get('original_position', 0))
+    
+    # Get all indices from the sorted sequences
+    all_indices = []
+    for seq in all_sequences:
+        all_indices.extend(seq['indices'])
+    
+    # Create the balanced dataframe while preserving order
+    balanced_df = df.loc[all_indices].copy().reset_index(drop=True)
+    
+    # Remove the sequence_id column we added
+    balanced_df = balanced_df.drop('sequence_id', axis=1)
+    
+    # Final statistics
+    final_distribution = balanced_df['word_label'].value_counts().to_dict()
+    print(f"Final class distribution: {final_distribution}")
+    sil_after = final_distribution.get('sil', 0)
+    non_sil_after = sum(count for word, count in final_distribution.items() if word != 'sil')
+    ratio_after = sil_after / non_sil_after if non_sil_after > 0 else float('inf')
+    print(f"Final ratio: {ratio_after:.2f} (silence:non-silence)")
+    
+    # Verify the sequence integrity
+    verify_sequences(balanced_df)
+    
+    return balanced_df
+
+def verify_sequences(df):
+    """Verify and print statistics about sequence integrity in the dataframe."""
+    current_word = None
+    sequence_count = 0
+    sequence_lengths = []
+    current_length = 0
+    
+    # Count sequences and their lengths
+    for word in df['word_label']:
+        if word != current_word:
+            if current_length > 0:
+                sequence_lengths.append(current_length)
+            current_word = word
+            sequence_count += 1
+            current_length = 1
+        else:
+            current_length += 1
+    
+    # Add the last sequence
+    if current_length > 0:
+        sequence_lengths.append(current_length)
+    
+    # Compute average sequence length
+    avg_length = sum(sequence_lengths) / len(sequence_lengths) if sequence_lengths else 0
+    
+    print(f"Sequence integrity verification:")
+    print(f"  - Total sequences: {sequence_count}")
+    print(f"  - Average sequence length: {avg_length:.1f}")
+    print(f"  - Min sequence length: {min(sequence_lengths) if sequence_lengths else 0}")
+    print(f"  - Max sequence length: {max(sequence_lengths) if sequence_lengths else 0}")
+    
+    # Count sequence transitions (sil → word → sil pattern)
+    sil_to_word = 0
+    word_to_sil = 0
+    word_to_word = 0  # This should ideally be minimal
+    
+    prev_word = None
+    for word in df['word_label']:
+        if prev_word == 'sil' and word != 'sil':
+            sil_to_word += 1
+        elif prev_word != 'sil' and word == 'sil':
+            word_to_sil += 1
+        elif prev_word is not None and prev_word != 'sil' and word != 'sil' and prev_word != word:
+            word_to_word += 1
+        prev_word = word
+    
+    print(f"  - sil → word transitions: {sil_to_word}")
+    print(f"  - word → sil transitions: {word_to_sil}")
+    print(f"  - word → different word transitions: {word_to_word} (should be minimal)")
+
+
 def apply_mne_ica(data, method='fastica', n_components=None, random_state=None, fs=128):
     """Applies ICA using MNE with specific focus on speech-related components."""
     print(f"Applying ICA with method: {method}")
@@ -335,147 +846,31 @@ def clean_eeg_data(input_file, output_file,
             if not sensor_columns:
                 return {'status': 'error', 'message': "No matching channels found. Please check channel names."}
 
-        # Apply class balancing if enabled
         class_distribution_before = {}
         class_distribution_after = {}
-        
+
         if balance_classes and 'word_label' in df.columns:
-            print("Applying class balancing...")
+            print("Applying sequence-aware class balancing...")
             
-            # Get word distribution before balancing
+            # Store original distribution for reporting
             class_distribution_before = df['word_label'].value_counts().to_dict()
             print(f"Class distribution before balancing: {class_distribution_before}")
             
-            # Filter to target words if specified
-            if target_words:
-                target_words = [w.strip() for w in target_words if w.strip()]
-                if target_words:
-                    print(f"Focusing on target words for balancing: {target_words}")
-                    # Make sure 'sil' is included for balancing
-                    if 'sil' not in target_words:
-                        target_words.append('sil')
-                    # Filter dataframe to only include rows with these words
-                    df = df[df['word_label'].isin(target_words)]
-                    print(f"Filtered to {len(df)} rows containing target words")
-            
-            # Get all unique words and counts
-            word_counts = df['word_label'].value_counts()
-            unique_words = word_counts.index.tolist()
-            
-            # Separate silence and non-silence
-            sil_rows = df[df['word_label'] == 'sil']
-            non_sil_rows = df[df['word_label'] != 'sil']
-            
-            sil_count = len(sil_rows)
-            non_sil_count = len(non_sil_rows)
-            print(f"Before balancing: {sil_count} silence samples, {non_sil_count} non-silence samples")
-            
-            if sil_count > 0 and non_sil_count > 0:
-                # Determine target counts based on balance_ratio
-                # balance_ratio is the target ratio of silence to non-silence
-                if balance_method == 'downsample':
-                    # Downsample the majority class (usually silence)
-                    if sil_count > non_sil_count * balance_ratio:
-                        # Silence is the majority class
-                        target_sil_count = int(non_sil_count * balance_ratio)
-                        print(f"Downsampling silence from {sil_count} to {target_sil_count}")
-                        # Randomly sample silence rows
-                        sil_rows = sil_rows.sample(n=target_sil_count, random_state=random_state)
-                        # Combine with non-silence rows
-                        df = pd.concat([sil_rows, non_sil_rows])
-                    elif non_sil_count > sil_count * (1/balance_ratio):
-                        # Non-silence is the majority class
-                        target_non_sil_count = int(sil_count * (1/balance_ratio))
-                        print(f"Downsampling non-silence from {non_sil_count} to {target_non_sil_count}")
-                        # First, ensure balanced representation of each word
-                        balanced_non_sil = []
-                        non_sil_words = non_sil_rows['word_label'].unique()
-                        samples_per_word = target_non_sil_count // len(non_sil_words)
-                        
-                        for word in non_sil_words:
-                            word_rows = non_sil_rows[non_sil_rows['word_label'] == word]
-                            # If we have fewer rows than needed, use all of them
-                            if len(word_rows) <= samples_per_word:
-                                balanced_non_sil.append(word_rows)
-                            else:
-                                # Otherwise sample the required number
-                                balanced_non_sil.append(word_rows.sample(n=samples_per_word, random_state=random_state))
-                        
-                        # Combine all balanced non-silence rows
-                        non_sil_rows = pd.concat(balanced_non_sil)
-                        # Combine with silence rows
-                        df = pd.concat([sil_rows, non_sil_rows])
-                
-                elif balance_method == 'upsample':
-                    # Upsample minority classes
-                    if sil_count < non_sil_count * balance_ratio:
-                        # Silence is the minority class
-                        target_sil_count = int(non_sil_count * balance_ratio)
-                        print(f"Upsampling silence from {sil_count} to {target_sil_count}")
-                        # Resample silence rows with replacement
-                        if sil_count > 0:
-                            sil_rows = sil_rows.sample(n=target_sil_count, replace=True, random_state=random_state)
-                            # Combine with non-silence rows
-                            df = pd.concat([sil_rows, non_sil_rows])
-                    else:
-                        # Non-silence classes are minority
-                        # Balance each non-silence word individually
-                        target_count_per_word = int(sil_count * (1/balance_ratio) / (len(unique_words) - 1))
-                        print(f"Upsampling each non-silence word to approximately {target_count_per_word} samples")
-                        
-                        balanced_non_sil = []
-                        for word in unique_words:
-                            if word != 'sil':
-                                word_rows = df[df['word_label'] == word]
-                                # If we have fewer rows than target, upsample with replacement
-                                if len(word_rows) < target_count_per_word and len(word_rows) > 0:
-                                    word_rows = word_rows.sample(n=target_count_per_word, replace=True, random_state=random_state)
-                                balanced_non_sil.append(word_rows)
-                        
-                        # Combine all balanced non-silence rows
-                        non_sil_rows = pd.concat(balanced_non_sil)
-                        # Combine with silence rows
-                        df = pd.concat([sil_rows, non_sil_rows])
-                
-                elif balance_method == 'hybrid':
-                    # Use both downsampling and upsampling to achieve balance
-                    # Determine target count somewhere between current counts
-                    target_count = int((sil_count + non_sil_count) / (1 + len(unique_words)) * balance_ratio)
-                    print(f"Hybrid balancing targeting approximately {target_count} samples per class")
-                    
-                    balanced_rows = []
-                    # For silence
-                    if sil_count > target_count:
-                        # Downsample silence
-                        balanced_rows.append(sil_rows.sample(n=target_count, random_state=random_state))
-                    else:
-                        # Upsample silence
-                        balanced_rows.append(sil_rows.sample(n=target_count, replace=True, random_state=random_state))
-                    
-                    # For each non-silence word
-                    for word in unique_words:
-                        if word != 'sil':
-                            word_rows = df[df['word_label'] == word]
-                            word_count = len(word_rows)
-                            
-                            if word_count > target_count:
-                                # Downsample this word
-                                balanced_rows.append(word_rows.sample(n=target_count, random_state=random_state))
-                            elif word_count > 0:
-                                # Upsample this word
-                                balanced_rows.append(word_rows.sample(n=target_count, replace=True, random_state=random_state))
-                    
-                    # Combine all balanced rows
-                    df = pd.concat(balanced_rows)
-            
-            # Shuffle the dataset to mix classes
-            df = df.sample(frac=1, random_state=random_state).reset_index(drop=True)
+            # Apply sequence-aware class balancing
+            df = sequence_aware_balance_classes(
+                df=df, 
+                balance_method=balance_method,
+                balance_ratio=balance_ratio,
+                random_state=random_state,
+                target_words=target_words
+            )
             
             # Get word distribution after balancing
             class_distribution_after = df['word_label'].value_counts().to_dict()
             print(f"Class distribution after balancing: {class_distribution_after}")
             print(f"Total samples after balancing: {len(df)}")
-        
+
+
         # For standard format, extract sensor data for processing
         if not is_structured_transformer:
             columns_to_keep = ['Timestamp'] + sensor_columns + event_columns

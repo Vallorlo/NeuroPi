@@ -1313,6 +1313,10 @@ def prepare_transformer_segments(df, transformer_config):
         result_df = pd.concat(segments, ignore_index=True)
         return result_df
 
+
+
+
+
 # ========== UTILITY FUNCTIONS ==========
 
 def calculate_signal_quality(data):

@@ -34,6 +34,21 @@
                     </div>
                 </div>
                 
+                <!-- Microphone Selection -->
+                <div class="form-group mb-4">
+                    <label for="microphoneSelect" class="form-label"><i class="bi bi-mic"></i> Select Microphone:</label>
+                    <div class="input-group">
+                        <select id="microphoneSelect" name="microphone_index" class="form-select">
+                            <option value="">Loading microphones...</option>
+                        </select>
+                        <button type="button" id="refreshMicsBtn" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-clockwise"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="form-text">This microphone will be used for all recordings in this session.</div>
+                    <div id="microphoneStatus" class="mt-2"></div>
+                </div>
+                
                 <div class="form-group mb-4">
                     <label class="form-label">Select Word:</label>
                     <div class="row word-selection">
@@ -57,6 +72,17 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+</div>
+
+<!-- Debug link at the bottom -->
+<div class="container mt-3 mb-5">
+    <div class="row">
+        <div class="col text-center">
+            <a href="{% url 'debug_audio_devices' %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-wrench"></i> Debug Audio Devices
+            </a>
         </div>
     </div>
 </div>
@@ -90,6 +116,15 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Load microphones
+        loadMicrophones();
+        
+        // Refresh microphones button
+        const refreshMicsBtn = document.getElementById('refreshMicsBtn');
+        if (refreshMicsBtn) {
+            refreshMicsBtn.addEventListener('click', loadMicrophones);
+        }
+        
         // Make the entire word card clickable
         const wordCards = document.querySelectorAll('.word-card');
         wordCards.forEach(card => {
@@ -149,5 +184,199 @@
             }
         });
     });
+    
+    // Function to load microphones with better organization
+    function loadMicrophones() {
+        const microphoneSelect = document.getElementById('microphoneSelect');
+        const microphoneStatus = document.getElementById('microphoneStatus');
+        const refreshMicsBtn = document.getElementById('refreshMicsBtn');
+        
+        if (!microphoneSelect) return;
+        
+        // Only update the button if it exists
+        if (refreshMicsBtn) {
+            refreshMicsBtn.disabled = true;
+            refreshMicsBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Loading...';
+        }
+        
+        // Update status
+        if (microphoneStatus) {
+            microphoneStatus.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Loading microphones...</div>';
+        }
+        
+        // Clear dropdown with a "Loading..." option
+        microphoneSelect.innerHTML = '<option value="">Loading microphones...</option>';
+        
+        console.log('Fetching microphones from server...');
+        
+        fetch('{% url "get_microphones" %}')
+            .then(response => {
+                console.log('Response received:', response.status);
+                return response.json();
+            })
+            .then(data => {
+                console.log('Microphone data received:', data);
+                
+                if (data.success) {
+                    // Save current selection if possible
+                    const currentSelection = microphoneSelect.value;
+                    
+                    // Clear existing options
+                    microphoneSelect.innerHTML = '';
+                    
+                    // Add default option
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = 'Default Microphone';
+                    microphoneSelect.appendChild(defaultOption);
+                    
+                    if (data.microphones && data.microphones.length > 0) {
+                        console.log(`Adding ${data.microphones.length} microphones to select box`);
+                        
+                        // Separate default, WASAPI, and other devices
+                        const defaultMics = data.microphones.filter(mic => mic.is_default);
+                        const wasapiMics = data.microphones.filter(mic => !mic.is_default && mic.name.toLowerCase().includes('wasapi'));
+                        const otherMics = data.microphones.filter(mic => !mic.is_default && !mic.name.toLowerCase().includes('wasapi'));
+                        
+                        // Add default device(s) first
+                        if (defaultMics.length > 0) {
+                            const defaultGroup = document.createElement('optgroup');
+                            defaultGroup.label = 'Default Device';
+                            
+                            defaultMics.forEach(mic => {
+                                const option = document.createElement('option');
+                                option.value = mic.index;
+                                option.textContent = `${mic.name} (${mic.channels} ch)`;
+                                option.selected = true; // Always select the default
+                                defaultGroup.appendChild(option);
+                            });
+                            
+                            microphoneSelect.appendChild(defaultGroup);
+                        }
+                        
+                        // Add WASAPI devices (usually best quality)
+                        if (wasapiMics.length > 0) {
+                            const wasapiGroup = document.createElement('optgroup');
+                            wasapiGroup.label = 'WASAPI Devices (Recommended)';
+                            
+                            wasapiMics.forEach(mic => {
+                                const option = document.createElement('option');
+                                option.value = mic.index;
+                                option.textContent = `${mic.name} (${mic.channels} ch)`;
+                                wasapiGroup.appendChild(option);
+                            });
+                            
+                            microphoneSelect.appendChild(wasapiGroup);
+                        }
+                        
+                        // Add other devices
+                        if (otherMics.length > 0) {
+                            const otherGroup = document.createElement('optgroup');
+                            otherGroup.label = 'Other Devices';
+                            
+                            otherMics.forEach(mic => {
+                                const option = document.createElement('option');
+                                option.value = mic.index;
+                                option.textContent = `${mic.name} (${mic.channels} ch)`;
+                                otherGroup.appendChild(option);
+                            });
+                            
+                            microphoneSelect.appendChild(otherGroup);
+                        }
+                        
+                        // Update status
+                        if (microphoneStatus) {
+                            microphoneStatus.innerHTML = `<div class="alert alert-success">
+                                <i class="bi bi-mic"></i> Found ${data.microphones.length} unique microphones 
+                                <button class="btn btn-sm btn-outline-success float-end" type="button" 
+                                        onclick="window.open('{% url 'debug_audio_devices' %}', '_blank')">
+                                    <i class="bi bi-wrench"></i> Debug
+                                </button>
+                            </div>`;
+                        }
+                        
+                        // Restore selection if still available
+                        if (currentSelection) {
+                            // Check all options including those in optgroups
+                            const allOptions = [...microphoneSelect.querySelectorAll('option')];
+                            const matchingOption = allOptions.find(opt => opt.value === currentSelection);
+                            if (matchingOption) {
+                                matchingOption.selected = true;
+                            }
+                        }
+                        
+                    } else {
+                        console.warn('No microphones found in response data');
+                        if (microphoneStatus) {
+                            microphoneStatus.innerHTML = `<div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle"></i> No microphones found. 
+                                <button class="btn btn-sm btn-outline-warning float-end" type="button" 
+                                        onclick="window.open('{% url 'debug_audio_devices' %}', '_blank')">
+                                    <i class="bi bi-wrench"></i> Debug
+                                </button>
+                            </div>`;
+                        }
+                    }
+                } else {
+                    console.error('Error getting microphones:', data.error);
+                    // Add an error note to the dropdown
+                    microphoneSelect.innerHTML = '';
+                    
+                    const defaultOption = document.createElement('option');
+                    defaultOption.value = '';
+                    defaultOption.textContent = 'Default Microphone';
+                    microphoneSelect.appendChild(defaultOption);
+                    
+                    const errorOption = document.createElement('option');
+                    errorOption.disabled = true;
+                    errorOption.textContent = `Error: ${data.error || 'Failed to load microphones'}`;
+                    microphoneSelect.appendChild(errorOption);
+                    
+                    // Update status
+                    if (microphoneStatus) {
+                        microphoneStatus.innerHTML = `<div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i> Error: ${data.error || 'Failed to load microphones'}
+                            <button class="btn btn-sm btn-outline-danger float-end" type="button" 
+                                    onclick="window.open('{% url 'debug_audio_devices' %}', '_blank')">
+                                <i class="bi bi-wrench"></i> Debug
+                            </button>
+                        </div>`;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching microphones:', error);
+                // Add an error note to the dropdown
+                microphoneSelect.innerHTML = '';
+                
+                const defaultOption = document.createElement('option');
+                defaultOption.value = '';
+                defaultOption.textContent = 'Default Microphone';
+                microphoneSelect.appendChild(defaultOption);
+                
+                const errorOption = document.createElement('option');
+                errorOption.disabled = true;
+                errorOption.textContent = `Error: ${error.message}`;
+                microphoneSelect.appendChild(errorOption);
+                
+                // Update status
+                if (microphoneStatus) {
+                    microphoneStatus.innerHTML = `<div class="alert alert-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Error: ${error.message}
+                        <button class="btn btn-sm btn-outline-danger float-end" type="button" 
+                                onclick="window.open('{% url 'debug_audio_devices' %}', '_blank')">
+                            <i class="bi bi-wrench"></i> Debug
+                        </button>
+                    </div>`;
+                }
+            })
+            .finally(() => {
+                // Only update the button if it exists
+                if (refreshMicsBtn) {
+                    refreshMicsBtn.disabled = false;
+                    refreshMicsBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
+                }
+            });
+    }
 </script>
 {% endblock content %}

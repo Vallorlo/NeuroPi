@@ -6,7 +6,7 @@ import os
 import time
 import datetime
 from django.utils import timezone
-from .data_collection import collect_stage_data
+from .data_collection import collect_stage_data, check_eeg_quality, get_available_microphones
 
 def get_existing_participants():
     """Get a list of existing participants from the Trials_data directory."""
@@ -35,12 +35,103 @@ def start_trial(request):
     
     return render(request, 'trials/start_trial.html', context)
 
+def get_microphones(request):
+    """API endpoint to get a list of available microphones."""
+    try:
+        microphones = get_available_microphones()
+        return JsonResponse({
+            "success": True,
+            "microphones": microphones
+        })
+    except Exception as e:
+        import traceback
+        print(f"Error in get_microphones: {e}")
+        print(traceback.format_exc())
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        })
+
+def debug_audio_devices(request):
+    """Debug utility to list all audio devices detected by PyAudio."""
+    import pyaudio
+    
+    try:
+        p = pyaudio.PyAudio()
+        device_count = p.get_device_count()
+        
+        html_response = f"""
+        <html>
+        <head>
+            <title>PyAudio Device Debug</title>
+            <style>
+                body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                h1 {{ color: #0066cc; }}
+                .device {{ border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }}
+                .device-name {{ font-weight: bold; }}
+                .device-property {{ margin-left: 20px; }}
+                .input-device {{ background-color: #e6f7ff; }}
+                .default-device {{ border: 2px solid #00cc00; }}
+            </style>
+        </head>
+        <body>
+            <h1>PyAudio Device Debug</h1>
+            <p>Total devices: {device_count}</p>
+        """
+        
+        # Get default input device
+        try:
+            default_input = p.get_default_input_device_info()
+            default_input_index = default_input.get('index')
+            html_response += f"<p>Default input device: {default_input.get('name')} (Index: {default_input_index})</p>"
+        except Exception as e:
+            html_response += f"<p>Error getting default input device: {str(e)}</p>"
+            default_input_index = None
+        
+        # List all devices
+        html_response += "<h2>All Devices:</h2>"
+        
+        for i in range(device_count):
+            try:
+                device_info = p.get_device_info_by_index(i)
+                
+                is_input = device_info.get('maxInputChannels', 0) > 0
+                is_default_input = i == default_input_index
+                
+                css_classes = ["device"]
+                if is_input:
+                    css_classes.append("input-device")
+                if is_default_input:
+                    css_classes.append("default-device")
+                
+                html_response += f"<div class='{' '.join(css_classes)}'>"
+                html_response += f"<div class='device-name'>Device {i}: {device_info.get('name')}</div>"
+                
+                for key, value in device_info.items():
+                    html_response += f"<div class='device-property'><strong>{key}:</strong> {value}</div>"
+                
+                html_response += "</div>"
+            except Exception as e:
+                html_response += f"<div class='device'>Error getting info for device {i}: {str(e)}</div>"
+        
+        html_response += """
+        </body>
+        </html>
+        """
+        
+        p.terminate()
+        return HttpResponse(html_response)
+    
+    except Exception as e:
+        return HttpResponse(f"Error initializing PyAudio: {str(e)}")
+
 def word_trials(request):
     """Display the available stages for a selected word trial."""
     if request.method == 'POST':
         word = request.POST.get('word')
         participant_name = request.POST.get('participant_name', '').strip()
         existing_participant = request.POST.get('existing_participant', '').strip()
+        microphone_index = request.POST.get('microphone_index', '')
         
         # Use existing participant if selected, otherwise use new participant name
         final_participant = existing_participant if existing_participant else participant_name
@@ -49,8 +140,9 @@ def word_trials(request):
             # If neither was provided, redirect back with an error
             return redirect('start_trial')
             
-        # Store participant in session
+        # Store participant and microphone in session
         request.session['participant_name'] = final_participant
+        request.session['microphone_index'] = microphone_index
         
         if word:
             trials = Trial.objects.filter(word=word).order_by('stage')
@@ -70,23 +162,62 @@ def word_trials(request):
             # Current date for display
             trial_date = timezone.now().strftime("%B %d, %Y")
             
+            # Get all unique words for the word selection modal
+            unique_words = Trial.objects.values_list('word', flat=True).distinct()
+            
+            # Get microphone name if available
+            microphone_name = "Default"
+            try:
+                if microphone_index and microphone_index.isdigit():
+                    microphones = get_available_microphones()
+                    for mic in microphones:
+                        if mic['index'] == int(microphone_index):
+                            microphone_name = mic['name']
+                            break
+            except Exception as e:
+                print(f"Error getting microphone name: {e}")
+            
             return render(request, 'trials/word_trials.html', {
                 'trials': trials, 
                 'word': word,
                 'participant_name': final_participant,
                 'completed_stages': completed_stages,
-                'trial_date': trial_date
+                'trial_date': trial_date,
+                'unique_words': unique_words,
+                'microphone_index': microphone_index,
+                'microphone_name': microphone_name
             })
     
     # If GET request or no valid POST data, redirect to start_trial
     return redirect('start_trial')
+
+def check_eeg_connection(request):
+    """API endpoint to check EEG connection quality before starting capture."""
+    try:
+        quality_data = check_eeg_quality(duration=5)
+        return JsonResponse({
+            "success": True,
+            "quality": quality_data
+        })
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        })
 
 def capture_stage(request):
     """Handle the capture of EEG and audio data for a specific stage."""
     word = request.GET.get('word')
     stage = request.GET.get('stage')
     participant_name = request.session.get('participant_name', 'Unknown')
+    microphone_index = request.session.get('microphone_index', None)
     attempt_number = request.GET.get('attempt', '1')  # Default to attempt 1
+    
+    # Convert microphone_index to int if it's a valid digit string
+    if microphone_index and microphone_index.isdigit():
+        microphone_index = int(microphone_index)
+    else:
+        microphone_index = None
     
     # Create directory structure
     participant_folder = os.path.join(settings.BASE_DIR, "Trials_data", f'trial_{participant_name}', word, stage)
@@ -148,10 +279,18 @@ def capture_stage(request):
             output_audio = os.path.join(participant_folder, f'audio_attempt_{attempt_number}.wav')
             
             try:
+                print(f"Starting data collection with microphone_index: {microphone_index}")
                 # Start data collection (EEG and audio)
-                # Set duration to 30 seconds
-                capture_duration = 30
-                captured_data = collect_stage_data(capture_duration, output_file, output_audio)
+                # Set duration to 90 seconds and use timestamp-based ending
+                capture_duration = 90
+                captured_data = collect_stage_data(
+                    capture_duration, 
+                    output_file, 
+                    output_audio,
+                    timestamp_file=timestamp_file,
+                    timestamps_threshold=15,
+                    microphone_index=microphone_index
+                )
                 
                 if captured_data:
                     # Keep timestamps for display before clearing
@@ -170,6 +309,18 @@ def capture_stage(request):
     if not timestamps:  # Only get from session if not already populated
         timestamps = request.session.get('timestamps', [])
     
+    # Get microphone name if possible
+    microphone_name = "Default"
+    try:
+        if microphone_index is not None:
+            microphones = get_available_microphones()
+            for mic in microphones:
+                if mic['index'] == microphone_index:
+                    microphone_name = mic['name']
+                    break
+    except Exception as e:
+        print(f"Error getting microphone name: {e}")
+    
     return render(request, 'trials/capture_stage.html', {
         'word': word,
         'stage': stage,
@@ -178,10 +329,10 @@ def capture_stage(request):
         'captured_data': captured_data,
         'error_message': error_message,
         'timestamps': timestamps,
-        'max_attempts': 5,  # Set the maximum number of attempts
+        'max_attempts': 15,  # Increased max attempts to 15
+        'microphone_index': microphone_index,
+        'microphone_name': microphone_name,
     })
-
-
 
 def completed_trials(request):
     """View to show a list of all completed trials."""

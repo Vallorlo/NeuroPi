@@ -38,7 +38,6 @@ def convert_numpy_types(obj):
         return obj
 
 
-# Focal Loss implementation
 def focal_loss(gamma=2.0, alpha=4.0):
     """
     Focal Loss to focus on hard-to-classify examples.
@@ -416,6 +415,65 @@ class RNNModelTrainer:
         
         return enhanced_features
         
+
+    def apply_silence_balancing(self, X_sequences, y_labels, silence_word='sil'):
+        """
+        Apply more precise silence balancing to achieve the target ratio.
+        
+        Parameters:
+        -----------
+        X_sequences : list
+            List of sequence arrays
+        y_labels : list
+            List of labels corresponding to each sequence
+        silence_word : str
+            The label used for silence
+            
+        Returns:
+        --------
+        tuple: (balanced_X, balanced_y) with balanced sequences and labels
+        """
+        print(f"Applying precise silence balancing with target ratio: {self.silence_balance_ratio}")
+        
+        # Separate silence and non-silence samples
+        silence_indices = [i for i, label in enumerate(y_labels) if label == silence_word]
+        nonsilence_indices = [i for i, label in enumerate(y_labels) if label != silence_word]
+        
+        print(f"Before balancing - Silence: {len(silence_indices)}, Non-silence: {len(nonsilence_indices)}")
+        
+        # Calculate target number of silence samples
+        target_silence_count = int(len(nonsilence_indices) * self.silence_balance_ratio)
+        
+        # Ensure we keep at least 2 silence samples for stratification
+        target_silence_count = max(2, target_silence_count)
+        
+        # Cap the number of silence samples if too many
+        if len(silence_indices) > target_silence_count:
+            print(f"Downsampling silence from {len(silence_indices)} to {target_silence_count} samples")
+            # Randomly sample the target number of silence samples
+            import random
+            random.seed(42)  # For reproducibility
+            silence_indices = random.sample(silence_indices, target_silence_count)
+        else:
+            print(f"Keeping all {len(silence_indices)} silence samples (fewer than target {target_silence_count})")
+        
+        # Combine silence and non-silence indices and sort to maintain original order
+        balanced_indices = sorted(silence_indices + nonsilence_indices)
+        
+        # Create balanced datasets
+        balanced_X = [X_sequences[i] for i in balanced_indices]
+        balanced_y = [y_labels[i] for i in balanced_indices]
+        
+        # Count final class distribution
+        class_counts = {}
+        for label in balanced_y:
+            class_counts[label] = class_counts.get(label, 0) + 1
+        
+        print(f"After balancing - Class distribution: {class_counts}")
+        print(f"Final silence:non-silence ratio = {class_counts.get(silence_word, 0) / sum(count for label, count in class_counts.items() if label != silence_word):.2f}")
+        
+        return balanced_X, balanced_y
+
     def preprocess_data(self):
         """Enhanced version of data preprocessing with better balancing and feature extraction."""
         print(f"Loading dataset from {self.dataset_path}")
@@ -450,8 +508,8 @@ class RNNModelTrainer:
         else:
             # Use raw EEG channels
             self.eeg_columns = [col for col in df.columns 
-                               if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt', 'word_label'] 
-                               and not col.endswith('_event')]
+                            if col not in ['Timestamp', 'COUNTER', 'participant_id', 'word', 'stage', 'attempt', 'word_label'] 
+                            and not col.endswith('_event')]
             self.band_columns = []
             print(f"Using raw EEG channels: {self.eeg_columns}")
         
@@ -462,7 +520,7 @@ class RNNModelTrainer:
         # If word_list is provided, filter the event columns
         if self.word_list and self.word_event_columns:
             self.word_event_columns = [col for col in self.word_event_columns 
-                                      if col.replace('_event', '') in self.word_list]
+                                    if col.replace('_event', '') in self.word_list]
             print(f"Filtered to {len(self.word_event_columns)} word event columns based on word_list: {self.word_event_columns}")
         
         # Check if we have word_label column
@@ -496,13 +554,24 @@ class RNNModelTrainer:
             # Feature columns to use
             feature_cols = self.band_columns if has_band_features else self.eeg_columns
             
-            # Count samples per word to track balancing
+            # Count samples per word to track balancing - this will include ALL samples initially
+            raw_word_counts = {word: 0 for word in unique_words}
+            
+            # Count samples by class in original data
+            for label in df['word_label']:
+                raw_word_counts[label] = raw_word_counts.get(label, 0) + 1
+            
+            print(f"Raw dataset word distribution: {raw_word_counts}")
+            
+            # Initialize counts for balancing tracking
             word_counts = {word: 0 for word in unique_words}
             sil_count = 0
             non_sil_count = 0
-            target_ratio = self.silence_balance_ratio  # Adjustable silence:speech ratio
             
-            # Create sequences using sliding window with improved balancing
+            # Track all collected samples by class for additional balancing later
+            class_samples = {word: [] for word in unique_words}
+            
+            # Create sequences using sliding window (without aggressive balancing yet)
             for i in range(0, len(df) - window_size, stride):
                 # Get window of data
                 window = df.iloc[i:i+window_size]
@@ -520,26 +589,71 @@ class RNNModelTrainer:
                 else:
                     non_sil_count += 1
                 
-                # Implement aggressive class balancing
-                if label == 'sil':
-                    # Skip silence samples more aggressively to maintain target ratio
-                    current_ratio = sil_count / max(1, non_sil_count)
-                    if current_ratio > target_ratio:
-                        # Skip this silence sample to reduce ratio
-                        continue
-                
-                # Update word counts
-                word_counts[label] = word_counts.get(label, 0) + 1
-                
                 # Extract features (either band features or raw EEG)
                 sequence = window[feature_cols].values
                 
                 # Add to training data
                 X_sequences.append(sequence)
                 y_labels.append(label)
+                
+                # Update word count and store the sample index
+                word_counts[label] = word_counts.get(label, 0) + 1
+                class_samples[label].append(len(X_sequences) - 1)  # Store the index
             
+            # Print initial class distribution
             print(f"Initial class distribution: {word_counts}")
-            print(f"Silence to non-silence ratio: {sil_count}/{non_sil_count} = {sil_count/max(1, non_sil_count):.2f}")
+            print(f"Initial silence to non-silence ratio: {sil_count}/{non_sil_count} = {sil_count/max(1, non_sil_count):.2f}")
+            
+            # Ensure minimum samples per class for stratification
+            min_samples_per_class = 2
+            for word, count in list(word_counts.items()):
+                if count < min_samples_per_class:
+                    print(f"Warning: Class '{word}' has only {count} samples, adding more to enable stratification")
+                    
+                    # If we have raw samples of this class
+                    class_indices_in_df = df.index[df['word_label'] == word].tolist()
+                    
+                    if len(class_indices_in_df) >= min_samples_per_class:
+                        # Add samples from original data
+                        needed_samples = min_samples_per_class - count
+                        for j in range(needed_samples):
+                            # Use modulo to cycle through available indices if needed
+                            idx = class_indices_in_df[j % len(class_indices_in_df)]
+                            if idx + window_size <= len(df):
+                                window = df.iloc[idx:idx+window_size]
+                                # Ensure window has only one label
+                                if len(window['word_label'].unique()) == 1:
+                                    sequence = window[feature_cols].values
+                                    X_sequences.append(sequence)
+                                    y_labels.append(word)
+                                    word_counts[word] += 1
+                    else:
+                        # If no raw samples, duplicate existing samples
+                        existing_samples = class_samples.get(word, [])
+                        if existing_samples:
+                            needed_samples = min_samples_per_class - count
+                            for j in range(needed_samples):
+                                # Use modulo to cycle through available samples
+                                sample_idx = existing_samples[j % len(existing_samples)]
+                                X_sequences.append(X_sequences[sample_idx])  # Duplicate
+                                y_labels.append(word)
+                                word_counts[word] += 1
+                        else:
+                            # Create synthetic samples if absolutely needed
+                            print(f"Creating synthetic samples for class '{word}'")
+                            for j in range(min_samples_per_class - count):
+                                # Create a random sample using the feature dimensions
+                                feature_dim = len(feature_cols)
+                                synthetic_sequence = np.random.randn(window_size, feature_dim) * 0.1
+                                X_sequences.append(synthetic_sequence)
+                                y_labels.append(word)
+                                word_counts[word] += 1
+            
+            # Print class distribution after ensuring minimums
+            print(f"Class distribution after ensuring minimum samples: {word_counts}")
+            
+            # Apply precise silence balancing
+            X_sequences, y_labels = self.apply_silence_balancing(X_sequences, y_labels)
             
             # Convert to numpy arrays
             X = np.array(X_sequences)
@@ -607,13 +721,24 @@ class RNNModelTrainer:
             # Feature columns to use
             feature_cols = self.band_columns if has_band_features else self.eeg_columns
             
-            # Count samples per word to track balancing
+            # Count samples per word to track balancing - this will include ALL samples initially
+            raw_word_counts = {word: 0 for word in unique_words}
+            
+            # Count samples by class in original data
+            for label in df['word_label']:
+                raw_word_counts[label] = raw_word_counts.get(label, 0) + 1
+            
+            print(f"Raw dataset word distribution: {raw_word_counts}")
+            
+            # Initialize counts for balancing tracking
             word_counts = {word: 0 for word in unique_words}
             sil_count = 0
             non_sil_count = 0
-            target_ratio = self.silence_balance_ratio  # Target silence:speech ratio
             
-            # Create sequences using sliding window with improved balancing
+            # Track all collected samples by class for additional balancing later
+            class_samples = {word: [] for word in unique_words}
+            
+            # Create sequences using sliding window (without aggressive balancing yet)
             for i in range(0, len(df) - window_size, stride):
                 # Get window of data
                 window = df.iloc[i:i+window_size]
@@ -631,26 +756,71 @@ class RNNModelTrainer:
                 else:
                     non_sil_count += 1
                 
-                # Implement aggressive class balancing
-                if label == 'sil':
-                    # Skip silence samples more aggressively to maintain target ratio
-                    current_ratio = sil_count / max(1, non_sil_count)
-                    if current_ratio > target_ratio:
-                        # Skip this silence sample to reduce ratio
-                        continue
-                
-                # Update word counts
-                word_counts[label] = word_counts.get(label, 0) + 1
-                
                 # Extract features (either band features or raw EEG)
                 sequence = window[feature_cols].values
                 
                 # Add to training data
                 X_sequences.append(sequence)
                 y_labels.append(label)
+                
+                # Update word count and store the sample index
+                word_counts[label] = word_counts.get(label, 0) + 1
+                class_samples[label].append(len(X_sequences) - 1)  # Store the index
             
+            # Print initial class distribution
             print(f"Initial class distribution: {word_counts}")
-            print(f"Silence to non-silence ratio: {sil_count}/{non_sil_count} = {sil_count/max(1, non_sil_count):.2f}")
+            print(f"Initial silence to non-silence ratio: {sil_count}/{non_sil_count} = {sil_count/max(1, non_sil_count):.2f}")
+            
+            # Ensure minimum samples per class for stratification
+            min_samples_per_class = 2
+            for word, count in list(word_counts.items()):
+                if count < min_samples_per_class:
+                    print(f"Warning: Class '{word}' has only {count} samples, adding more to enable stratification")
+                    
+                    # If we have raw samples of this class
+                    class_indices_in_df = df.index[df['word_label'] == word].tolist()
+                    
+                    if len(class_indices_in_df) >= min_samples_per_class:
+                        # Add samples from original data
+                        needed_samples = min_samples_per_class - count
+                        for j in range(needed_samples):
+                            # Use modulo to cycle through available indices if needed
+                            idx = class_indices_in_df[j % len(class_indices_in_df)]
+                            if idx + window_size <= len(df):
+                                window = df.iloc[idx:idx+window_size]
+                                # Ensure window has only one label
+                                if len(window['word_label'].unique()) == 1:
+                                    sequence = window[feature_cols].values
+                                    X_sequences.append(sequence)
+                                    y_labels.append(word)
+                                    word_counts[word] += 1
+                    else:
+                        # If no raw samples, duplicate existing samples
+                        existing_samples = class_samples.get(word, [])
+                        if existing_samples:
+                            needed_samples = min_samples_per_class - count
+                            for j in range(needed_samples):
+                                # Use modulo to cycle through available samples
+                                sample_idx = existing_samples[j % len(existing_samples)]
+                                X_sequences.append(X_sequences[sample_idx])  # Duplicate
+                                y_labels.append(word)
+                                word_counts[word] += 1
+                        else:
+                            # Create synthetic samples if absolutely needed
+                            print(f"Creating synthetic samples for class '{word}'")
+                            for j in range(min_samples_per_class - count):
+                                # Create a random sample using the feature dimensions
+                                feature_dim = len(feature_cols)
+                                synthetic_sequence = np.random.randn(window_size, feature_dim) * 0.1
+                                X_sequences.append(synthetic_sequence)
+                                y_labels.append(word)
+                                word_counts[word] += 1
+            
+            # Print class distribution after ensuring minimums
+            print(f"Class distribution after ensuring minimum samples: {word_counts}")
+            
+            # Apply precise silence balancing
+            X_sequences, y_labels = self.apply_silence_balancing(X_sequences, y_labels)
             
             # Convert to numpy arrays
             X = np.array(X_sequences)
@@ -685,7 +855,8 @@ class RNNModelTrainer:
         
         else:
             raise ValueError("Dataset must contain either a word_label column or event columns")
-    
+
+
     def build_transformer_model(self, input_shape, num_classes):
         """
         Build a transformer-based model for EEG sequence processing.
@@ -878,7 +1049,7 @@ class RNNModelTrainer:
             return self.build_transformer_model(input_shape, num_classes)
         else:
             return self.build_gru_model(input_shape, num_classes)
-    
+
     def train(self):
         """Train the RNN model on the preprocessed data with enhanced techniques for speech detection."""
         # Check for GPU availability
@@ -902,22 +1073,36 @@ class RNNModelTrainer:
         # Preprocess data
         X, y = self.preprocess_data()
         
-        # Apply data augmentation to non-silence classes
+        # Apply data augmentation to non-silence classes only if factor > 0
         if self.augmentation_factor > 0:
             print(f"Applying data augmentation with factor {self.augmentation_factor}")
             X, y = augment_eeg_data(X, y, self.label_encoder, self.augmentation_factor)
+        else:
+            print("Data augmentation disabled (factor = 0)")
         
-        # Split into train and validation sets with stratification
-        X_train, X_val, y_train, y_val = train_test_split(
-            X, y, test_size=self.validation_split, random_state=42, 
-            stratify=np.argmax(y, axis=1)  # Ensure balanced classes in train/val
-        )
+        # Check class distribution to see if stratification is possible
+        class_indices = np.argmax(y, axis=1)
+        class_counts = np.bincount(class_indices)
+        min_class_count = np.min(class_counts)
+        
+        # Split into train and validation sets
+        if min_class_count < 2:
+            print(f"Warning: Class {np.argmin(class_counts)} has only {min_class_count} samples, which is too few for stratified split")
+            print("Falling back to random split (non-stratified)")
+            X_train, X_val, y_train, y_val = train_test_split(
+                X, y, test_size=self.validation_split, random_state=42
+            )
+        else:
+            # Proceed with stratified split
+            X_train, X_val, y_train, y_val = train_test_split(
+                X, y, test_size=self.validation_split, random_state=42, 
+                stratify=np.argmax(y, axis=1)  # Ensure balanced classes in train/val
+            )
         
         print(f"Training data shape: {X_train.shape}, Labels shape: {y_train.shape}")
         print(f"Validation data shape: {X_val.shape}, Validation labels shape: {y_val.shape}")
         
         # Calculate class weights to further address imbalance
-        # More weight for non-silence classes
         class_indices = np.argmax(y_train, axis=1)
         class_weights_dict = class_weight.compute_class_weight(
             'balanced', classes=np.unique(class_indices), y=class_indices
@@ -980,7 +1165,6 @@ class RNNModelTrainer:
         
         # Return the model and history
         return self.model, history_dict
-
 
 class RNNPredictor:
     """Enhanced class for making predictions with a trained RNN model."""

@@ -212,6 +212,16 @@ def model_info_api(request):
         # Get model directory path
         model_dir = os.path.join(settings.BASE_DIR, model.model_path)
         
+        # Check if this is a hierarchical model
+        is_hierarchical = False
+        hierarchical_model_path = os.path.join(model_dir, 'hierarchical_model.json')
+        hierarchical_info = {}
+        
+        if os.path.exists(hierarchical_model_path):
+            is_hierarchical = True
+            with open(hierarchical_model_path, 'r') as f:
+                hierarchical_info = json.load(f)
+        
         # Try to load preprocessing info
         preprocessing_info = {}
         preprocessing_path = os.path.join(model_dir, 'preprocessing_info.json')
@@ -219,9 +229,15 @@ def model_info_api(request):
         if os.path.exists(preprocessing_path):
             with open(preprocessing_path, 'r') as f:
                 preprocessing_info = json.load(f)
+                # Check for hierarchical flag in preprocessing info as well
+                if preprocessing_info.get('hierarchical_model', False):
+                    is_hierarchical = True
         
-        # Return filter configuration and other model info
-        return JsonResponse({
+        # Determine architecture type
+        architecture_type = "Transformer" if preprocessing_info.get('use_transformer', False) else "Bidirectional GRU"
+        
+        # Return model information
+        response = {
             'status': 'success',
             'model_id': model_id,
             'model_name': model.name,
@@ -229,16 +245,32 @@ def model_info_api(request):
             'eeg_columns': preprocessing_info.get('eeg_columns', []),
             'band_columns': preprocessing_info.get('band_columns', []),
             'sequence_length': preprocessing_info.get('sequence_length', 40),
-            'words': preprocessing_info.get('words', []),
+            'hierarchical_model': is_hierarchical,
+            'architecture_type': architecture_type,
             'has_band_features': preprocessing_info.get('has_band_features', False),
             'silence_balance_ratio': preprocessing_info.get('silence_balance_ratio', 1.0)
-        })
+        }
+        
+        # Add hierarchical-specific info if available
+        if is_hierarchical:
+            response.update({
+                'binary_classes': preprocessing_info.get('binary_classes', ['sil', 'speech']),
+                'word_classes': preprocessing_info.get('word_classes', []),
+                'binary_accuracy': hierarchical_info.get('binary_accuracy', 0),
+                'word_accuracy': hierarchical_info.get('word_accuracy', 0),
+                'combined_accuracy': hierarchical_info.get('combined_accuracy', 0)
+            })
+        else:
+            response.update({
+                'words': preprocessing_info.get('words', [])
+            })
+        
+        return JsonResponse(response)
         
     except EEGModel.DoesNotExist:
         return JsonResponse({'error': 'Model not found'}, status=404)
     except Exception as e:
         return JsonResponse({'error': str(e)}, status=500)
-
 
 def model_dashboard(request):
     """Main dashboard for the model training and prediction app."""
@@ -260,6 +292,7 @@ def model_dashboard(request):
     }
     
     return render(request, 'pi_main/dashboard.html', context)
+
 
 def train_model_background(job_id):
     """Background process to train the model with enhanced parameters."""
@@ -290,7 +323,7 @@ def train_model_background(job_id):
         trainer = RNNModelTrainer(
             dataset_path=dataset_path,
             model_name=job.model_name,
-            word_list=job.word_list.split(',') if job.word_list else None,
+            word_list=None,  # No longer using word_list as we're using word_label directly
             epochs=job.epochs,
             batch_size=job.batch_size,
             learning_rate=job.learning_rate,
@@ -313,21 +346,48 @@ def train_model_background(job_id):
         output_dir = os.path.join(settings.BASE_DIR, 'trained_models', job.model_name)
         os.makedirs(output_dir, exist_ok=True)
         
-        # Save training history
-        history_path = os.path.join(output_dir, 'training_history.json')
-        with open(history_path, 'w') as f:
-            json.dump(history, f)
+        # Check if this is a hierarchical model
+        is_hierarchical = False
+        hierarchical_model_path = os.path.join(output_dir, 'hierarchical_model.json')
+        combined_history = None
         
-        # Create model record
-        eeg_model = EEGModel(
-            name=job.model_name,
-            description=job.description,
-            dataset_path=job.dataset_path,
-            model_path=os.path.join('trained_models', job.model_name),
-            accuracy=history.get('val_accuracy', [0])[-1],
-            loss=history.get('val_loss', [0])[-1],
-            training_job=job
-        )
+        if os.path.exists(hierarchical_model_path):
+            is_hierarchical = True
+            try:
+                with open(hierarchical_model_path, 'r') as f:
+                    hierarchical_info = json.load(f)
+                    combined_accuracy = hierarchical_info.get('combined_accuracy', 0)
+                
+                with open(os.path.join(output_dir, 'combined_history.json'), 'r') as f:
+                    combined_history = json.load(f)
+            except Exception as e:
+                print(f"Error reading hierarchical model info: {e}")
+                combined_accuracy = 0
+        
+        # Create model record with appropriate accuracy
+        if is_hierarchical and combined_history:
+            # Use the combined accuracy from the hierarchical model
+            eeg_model = EEGModel(
+                name=job.model_name,
+                description=job.description,
+                dataset_path=job.dataset_path,
+                model_path=os.path.join('trained_models', job.model_name),
+                accuracy=combined_history.get('combined_accuracy', 0),
+                loss=0.0,  # Not used in hierarchical model
+                training_job=job
+            )
+        else:
+            # Standard model - use the last validation accuracy
+            eeg_model = EEGModel(
+                name=job.model_name,
+                description=job.description,
+                dataset_path=job.dataset_path,
+                model_path=os.path.join('trained_models', job.model_name),
+                accuracy=history.get('val_accuracy', [0])[-1],
+                loss=history.get('val_loss', [0])[-1],
+                training_job=job
+            )
+        
         eeg_model.save()
         
         # Update job status
@@ -708,9 +768,11 @@ def predict_eeg_api(request):
             'message': str(e)
         }, status=500)
 
+
 def training_history_api(request):
     """API endpoint to get training history for a model."""
     model_id = request.GET.get('model_id')
+    hierarchical = request.GET.get('hierarchical', 'false').lower() == 'true'
     
     if not model_id:
         return JsonResponse({'error': 'No model ID provided'}, status=400)
@@ -718,21 +780,81 @@ def training_history_api(request):
     try:
         model = EEGModel.objects.get(id=model_id)
         
-        # Get training history file path
-        history_path = os.path.join(settings.BASE_DIR, model.model_path, 'training_history.json')
+        # Get model directory path
+        model_dir = os.path.join(settings.BASE_DIR, model.model_path)
         
-        if not os.path.exists(history_path):
-            return JsonResponse({'error': 'Training history not found'}, status=404)
+        # Check if this is a hierarchical model
+        hierarchical_model_path = os.path.join(model_dir, 'hierarchical_model.json')
+        is_hierarchical = os.path.exists(hierarchical_model_path)
         
-        # Read training history
-        with open(history_path, 'r') as f:
-            history = json.load(f)
+        # Also check preprocessing info for hierarchical flag
+        preprocessing_path = os.path.join(model_dir, 'preprocessing_info.json')
+        if os.path.exists(preprocessing_path):
+            try:
+                with open(preprocessing_path, 'r') as f:
+                    preprocessing_info = json.load(f)
+                    if preprocessing_info.get('hierarchical_model', False):
+                        is_hierarchical = True
+            except:
+                pass
         
-        return JsonResponse({
-            'status': 'success',
-            'model_id': model_id,
-            'history': history
-        })
+        if is_hierarchical:
+            # It's a hierarchical model, handle differently
+            combined_history_path = os.path.join(model_dir, 'combined_history.json')
+            
+            if os.path.exists(combined_history_path):
+                with open(combined_history_path, 'r') as f:
+                    combined_history = json.load(f)
+                
+                if hierarchical:
+                    # Return the full combined history
+                    return JsonResponse({
+                        'status': 'success',
+                        'model_id': model_id,
+                        'hierarchical_model': True,
+                        'combined_history': combined_history
+                    })
+                else:
+                    # Return just one of the histories (binary by default) for the chart
+                    return JsonResponse({
+                        'status': 'success',
+                        'model_id': model_id,
+                        'hierarchical_model': True,
+                        'history': combined_history.get('binary', {})
+                    })
+            else:
+                # Try individual model histories
+                binary_history_path = os.path.join(model_dir, 'binary_model', 'training_history.json')
+                
+                if os.path.exists(binary_history_path):
+                    with open(binary_history_path, 'r') as f:
+                        history = json.load(f)
+                    
+                    return JsonResponse({
+                        'status': 'success',
+                        'model_id': model_id,
+                        'hierarchical_model': True,
+                        'history': history
+                    })
+                else:
+                    return JsonResponse({'error': 'Training history not found'}, status=404)
+        else:
+            # Regular model history
+            history_path = os.path.join(model_dir, 'training_history.json')
+            
+            if not os.path.exists(history_path):
+                return JsonResponse({'error': 'Training history not found'}, status=404)
+            
+            # Read training history
+            with open(history_path, 'r') as f:
+                history = json.load(f)
+            
+            return JsonResponse({
+                'status': 'success',
+                'model_id': model_id,
+                'hierarchical_model': False,
+                'history': history
+            })
         
     except EEGModel.DoesNotExist:
         return JsonResponse({'error': 'Model not found'}, status=404)

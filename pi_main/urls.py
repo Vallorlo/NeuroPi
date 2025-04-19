@@ -25,6 +25,7 @@ urlpatterns = [
     path('api/training-history/', views.training_history_api, name='training_history_api'),
     path('api/toggle-model-status/', views.toggle_model_status_api, name='toggle_model_status_api'),
     path('api/dataset-words/', views.dataset_words_api, name='dataset_words_api'),
+    path('api/model-info/', views.model_info_api, name='model_info_api'),  # Add this new line
     
     # EEG connection endpoints
     path('api/live-predict/', views.live_predict_api, name='live_predict_api'),

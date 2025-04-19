@@ -3,6 +3,9 @@ from django import forms
 from .models import TrainingJob, EEGModel
 from django.conf import settings
 import os
+import json
+
+
 
 class ModelTrainingForm(forms.ModelForm):
     """Form for creating a new model training job."""
@@ -12,15 +15,6 @@ class ModelTrainingForm(forms.ModelForm):
         choices=[],
         label='Dataset',
         widget=forms.Select(attrs={'class': 'form-select'})
-    )
-    
-    # Word selection field (multiselect)
-    selected_words = forms.MultipleChoiceField(
-        choices=[],
-        required=False,
-        label='Words to Include',
-        help_text='Leave empty to use all words',
-        widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': '5'})
     )
     
     # Add filtering option
@@ -105,9 +99,6 @@ class ModelTrainingForm(forms.ModelForm):
         
         # Set up dataset choices
         self.fields['dataset_path'].choices = self.get_dataset_choices()
-        
-        # Set up word choices (will be updated via JavaScript based on selected dataset)
-        self.fields['selected_words'].choices = self.get_word_choices()
     
     @staticmethod
     def get_dataset_choices():
@@ -158,19 +149,8 @@ class ModelTrainingForm(forms.ModelForm):
         
         return choices
     
-    def get_word_choices(self):
-        """Get choices for word selection."""
-        # This will be populated via AJAX based on the selected dataset
-        return []
-    
     def clean(self):
         cleaned_data = super().clean()
-        
-        # Combine selected words into comma-separated string
-        selected_words = self.data.getlist('selected_words')
-        if selected_words:
-            cleaned_data['word_list'] = ','.join(selected_words)
-        
         return cleaned_data
 
 class PredictionForm(forms.Form):

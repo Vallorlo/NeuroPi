@@ -49,6 +49,9 @@
                                                             </option>
                                                         {% endfor %}
                                                     </select>
+                                                    <div id="hierarchicalBadge" style="display: none;" class="mt-2">
+                                                        <span class="badge bg-success">Hierarchical Model (Speech/Silence + Word Classification)</span>
+                                                    </div>
                                                 </div>
                                                 
                                                 <div class="mb-3">
@@ -97,6 +100,22 @@
                                                             <small class="form-text text-muted d-block">
                                                                 Combines predictions across time windows for better accuracy
                                                             </small>
+                                                        </div>
+                                                        
+                                                        <!-- Hierarchical model specific settings (initially hidden) -->
+                                                        <div id="hierarchicalSettings" style="display: none;" class="mt-3 pt-3 border-top">
+                                                            <h6 class="mb-2"><i class="bi bi-layers"></i> Hierarchical Model Settings</h6>
+                                                            
+                                                            <div class="form-check mb-2">
+                                                                <input class="form-check-input" type="range" id="speechThreshold" name="speech_threshold" 
+                                                                       min="0.2" max="0.8" step="0.05" value="0.55">
+                                                                <label class="form-check-label" for="speechThreshold">
+                                                                    Speech Detection Threshold: <span id="speechThresholdValue">0.55</span>
+                                                                </label>
+                                                                <small class="form-text text-muted d-block">
+                                                                    Lower values detect more speech, higher values detect more silence
+                                                                </small>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -168,6 +187,46 @@
                                             {% elif recording_status == "success" and prediction_results %}
                                                 <div class="prediction-container mb-4">
                                                     <h2 id="predictedWord">{{ prediction_results.predicted_word }}</h2>
+                                                    
+                                                    <!-- Display hierarchical model info if available -->
+                                                    {% if prediction_results.hierarchical_model %}
+                                                    <div class="alert alert-info mb-3">
+                                                        <h6><i class="bi bi-layers"></i> Hierarchical Model Results:</h6>
+                                                        <div class="row">
+                                                            <div class="col-6">
+                                                                <div class="mb-2">
+                                                                    <strong>Binary Classification:</strong> 
+                                                                    <span class="badge {% if prediction_results.binary_result == 'speech' %}bg-success{% else %}bg-secondary{% endif %}">
+                                                                        {{ prediction_results.binary_result|title }}
+                                                                    </span>
+                                                                </div>
+                                                                <div class="progress mb-1" style="height: 15px;">
+                                                                    <div class="progress-bar {% if prediction_results.binary_result == 'speech' %}bg-success{% else %}bg-secondary{% endif %}"
+                                                                         style="width: {{ prediction_results.binary_confidence|mul:100 }}%">
+                                                                        {{ prediction_results.binary_confidence|mul:100|floatformat:1 }}%
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <div class="col-6">
+                                                                {% if prediction_results.binary_result == 'speech' %}
+                                                                <div class="mb-2">
+                                                                    <strong>Word Classification:</strong>
+                                                                    <span class="badge bg-primary">
+                                                                        {{ prediction_results.predicted_word }}
+                                                                    </span>
+                                                                </div>
+                                                                <div class="progress mb-1" style="height: 15px;">
+                                                                    <div class="progress-bar bg-primary"
+                                                                         style="width: {{ prediction_results.word_confidence|mul:100 }}%">
+                                                                        {{ prediction_results.word_confidence|mul:100|floatformat:1 }}%
+                                                                    </div>
+                                                                </div>
+                                                                {% endif %}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {% endif %}
+                                                    
                                                     <div class="progress mb-3">
                                                         <div id="confidenceBar" class="progress-bar 
                                                             {% if prediction_results.confidence >= 0.7 %}bg-success{% elif prediction_results.confidence >= 0.4 %}bg-warning{% else %}bg-danger{% endif %}" 
@@ -178,7 +237,7 @@
                                                              aria-valuemax="100">
                                                         </div>
                                                     </div>
-                                                    <p id="confidenceValue">Confidence: {{ prediction_results.confidence|mul:100|floatformat:1 }}%</p>
+                                                    <p id="confidenceValue">Overall Confidence: {{ prediction_results.confidence|mul:100|floatformat:1 }}%</p>
                                                     
                                                     <!-- Enhanced prediction info -->
                                                     {% if prediction_results.custom_thresholds_used or prediction_results.majority_vote_applied %}
@@ -332,6 +391,23 @@
                     </div>
                 </div>
                 
+                <div id="hierarchicalModelInfo" style="display: none;">
+                    <div class="card mb-3 border-info">
+                        <div class="card-header bg-info text-white">
+                            <h6 class="mb-0">About Hierarchical Models</h6>
+                        </div>
+                        <div class="card-body">
+                            <p>Your selected model uses a two-stage hierarchical approach:</p>
+                            <ol>
+                                <li><strong>Binary Classifier:</strong> First determines if the EEG pattern is speech or silence</li>
+                                <li><strong>Word Classifier:</strong> If speech is detected, determines which specific word</li>
+                            </ol>
+                            <p>This approach improves accuracy by addressing the inherent imbalance between silence and speech data.</p>
+                            <p class="mb-0">The <strong>Speech Detection Threshold</strong> slider lets you adjust how aggressively the model detects speech vs. silence.</p>
+                        </div>
+                    </div>
+                </div>
+                
                 <h5>Tips for best results:</h5>
                 <ul class="ulguide">
                     <li>Ensure the EEG headset is positioned correctly and has good contact</li>
@@ -367,10 +443,22 @@
         const eegStatus = document.getElementById('eegStatus');
         const modelStatus = document.getElementById('modelStatus');
         const statusMessage = document.getElementById('statusMessage');
+        const hierarchicalBadge = document.getElementById('hierarchicalBadge');
+        const hierarchicalSettings = document.getElementById('hierarchicalSettings');
+        const speechThreshold = document.getElementById('speechThreshold');
+        const speechThresholdValue = document.getElementById('speechThresholdValue');
+        const hierarchicalModelInfo = document.getElementById('hierarchicalModelInfo');
         
         // Enhanced options elements
         const useCustomThresholds = document.getElementById('useCustomThresholds');
         const useMajorityVoting = document.getElementById('useMajorityVoting');
+        
+        // Update speech threshold value display
+        if (speechThreshold) {
+            speechThreshold.addEventListener('input', function() {
+                speechThresholdValue.textContent = this.value;
+            });
+        }
         
         // Show instructions modal on first load
         const instructionsModal = new bootstrap.Modal(document.getElementById('instructionsModal'));
@@ -378,6 +466,52 @@
             instructionsModal.show();
             localStorage.setItem('predictionInstructionsShown', 'true');
         }
+        
+        // Check if model is hierarchical when selected
+        modelSelect.addEventListener('change', function() {
+            if (!this.value) {
+                // No model selected
+                modelStatus.className = 'status-indicator bg-danger me-2';
+                startRecordingBtn.disabled = true;
+                hierarchicalBadge.style.display = 'none';
+                hierarchicalSettings.style.display = 'none';
+                hierarchicalModelInfo.style.display = 'none';
+                return;
+            }
+            
+            // Update model status
+            modelStatus.className = 'status-indicator bg-success me-2';
+            
+            // Enable start button if EEG is connected
+            if (eegStatus.className.includes('bg-success')) {
+                startRecordingBtn.disabled = false;
+            }
+            
+            // Check if this is a hierarchical model
+            fetch(`/pi_main/api/model-info/?model_id=${this.value}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.hierarchical_model) {
+                        console.log("Hierarchical model detected");
+                        // Show hierarchical model badge and settings
+                        hierarchicalBadge.style.display = 'block';
+                        hierarchicalSettings.style.display = 'block';
+                        hierarchicalModelInfo.style.display = 'block';
+                    } else {
+                        // Hide hierarchical model badge and settings
+                        hierarchicalBadge.style.display = 'none';
+                        hierarchicalSettings.style.display = 'none';
+                        hierarchicalModelInfo.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking model type:', error);
+                    // Hide hierarchical model badge and settings
+                    hierarchicalBadge.style.display = 'none';
+                    hierarchicalSettings.style.display = 'none';
+                    hierarchicalModelInfo.style.display = 'none';
+                });
+        });
         
         // Connect EEG button handler
         connectEEGBtn.addEventListener('click', function() {
@@ -426,20 +560,6 @@
             });
         });
         
-        // Model select change handler
-        modelSelect.addEventListener('change', function() {
-            if (this.value) {
-                modelStatus.className = 'status-indicator bg-success me-2';
-                // Enable start button if EEG is connected
-                if (eegStatus.className.includes('bg-success')) {
-                    startRecordingBtn.disabled = false;
-                }
-            } else {
-                modelStatus.className = 'status-indicator bg-danger me-2';
-                startRecordingBtn.disabled = true;
-            }
-        });
-        
         // Clean up EEG connection when leaving the page
         window.addEventListener('beforeunload', function() {
             // Only try to disconnect if the EEG is connected (green status)
@@ -456,6 +576,22 @@
         // Initialize UI based on selected model (if any)
         if (modelSelect.value) {
             modelStatus.className = 'status-indicator bg-success me-2';
+            
+            // Check if this is a hierarchical model
+            fetch(`/pi_main/api/model-info/?model_id=${modelSelect.value}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success' && data.hierarchical_model) {
+                        console.log("Hierarchical model detected");
+                        // Show hierarchical model badge and settings
+                        hierarchicalBadge.style.display = 'block';
+                        hierarchicalSettings.style.display = 'block';
+                        hierarchicalModelInfo.style.display = 'block';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking model type:', error);
+                });
         }
     });
 </script>

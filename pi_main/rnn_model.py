@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 from tensorflow.keras.utils import to_categorical
 from sklearn.utils import class_weight
+import traceback
 
 # Import the EEG utilities
 from cleaner.eeg_utils import (
@@ -20,27 +21,14 @@ from cleaner.eeg_utils import (
     calculate_signal_quality
 )
 
-def convert_numpy_types(obj):
-    """Convert numpy types to native Python types for JSON serialization."""
-    import numpy as np
-    
-    if isinstance(obj, np.integer):
-        return int(obj)
-    elif isinstance(obj, np.floating):
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, dict):
-        return {key: convert_numpy_types(value) for key, value in obj.items()}
-    elif isinstance(obj, list):
-        return [convert_numpy_types(item) for item in obj]
-    else:
-        return obj
+
+
+
 
 
 def focal_loss(gamma=2.0, alpha=4.0):
     """
-    Focal Loss to focus on hard-to-classify examples.
+    Fixed focal loss function that avoids returning or using lists.
     
     Parameters:
     -----------
@@ -67,24 +55,31 @@ def focal_loss(gamma=2.0, alpha=4.0):
         # Calculate focal term
         focal_weight = tf.pow(1.0 - y_pred, gamma)
         
-        # Apply alpha class weighting - higher weight for speech classes (non-zero)
-        # Assuming class 0 is silence, all other classes are speech
-        is_silence = K.equal(K.argmax(y_true, axis=-1), 0)
-        is_silence_float = K.cast(is_silence, K.floatx())
-        
-        # Create weights where silence gets 1.0 and speech gets alpha
-        class_weights = 1.0 + (alpha - 1.0) * (1.0 - is_silence_float)
-        
-        # Expand dims to match cross_entropy shape
-        class_weights = K.expand_dims(class_weights, axis=-1)
-        
-        # Combine all terms
-        focal_loss = class_weights * focal_weight * cross_entropy
+        # Apply alpha class weighting using scalar multiplication instead of vector operations
+        # This simplifies the computation and avoids returning lists
+        weighted_focal_loss = alpha * focal_weight * cross_entropy
         
         # Sum over classes and return mean over batch
-        return K.mean(K.sum(focal_loss, axis=-1))
+        return tf.reduce_mean(tf.reduce_sum(weighted_focal_loss, axis=-1))
     
     return focal_loss_fixed
+	
+def convert_numpy_types(obj):
+    """Convert numpy types to native Python types for JSON serialization."""
+    import numpy as np
+    
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    else:
+        return obj
 
 
 def positional_encoding(positions, d_model):
@@ -217,7 +212,7 @@ def augment_eeg_data(X, y, label_encoder, augmentation_factor=0.3):
 
 
 class RNNModelTrainer:
-    """Enhanced class for training RNN models on EEG data with improved speech detection."""
+    """Class for training a two-stage model: binary silence/speech detector and multi-class word classifier."""
     
     def __init__(self, dataset_path, model_name, word_list=None, epochs=50, batch_size=32, 
                 learning_rate=0.001, validation_split=0.2, hidden_units=64, 
@@ -250,17 +245,24 @@ class RNNModelTrainer:
         self.apply_filtering = apply_filtering
         
         # Enhanced parameters for speech detection
-        self.silence_balance_ratio = silence_balance_ratio  # Control silence:speech ratio
-        self.use_focal_loss = use_focal_loss  # Whether to use focal loss
-        self.use_transformer = use_transformer  # Whether to use transformer architecture
-        self.augmentation_factor = augmentation_factor  # Data augmentation factor
+        self.silence_balance_ratio = silence_balance_ratio
+        self.use_focal_loss = use_focal_loss
+        self.use_transformer = use_transformer
+        self.augmentation_factor = augmentation_factor
         
         # Create output directory
         os.makedirs(self.output_dir, exist_ok=True)
         
-        # Initialize model
-        self.model = None
-        self.history = None
+        # Create subdirectories for both models
+        self.binary_model_dir = os.path.join(self.output_dir, 'binary_model')
+        self.word_model_dir = os.path.join(self.output_dir, 'word_model')
+        os.makedirs(self.binary_model_dir, exist_ok=True)
+        os.makedirs(self.word_model_dir, exist_ok=True)
+        
+        # Initialize models
+        self.binary_model = None
+        self.word_model = None
+        self.history = {'binary': None, 'word': None}
         self.label_encoder = None
         self.word_event_columns = []
         self.eeg_columns = []
@@ -303,179 +305,12 @@ class RNNModelTrainer:
             print(f"Error extracting filter configuration: {e}")
             return {}
     
-    def extract_connectivity_features(self, eeg_data):
-        """
-        Extract connectivity features between brain regions.
-        Simple version focusing on correlation between channels.
-        
-        Parameters:
-        -----------
-        eeg_data : ndarray
-            EEG data with shape (channels, samples) or (samples, channels)
-            
-        Returns:
-        --------
-        ndarray: Connectivity features
-        """
-        # Ensure data is in (samples, channels) format
-        if eeg_data.shape[0] < eeg_data.shape[1]:  # (channels, samples) format
-            eeg_data = eeg_data.T
-        
-        samples, channels = eeg_data.shape
-        
-        # Calculate correlation matrix between channels
-        corr_matrix = np.corrcoef(eeg_data.T)
-        
-        # Extract upper triangle of correlation matrix (without diagonal)
-        features = []
-        for i in range(channels):
-            for j in range(i+1, channels):
-                features.append(corr_matrix[i, j])
-        
-        # Repeat the features for each sample to maintain shape compatibility
-        connectivity_features = np.tile(features, (samples, 1))
-        
-        return connectivity_features
-    
-    def extract_temporal_features(self, eeg_data, window_size=20):
-        """
-        Extract temporal features from EEG data.
-        
-        Parameters:
-        -----------
-        eeg_data : ndarray
-            EEG data with shape (channels, samples) or (samples, channels)
-        window_size : int
-            Window size for calculating features
-            
-        Returns:
-        --------
-        ndarray: Temporal features
-        """
-        # Ensure data is in (samples, channels) format
-        if eeg_data.shape[0] < eeg_data.shape[1]:  # (channels, samples) format
-            eeg_data = eeg_data.T
-        
-        samples, channels = eeg_data.shape
-        
-        # Initialize feature arrays
-        rate_of_change = np.zeros((samples, channels))
-        zero_crossings = np.zeros((samples, channels))
-        peaks = np.zeros((samples, channels))
-        
-        # Calculate features using rolling windows
-        for i in range(window_size, samples):
-            window = eeg_data[i-window_size:i, :]
-            
-            # Rate of change (derivative)
-            rate_of_change[i, :] = np.mean(np.abs(np.diff(window, axis=0)), axis=0)
-            
-            # Zero crossings
-            for c in range(channels):
-                channel_data = window[:, c]
-                zero_crossings[i, c] = np.sum(np.diff(np.signbit(channel_data)))
-            
-            # Peaks (using simple detection)
-            for c in range(channels):
-                channel_data = window[:, c]
-                # Find peaks where data point is higher than neighbors
-                peaks[i, c] = np.sum((channel_data[1:-1] > channel_data[:-2]) & 
-                                    (channel_data[1:-1] > channel_data[2:]))
-        
-        # Combine features
-        temporal_features = np.hstack([rate_of_change, zero_crossings, peaks])
-        
-        return temporal_features
-    
-    def extract_enhanced_features(self, eeg_data):
-        """
-        Extract enhanced features from EEG data including:
-        1. Connectivity features
-        2. Temporal features
-        
-        Parameters:
-        -----------
-        eeg_data : ndarray
-            EEG data with shape (channels, samples) or (samples, channels)
-            
-        Returns:
-        --------
-        ndarray: Enhanced features
-        """
-        # Extract individual feature sets
-        connectivity_features = self.extract_connectivity_features(eeg_data)
-        temporal_features = self.extract_temporal_features(eeg_data)
-        
-        # Ensure data is in (samples, channels) format for consistent concatenation
-        if eeg_data.shape[0] < eeg_data.shape[1]:  # (channels, samples) format
-            eeg_data = eeg_data.T
-        
-        # Combine all features
-        enhanced_features = np.hstack([eeg_data, connectivity_features, temporal_features])
-        
-        return enhanced_features
-        
-
-    def apply_silence_balancing(self, X_sequences, y_labels, silence_word='sil'):
-        """
-        Apply more precise silence balancing to achieve the target ratio.
-        
-        Parameters:
-        -----------
-        X_sequences : list
-            List of sequence arrays
-        y_labels : list
-            List of labels corresponding to each sequence
-        silence_word : str
-            The label used for silence
-            
-        Returns:
-        --------
-        tuple: (balanced_X, balanced_y) with balanced sequences and labels
-        """
-        print(f"Applying precise silence balancing with target ratio: {self.silence_balance_ratio}")
-        
-        # Separate silence and non-silence samples
-        silence_indices = [i for i, label in enumerate(y_labels) if label == silence_word]
-        nonsilence_indices = [i for i, label in enumerate(y_labels) if label != silence_word]
-        
-        print(f"Before balancing - Silence: {len(silence_indices)}, Non-silence: {len(nonsilence_indices)}")
-        
-        # Calculate target number of silence samples
-        target_silence_count = int(len(nonsilence_indices) * self.silence_balance_ratio)
-        
-        # Ensure we keep at least 2 silence samples for stratification
-        target_silence_count = max(2, target_silence_count)
-        
-        # Cap the number of silence samples if too many
-        if len(silence_indices) > target_silence_count:
-            print(f"Downsampling silence from {len(silence_indices)} to {target_silence_count} samples")
-            # Randomly sample the target number of silence samples
-            import random
-            random.seed(42)  # For reproducibility
-            silence_indices = random.sample(silence_indices, target_silence_count)
-        else:
-            print(f"Keeping all {len(silence_indices)} silence samples (fewer than target {target_silence_count})")
-        
-        # Combine silence and non-silence indices and sort to maintain original order
-        balanced_indices = sorted(silence_indices + nonsilence_indices)
-        
-        # Create balanced datasets
-        balanced_X = [X_sequences[i] for i in balanced_indices]
-        balanced_y = [y_labels[i] for i in balanced_indices]
-        
-        # Count final class distribution
-        class_counts = {}
-        for label in balanced_y:
-            class_counts[label] = class_counts.get(label, 0) + 1
-        
-        print(f"After balancing - Class distribution: {class_counts}")
-        print(f"Final silence:non-silence ratio = {class_counts.get(silence_word, 0) / sum(count for label, count in class_counts.items() if label != silence_word):.2f}")
-        
-        return balanced_X, balanced_y
-
     def preprocess_data(self):
-        """Enhanced version of data preprocessing with better balancing and feature extraction."""
+        """
+        Preprocess data and create two datasets:
+        1. Binary dataset for silence vs. speech classification
+        2. Word dataset for multi-class word classification (only speech samples)
+        """
         print(f"Loading dataset from {self.dataset_path}")
         
         # Get full path if relative
@@ -554,24 +389,7 @@ class RNNModelTrainer:
             # Feature columns to use
             feature_cols = self.band_columns if has_band_features else self.eeg_columns
             
-            # Count samples per word to track balancing - this will include ALL samples initially
-            raw_word_counts = {word: 0 for word in unique_words}
-            
-            # Count samples by class in original data
-            for label in df['word_label']:
-                raw_word_counts[label] = raw_word_counts.get(label, 0) + 1
-            
-            print(f"Raw dataset word distribution: {raw_word_counts}")
-            
-            # Initialize counts for balancing tracking
-            word_counts = {word: 0 for word in unique_words}
-            sil_count = 0
-            non_sil_count = 0
-            
-            # Track all collected samples by class for additional balancing later
-            class_samples = {word: [] for word in unique_words}
-            
-            # Create sequences using sliding window (without aggressive balancing yet)
+            # Create sequences using sliding window
             for i in range(0, len(df) - window_size, stride):
                 # Get window of data
                 window = df.iloc[i:i+window_size]
@@ -583,116 +401,96 @@ class RNNModelTrainer:
                 # Get the label (most common word in the window)
                 label = window['word_label'].iloc[0]
                 
-                # Count by class
-                if label == 'sil':
-                    sil_count += 1
-                else:
-                    non_sil_count += 1
-                
                 # Extract features (either band features or raw EEG)
                 sequence = window[feature_cols].values
                 
                 # Add to training data
                 X_sequences.append(sequence)
                 y_labels.append(label)
-                
-                # Update word count and store the sample index
-                word_counts[label] = word_counts.get(label, 0) + 1
-                class_samples[label].append(len(X_sequences) - 1)  # Store the index
             
-            # Print initial class distribution
-            print(f"Initial class distribution: {word_counts}")
-            print(f"Initial silence to non-silence ratio: {sil_count}/{non_sil_count} = {sil_count/max(1, non_sil_count):.2f}")
+            if not X_sequences:
+                raise ValueError("No valid sequences could be created from test data")
             
-            # Ensure minimum samples per class for stratification
-            min_samples_per_class = 2
-            for word, count in list(word_counts.items()):
-                if count < min_samples_per_class:
-                    print(f"Warning: Class '{word}' has only {count} samples, adding more to enable stratification")
-                    
-                    # If we have raw samples of this class
-                    class_indices_in_df = df.index[df['word_label'] == word].tolist()
-                    
-                    if len(class_indices_in_df) >= min_samples_per_class:
-                        # Add samples from original data
-                        needed_samples = min_samples_per_class - count
-                        for j in range(needed_samples):
-                            # Use modulo to cycle through available indices if needed
-                            idx = class_indices_in_df[j % len(class_indices_in_df)]
-                            if idx + window_size <= len(df):
-                                window = df.iloc[idx:idx+window_size]
-                                # Ensure window has only one label
-                                if len(window['word_label'].unique()) == 1:
-                                    sequence = window[feature_cols].values
-                                    X_sequences.append(sequence)
-                                    y_labels.append(word)
-                                    word_counts[word] += 1
-                    else:
-                        # If no raw samples, duplicate existing samples
-                        existing_samples = class_samples.get(word, [])
-                        if existing_samples:
-                            needed_samples = min_samples_per_class - count
-                            for j in range(needed_samples):
-                                # Use modulo to cycle through available samples
-                                sample_idx = existing_samples[j % len(existing_samples)]
-                                X_sequences.append(X_sequences[sample_idx])  # Duplicate
-                                y_labels.append(word)
-                                word_counts[word] += 1
-                        else:
-                            # Create synthetic samples if absolutely needed
-                            print(f"Creating synthetic samples for class '{word}'")
-                            for j in range(min_samples_per_class - count):
-                                # Create a random sample using the feature dimensions
-                                feature_dim = len(feature_cols)
-                                synthetic_sequence = np.random.randn(window_size, feature_dim) * 0.1
-                                X_sequences.append(synthetic_sequence)
-                                y_labels.append(word)
-                                word_counts[word] += 1
+            print(f"Created {len(X_sequences)} sequences with {len(unique_words)} different words")
             
-            # Print class distribution after ensuring minimums
-            print(f"Class distribution after ensuring minimum samples: {word_counts}")
-            
-            # Apply precise silence balancing
-            X_sequences, y_labels = self.apply_silence_balancing(X_sequences, y_labels)
-            
-            # Convert to numpy arrays
+            # Convert sequences to numpy array
             X = np.array(X_sequences)
             
-            # Encode labels
-            self.label_encoder = LabelEncoder()
-            y_encoded = self.label_encoder.fit_transform(y_labels)
-            y = to_categorical(y_encoded)
+            # Create binary labels (silence vs. speech)
+            binary_labels = np.array(['speech' if label != 'sil' else 'sil' for label in y_labels])
             
-            print(f"Created {len(X)} sequences of length {window_size}")
-            print(f"Final data shapes: X = {X.shape}, y = {y.shape}")
+            # Create word-only dataset (no silence)
+            speech_mask = np.array([label != 'sil' for label in y_labels])
+            X_speech = X[speech_mask]
+            y_speech_labels = np.array([label for label in y_labels if label != 'sil'])
             
-            # Save label encoder
-            with open(os.path.join(self.output_dir, 'label_encoder.pkl'), 'wb') as f:
-                pickle.dump(self.label_encoder, f)
+            print(f"Split data into: {len(binary_labels)} binary samples, {len(y_speech_labels)} speech-only samples")
+            
+            # Create label encoders for both problems
+            self.binary_encoder = LabelEncoder()
+            binary_encoded = self.binary_encoder.fit_transform(binary_labels)
+            binary_y = to_categorical(binary_encoded)
+            
+            self.word_encoder = LabelEncoder()
+            word_encoded = self.word_encoder.fit_transform(y_speech_labels)
+            word_y = to_categorical(word_encoded)
+            
+            # Save label encoders
+            with open(os.path.join(self.binary_model_dir, 'label_encoder.pkl'), 'wb') as f:
+                pickle.dump(self.binary_encoder, f)
                 
+            with open(os.path.join(self.word_model_dir, 'label_encoder.pkl'), 'wb') as f:
+                pickle.dump(self.word_encoder, f)
+            
             # Save preprocessing info
             preprocessing_info = {
                 'eeg_columns': self.eeg_columns,
                 'band_columns': self.band_columns,
                 'sequence_length': self.sequence_length,
-                'words': self.label_encoder.classes_.tolist(),
+                'binary_classes': self.binary_encoder.classes_.tolist(),
+                'word_classes': self.word_encoder.classes_.tolist(),
                 'filter_config': self.filter_config,
                 'has_band_features': has_band_features,
-                'silence_balance_ratio': self.silence_balance_ratio
+                'silence_balance_ratio': self.silence_balance_ratio,
+                'hierarchical_model': True
             }
             
             with open(os.path.join(self.output_dir, 'preprocessing_info.json'), 'w') as f:
                 json.dump(preprocessing_info, f)
                 
-            return X, y
-        
+            # Balance the binary dataset
+            # We want to have approximately equal silence and speech samples
+            sil_indices = np.where(binary_labels == 'sil')[0]
+            speech_indices = np.where(binary_labels == 'speech')[0]
+            
+            # Determine target counts for balancing
+            target_sil_count = int(min(len(speech_indices), len(sil_indices) * 2))
+            target_speech_count = int(min(len(sil_indices), len(speech_indices) * 2))
+            
+            if len(sil_indices) > target_sil_count:
+                # Downsample silence
+                sil_indices = np.random.choice(sil_indices, target_sil_count, replace=False)
+            
+            if len(speech_indices) > target_speech_count:
+                # Downsample speech for binary classifier
+                speech_indices = np.random.choice(speech_indices, target_speech_count, replace=False)
+            
+            # Create balanced binary dataset
+            balanced_indices = np.concatenate([sil_indices, speech_indices])
+            X_binary = X[balanced_indices]
+            binary_y = to_categorical(self.binary_encoder.transform(binary_labels[balanced_indices]))
+            
+            print(f"Balanced binary dataset: {len(X_binary)} samples")
+            print(f"Speech-only dataset: {len(X_speech)} samples for word classification")
+            
+            return {
+                'binary': (X_binary, binary_y),
+                'word': (X_speech, word_y)
+            }
+            
         elif self.word_event_columns:
             # Handle datasets with event columns instead of word_label
             print("Using event columns for classification target")
-            
-            # Extract word labels from event columns
-            X_sequences = []
-            y_labels = []
             
             # Create a word_label column
             df['word_label'] = 'sil'  # default to silence
@@ -700,7 +498,7 @@ class RNNModelTrainer:
                 word = event_col.replace('_event', '')
                 df.loc[df[event_col], 'word_label'] = word
             
-            # Now proceed with word_label approach
+            # Now process with the same approach as above
             unique_words = df['word_label'].unique().tolist()
             print(f"Extracted {len(unique_words)} unique words from event columns: {unique_words}")
             
@@ -710,6 +508,10 @@ class RNNModelTrainer:
                 print(f"Filtered to {len(df)} rows containing words in word_list")
                 unique_words = [w for w in unique_words if w in self.word_list]
                 print(f"Filtered to {len(unique_words)} unique words: {unique_words}")
+            
+            # Create sequences of EEG data with sliding window
+            X_sequences = []
+            y_labels = []
             
             # Window size for sequences (in samples)
             window_size = 40  # 40 samples ≈ 312.5ms at 128Hz
@@ -721,24 +523,7 @@ class RNNModelTrainer:
             # Feature columns to use
             feature_cols = self.band_columns if has_band_features else self.eeg_columns
             
-            # Count samples per word to track balancing - this will include ALL samples initially
-            raw_word_counts = {word: 0 for word in unique_words}
-            
-            # Count samples by class in original data
-            for label in df['word_label']:
-                raw_word_counts[label] = raw_word_counts.get(label, 0) + 1
-            
-            print(f"Raw dataset word distribution: {raw_word_counts}")
-            
-            # Initialize counts for balancing tracking
-            word_counts = {word: 0 for word in unique_words}
-            sil_count = 0
-            non_sil_count = 0
-            
-            # Track all collected samples by class for additional balancing later
-            class_samples = {word: [] for word in unique_words}
-            
-            # Create sequences using sliding window (without aggressive balancing yet)
+            # Create sequences using sliding window
             for i in range(0, len(df) - window_size, stride):
                 # Get window of data
                 window = df.iloc[i:i+window_size]
@@ -750,114 +535,96 @@ class RNNModelTrainer:
                 # Get the label (most common word in the window)
                 label = window['word_label'].iloc[0]
                 
-                # Count by class
-                if label == 'sil':
-                    sil_count += 1
-                else:
-                    non_sil_count += 1
-                
                 # Extract features (either band features or raw EEG)
                 sequence = window[feature_cols].values
                 
                 # Add to training data
                 X_sequences.append(sequence)
                 y_labels.append(label)
-                
-                # Update word count and store the sample index
-                word_counts[label] = word_counts.get(label, 0) + 1
-                class_samples[label].append(len(X_sequences) - 1)  # Store the index
             
-            # Print initial class distribution
-            print(f"Initial class distribution: {word_counts}")
-            print(f"Initial silence to non-silence ratio: {sil_count}/{non_sil_count} = {sil_count/max(1, non_sil_count):.2f}")
+            if not X_sequences:
+                raise ValueError("No valid sequences could be created from test data")
             
-            # Ensure minimum samples per class for stratification
-            min_samples_per_class = 2
-            for word, count in list(word_counts.items()):
-                if count < min_samples_per_class:
-                    print(f"Warning: Class '{word}' has only {count} samples, adding more to enable stratification")
-                    
-                    # If we have raw samples of this class
-                    class_indices_in_df = df.index[df['word_label'] == word].tolist()
-                    
-                    if len(class_indices_in_df) >= min_samples_per_class:
-                        # Add samples from original data
-                        needed_samples = min_samples_per_class - count
-                        for j in range(needed_samples):
-                            # Use modulo to cycle through available indices if needed
-                            idx = class_indices_in_df[j % len(class_indices_in_df)]
-                            if idx + window_size <= len(df):
-                                window = df.iloc[idx:idx+window_size]
-                                # Ensure window has only one label
-                                if len(window['word_label'].unique()) == 1:
-                                    sequence = window[feature_cols].values
-                                    X_sequences.append(sequence)
-                                    y_labels.append(word)
-                                    word_counts[word] += 1
-                    else:
-                        # If no raw samples, duplicate existing samples
-                        existing_samples = class_samples.get(word, [])
-                        if existing_samples:
-                            needed_samples = min_samples_per_class - count
-                            for j in range(needed_samples):
-                                # Use modulo to cycle through available samples
-                                sample_idx = existing_samples[j % len(existing_samples)]
-                                X_sequences.append(X_sequences[sample_idx])  # Duplicate
-                                y_labels.append(word)
-                                word_counts[word] += 1
-                        else:
-                            # Create synthetic samples if absolutely needed
-                            print(f"Creating synthetic samples for class '{word}'")
-                            for j in range(min_samples_per_class - count):
-                                # Create a random sample using the feature dimensions
-                                feature_dim = len(feature_cols)
-                                synthetic_sequence = np.random.randn(window_size, feature_dim) * 0.1
-                                X_sequences.append(synthetic_sequence)
-                                y_labels.append(word)
-                                word_counts[word] += 1
+            print(f"Created {len(X_sequences)} sequences with {len(unique_words)} different words")
             
-            # Print class distribution after ensuring minimums
-            print(f"Class distribution after ensuring minimum samples: {word_counts}")
-            
-            # Apply precise silence balancing
-            X_sequences, y_labels = self.apply_silence_balancing(X_sequences, y_labels)
-            
-            # Convert to numpy arrays
+            # Convert sequences to numpy array
             X = np.array(X_sequences)
             
-            # Encode labels
-            self.label_encoder = LabelEncoder()
-            y_encoded = self.label_encoder.fit_transform(y_labels)
-            y = to_categorical(y_encoded)
+            # Create binary labels (silence vs. speech)
+            binary_labels = np.array(['speech' if label != 'sil' else 'sil' for label in y_labels])
             
-            print(f"Created {len(X)} sequences of length {window_size}")
-            print(f"Final data shapes: X = {X.shape}, y = {y.shape}")
+            # Create word-only dataset (no silence)
+            speech_mask = np.array([label != 'sil' for label in y_labels])
+            X_speech = X[speech_mask]
+            y_speech_labels = np.array([label for label in y_labels if label != 'sil'])
             
-            # Save label encoder
-            with open(os.path.join(self.output_dir, 'label_encoder.pkl'), 'wb') as f:
-                pickle.dump(self.label_encoder, f)
+            print(f"Split data into: {len(binary_labels)} binary samples, {len(y_speech_labels)} speech-only samples")
+            
+            # Create label encoders for both problems
+            self.binary_encoder = LabelEncoder()
+            binary_encoded = self.binary_encoder.fit_transform(binary_labels)
+            binary_y = to_categorical(binary_encoded)
+            
+            self.word_encoder = LabelEncoder()
+            word_encoded = self.word_encoder.fit_transform(y_speech_labels)
+            word_y = to_categorical(word_encoded)
+            
+            # Save label encoders
+            with open(os.path.join(self.binary_model_dir, 'label_encoder.pkl'), 'wb') as f:
+                pickle.dump(self.binary_encoder, f)
                 
+            with open(os.path.join(self.word_model_dir, 'label_encoder.pkl'), 'wb') as f:
+                pickle.dump(self.word_encoder, f)
+            
             # Save preprocessing info
             preprocessing_info = {
                 'eeg_columns': self.eeg_columns,
                 'band_columns': self.band_columns,
                 'sequence_length': self.sequence_length,
-                'words': self.label_encoder.classes_.tolist(),
+                'binary_classes': self.binary_encoder.classes_.tolist(),
+                'word_classes': self.word_encoder.classes_.tolist(),
                 'filter_config': self.filter_config,
                 'has_band_features': has_band_features,
-                'silence_balance_ratio': self.silence_balance_ratio
+                'silence_balance_ratio': self.silence_balance_ratio,
+                'hierarchical_model': True
             }
             
             with open(os.path.join(self.output_dir, 'preprocessing_info.json'), 'w') as f:
                 json.dump(preprocessing_info, f)
                 
-            return X, y
-        
+            # Balance the binary dataset
+            # We want to have approximately equal silence and speech samples
+            sil_indices = np.where(binary_labels == 'sil')[0]
+            speech_indices = np.where(binary_labels == 'speech')[0]
+            
+            # Determine target counts for balancing
+            target_sil_count = int(min(len(speech_indices), len(sil_indices) * 2))
+            target_speech_count = int(min(len(sil_indices), len(speech_indices) * 2))
+            
+            if len(sil_indices) > target_sil_count:
+                # Downsample silence
+                sil_indices = np.random.choice(sil_indices, target_sil_count, replace=False)
+            
+            if len(speech_indices) > target_speech_count:
+                # Downsample speech for binary classifier
+                speech_indices = np.random.choice(speech_indices, target_speech_count, replace=False)
+            
+            # Create balanced binary dataset
+            balanced_indices = np.concatenate([sil_indices, speech_indices])
+            X_binary = X[balanced_indices]
+            binary_y = to_categorical(self.binary_encoder.transform(binary_labels[balanced_indices]))
+            
+            print(f"Balanced binary dataset: {len(X_binary)} samples")
+            print(f"Speech-only dataset: {len(X_speech)} samples for word classification")
+            
+            return {
+                'binary': (X_binary, binary_y),
+                'word': (X_speech, word_y)
+            }
         else:
             raise ValueError("Dataset must contain either a word_label column or event columns")
 
-
-    def build_transformer_model(self, input_shape, num_classes):
+    def build_transformer_model(self, input_shape, num_classes, model_type='binary'):
         """
         Build a transformer-based model for EEG sequence processing.
         
@@ -867,12 +634,14 @@ class RNNModelTrainer:
             Shape of input data (sequence_length, features)
         num_classes : int
             Number of output classes
+        model_type : str
+            Type of model to build ('binary' or 'word')
             
         Returns:
         --------
         model: Compiled TensorFlow model
         """
-        print(f"Building transformer model with input shape {input_shape} and {num_classes} classes")
+        print(f"Building transformer {model_type} model with input shape {input_shape} and {num_classes} classes")
         
         # Get number of sequence steps and features
         seq_length, feat_dim = input_shape
@@ -911,15 +680,16 @@ class RNNModelTrainer:
         x = layers.Dense(64, activation='relu')(context)
         x = layers.Dropout(self.dropout_rate)(x)
         
-        # Output layer with bias initialization to reduce silence bias
-        # Assuming class 0 is silence, give it a negative bias
-        # This effectively raises the threshold for predicting silence
+        # Different output configuration for binary vs. word model
         initializer = None
-        if num_classes > 1:
-            # Create a bias initializer that penalizes the silence class
+        if model_type == 'binary':
+            # Binary classification - we want to penalize silence slightly
             initial_bias = np.zeros(num_classes)
-            initial_bias[0] = -2.0  # Strong negative bias for silence class
+            initial_bias[0] = -0.5  # Moderate negative bias for silence class
             initializer = tf.keras.initializers.Constant(initial_bias)
+        else:
+            # Word classification - no special bias needed
+            initializer = 'zeros'
         
         outputs = layers.Dense(
             num_classes, 
@@ -933,10 +703,10 @@ class RNNModelTrainer:
         # Use focal loss if requested
         if self.use_focal_loss:
             loss_function = focal_loss(gamma=2.0, alpha=4.0)
-            print("Using focal loss for training")
+            print(f"Using focal loss for {model_type} model training")
         else:
             loss_function = 'categorical_crossentropy'
-            print("Using standard categorical crossentropy loss")
+            print(f"Using standard categorical crossentropy loss for {model_type} model")
         
         # Compile model
         model.compile(
@@ -947,9 +717,9 @@ class RNNModelTrainer:
         
         return model
     
-    def build_gru_model(self, input_shape, num_classes):
+    def build_gru_model(self, input_shape, num_classes, model_type='binary'):
         """
-        Build an enhanced GRU-based model for EEG sequence processing.
+        Build a GRU-based model for EEG sequence processing.
         
         Parameters:
         -----------
@@ -957,12 +727,14 @@ class RNNModelTrainer:
             Shape of input data (sequence_length, features)
         num_classes : int
             Number of output classes
+        model_type : str
+            Type of model to build ('binary' or 'word')
             
         Returns:
         --------
         model: Compiled TensorFlow model
         """
-        print(f"Building enhanced GRU model with input shape {input_shape} and {num_classes} classes")
+        print(f"Building GRU {model_type} model with input shape {input_shape} and {num_classes} classes")
         
         # Input layer
         inputs = layers.Input(shape=input_shape)
@@ -1009,13 +781,16 @@ class RNNModelTrainer:
         x = layers.Dense(self.hidden_units, activation='relu')(context)
         x = layers.Dropout(self.dropout_rate)(x)
         
-        # Output layer with bias initialization to reduce silence bias
+        # Different output configuration for binary vs. word model
         initializer = None
-        if num_classes > 1:
-            # Create a bias initializer that penalizes the silence class
+        if model_type == 'binary':
+            # Binary classification - we want to penalize silence slightly
             initial_bias = np.zeros(num_classes)
-            initial_bias[0] = -2.0  # Strong negative bias for silence class
+            initial_bias[0] = -0.5  # Moderate negative bias for silence class
             initializer = tf.keras.initializers.Constant(initial_bias)
+        else:
+            # Word classification - no special bias needed
+            initializer = 'zeros'
         
         outputs = layers.Dense(
             num_classes, 
@@ -1029,10 +804,10 @@ class RNNModelTrainer:
         # Use focal loss if requested
         if self.use_focal_loss:
             loss_function = focal_loss(gamma=2.0, alpha=4.0)
-            print("Using focal loss for training")
+            print(f"Using focal loss for {model_type} model training")
         else:
             loss_function = 'categorical_crossentropy'
-            print("Using standard categorical crossentropy loss")
+            print(f"Using standard categorical crossentropy loss for {model_type} model")
         
         # Compile model
         model.compile(
@@ -1043,91 +818,24 @@ class RNNModelTrainer:
         
         return model
     
-    def build_model(self, input_shape, num_classes):
-        """Build and compile the model, choosing architecture based on settings."""
-        if self.use_transformer:
-            return self.build_transformer_model(input_shape, num_classes)
-        else:
-            return self.build_gru_model(input_shape, num_classes)
-
-    def train(self):
-        """Train the RNN model on the preprocessed data with enhanced techniques for speech detection."""
-        # Check for GPU availability
-        physical_devices = tf.config.list_physical_devices('GPU')
-        if physical_devices:
-            print(f"Found {len(physical_devices)} GPUs: {physical_devices}")
-            # Enable memory growth to prevent allocation errors
-            for device in physical_devices:
-                try:
-                    tf.config.experimental.set_memory_growth(device, True)
-                    print(f"Memory growth enabled for {device}")
-                except:
-                    print(f"Failed to enable memory growth for {device}")
-        else:
-            print("No GPU found. Using CPU for training.")
-            print("Available devices:", tf.config.list_physical_devices())
-        
-        # Print TensorFlow version
-        print(f"TensorFlow version: {tf.__version__}")
-        
-        # Preprocess data
-        X, y = self.preprocess_data()
-        
-        # Apply data augmentation to non-silence classes only if factor > 0
-        if self.augmentation_factor > 0:
-            print(f"Applying data augmentation with factor {self.augmentation_factor}")
-            X, y = augment_eeg_data(X, y, self.label_encoder, self.augmentation_factor)
-        else:
-            print("Data augmentation disabled (factor = 0)")
-        
-        # Check class distribution to see if stratification is possible
-        class_indices = np.argmax(y, axis=1)
-        class_counts = np.bincount(class_indices)
-        min_class_count = np.min(class_counts)
-        
-        # Split into train and validation sets
-        if min_class_count < 2:
-            print(f"Warning: Class {np.argmin(class_counts)} has only {min_class_count} samples, which is too few for stratified split")
-            print("Falling back to random split (non-stratified)")
-            X_train, X_val, y_train, y_val = train_test_split(
-                X, y, test_size=self.validation_split, random_state=42
-            )
-        else:
-            # Proceed with stratified split
-            X_train, X_val, y_train, y_val = train_test_split(
-                X, y, test_size=self.validation_split, random_state=42, 
-                stratify=np.argmax(y, axis=1)  # Ensure balanced classes in train/val
-            )
-        
-        print(f"Training data shape: {X_train.shape}, Labels shape: {y_train.shape}")
-        print(f"Validation data shape: {X_val.shape}, Validation labels shape: {y_val.shape}")
-        
-        # Calculate class weights to further address imbalance
-        class_indices = np.argmax(y_train, axis=1)
-        class_weights_dict = class_weight.compute_class_weight(
-            'balanced', classes=np.unique(class_indices), y=class_indices
-        )
-        
-        # Convert to dictionary format for Keras
-        class_weights = {i: weight for i, weight in enumerate(class_weights_dict)}
-        
-        # Add extra boost to speech classes (non-zero indices)
-        for class_idx, weight in class_weights.items():
-            if class_idx != 0:  # If not silence class
-                class_weights[class_idx] = weight * 1.5  # Boost speech class weights
-        
-        print(f"Using class weights: {class_weights}")
+    def train_binary_model(self, X_train, y_train, X_val, y_val):
+        """Train the binary classifier model (silence vs. speech)."""
+        print("\n===== Training Binary Classifier (Silence vs. Speech) =====")
         
         # Build the model
         input_shape = (X_train.shape[1], X_train.shape[2])
         num_classes = y_train.shape[1]
-        self.model = self.build_model(input_shape, num_classes)
         
-        print("Model built successfully:")
-        self.model.summary()
+        if self.use_transformer:
+            self.binary_model = self.build_transformer_model(input_shape, num_classes, 'binary')
+        else:
+            self.binary_model = self.build_gru_model(input_shape, num_classes, 'binary')
+        
+        print("Binary model built successfully:")
+        self.binary_model.summary()
         
         # Set up callbacks
-        checkpoint_path = os.path.join(self.output_dir, 'model_checkpoint.h5')
+        checkpoint_path = os.path.join(self.binary_model_dir, 'model_checkpoint.h5')
         callbacks = [
             ModelCheckpoint(
                 checkpoint_path, 
@@ -1136,38 +844,225 @@ class RNNModelTrainer:
             ),
             EarlyStopping(
                 monitor='val_loss', 
-                patience=15,  # Increased patience for better convergence
+                patience=10,
                 restore_best_weights=True
             )
         ]
         
-        # Train the model with class weights
-        history = self.model.fit(
+        # Calculate class weights to balance the binary classes
+        class_indices = np.argmax(y_train, axis=1)
+        class_weights_dict = class_weight.compute_class_weight(
+            'balanced', classes=np.unique(class_indices), y=class_indices
+        )
+        
+        # Convert to dictionary format for Keras
+        class_weights = {i: weight for i, weight in enumerate(class_weights_dict)}
+        print(f"Using class weights for binary model: {class_weights}")
+        
+        # Train the model
+        history = self.binary_model.fit(
             X_train, y_train,
             epochs=self.epochs,
             batch_size=self.batch_size,
             validation_data=(X_val, y_val),
             callbacks=callbacks,
-            class_weight=class_weights,  # Apply class weights
+            class_weight=class_weights,
             verbose=1
         )
         
-        # Save the final model
-        model_path = os.path.join(self.output_dir, 'model.h5')
-        self.model.save(model_path)
+        # Save the model
+        model_path = os.path.join(self.binary_model_dir, 'model.h5')
+        self.binary_model.save(model_path)
         
         # Save the training history
         history_dict = history.history
-        with open(os.path.join(self.output_dir, 'training_history.json'), 'w') as f:
+        self.history['binary'] = history_dict
+        with open(os.path.join(self.binary_model_dir, 'training_history.json'), 'w') as f:
             json.dump(history_dict, f)
             
-        print(f"Model saved to {model_path}")
+        print(f"Binary model saved to {model_path}")
         
-        # Return the model and history
-        return self.model, history_dict
+        # Evaluate the model
+        eval_result = self.binary_model.evaluate(X_val, y_val)
+        print(f"Binary model validation - Loss: {eval_result[0]:.4f}, Accuracy: {eval_result[1]:.4f}")
+        
+        return history_dict
+    
+    def train_word_model(self, X_train, y_train, X_val, y_val):
+        """Train the word classifier model (multi-class word prediction)."""
+        print("\n===== Training Word Classifier (Multi-class Speech Recognition) =====")
+        
+        # Build the model
+        input_shape = (X_train.shape[1], X_train.shape[2])
+        num_classes = y_train.shape[1]
+        
+        if self.use_transformer:
+            self.word_model = self.build_transformer_model(input_shape, num_classes, 'word')
+        else:
+            self.word_model = self.build_gru_model(input_shape, num_classes, 'word')
+        
+        print("Word model built successfully:")
+        self.word_model.summary()
+        
+        # Set up callbacks
+        checkpoint_path = os.path.join(self.word_model_dir, 'model_checkpoint.h5')
+        callbacks = [
+            ModelCheckpoint(
+                checkpoint_path, 
+                save_best_only=True, 
+                monitor='val_accuracy'
+            ),
+            EarlyStopping(
+                monitor='val_loss', 
+                patience=15,
+                restore_best_weights=True
+            )
+        ]
+        
+        # Calculate class weights for word classes
+        class_indices = np.argmax(y_train, axis=1)
+        class_weights_dict = class_weight.compute_class_weight(
+            'balanced', classes=np.unique(class_indices), y=class_indices
+        )
+        
+        # Convert to dictionary format for Keras
+        class_weights = {i: weight for i, weight in enumerate(class_weights_dict)}
+        print(f"Using class weights for word model: {class_weights}")
+        
+        # Train the model
+        history = self.word_model.fit(
+            X_train, y_train,
+            epochs=self.epochs,  # More epochs for the word model
+            batch_size=self.batch_size,
+            validation_data=(X_val, y_val),
+            callbacks=callbacks,
+            class_weight=class_weights,
+            verbose=1
+        )
+        
+        # Save the model
+        model_path = os.path.join(self.word_model_dir, 'model.h5')
+        self.word_model.save(model_path)
+        
+        # Save the training history
+        history_dict = history.history
+        self.history['word'] = history_dict
+        with open(os.path.join(self.word_model_dir, 'training_history.json'), 'w') as f:
+            json.dump(history_dict, f)
+            
+        print(f"Word model saved to {model_path}")
+        
+        # Evaluate the model
+        eval_result = self.word_model.evaluate(X_val, y_val)
+        print(f"Word model validation - Loss: {eval_result[0]:.4f}, Accuracy: {eval_result[1]:.4f}")
+        
+        return history_dict
+    
+    def train(self):
+            """Train both models in the hierarchical system."""
+            print(f"Starting hierarchical model training with two-stage approach")
+            
+            # Check for GPU availability
+            physical_devices = tf.config.list_physical_devices('GPU')
+            if physical_devices:
+                print(f"Found {len(physical_devices)} GPUs: {physical_devices}")
+                # Enable memory growth to prevent allocation errors
+                for device in physical_devices:
+                    try:
+                        tf.config.experimental.set_memory_growth(device, True)
+                        print(f"Memory growth enabled for {device}")
+                    except:
+                        print(f"Failed to enable memory growth for {device}")
+            else:
+                print("No GPU found. Using CPU for training.")
+                print("Available devices:", tf.config.list_physical_devices())
+            
+            # Preprocess data
+            datasets = self.preprocess_data()
+            
+            # STAGE 1: Train Binary Classifier (silence vs. speech)
+            X_binary, y_binary = datasets['binary']
+            
+            # Data augmentation for binary model
+            if self.augmentation_factor > 0:
+                print(f"Applying data augmentation for binary model with factor {self.augmentation_factor}")
+                # For binary model, we want to augment only 'speech' class
+                X_binary, y_binary = augment_eeg_data(X_binary, y_binary, self.binary_encoder, self.augmentation_factor)
+            
+            # Split binary data into train and validation sets
+            X_binary_train, X_binary_val, y_binary_train, y_binary_val = train_test_split(
+                X_binary, y_binary, test_size=self.validation_split, random_state=42, 
+                stratify=np.argmax(y_binary, axis=1)
+            )
+            
+            print(f"Binary model - Training data shape: {X_binary_train.shape}")
+            print(f"Binary model - Validation data shape: {X_binary_val.shape}")
+            
+            # Train the binary model
+            binary_history = self.train_binary_model(X_binary_train, y_binary_train, X_binary_val, y_binary_val)
+            
+            # STAGE 2: Train Word Classifier (multi-class for speech only)
+            X_word, y_word = datasets['word']
+            
+            # Data augmentation for word model
+            if self.augmentation_factor > 0:
+                print(f"Applying data augmentation for word model with factor {self.augmentation_factor}")
+                X_word, y_word = augment_eeg_data(X_word, y_word, self.word_encoder, self.augmentation_factor)
+            
+            # Split word data into train and validation sets
+            X_word_train, X_word_val, y_word_train, y_word_val = train_test_split(
+                X_word, y_word, test_size=self.validation_split, random_state=42, 
+                stratify=np.argmax(y_word, axis=1)
+            )
+            
+            print(f"Word model - Training data shape: {X_word_train.shape}")
+            print(f"Word model - Validation data shape: {X_word_val.shape}")
+            
+            # Train the word model
+            word_history = self.train_word_model(X_word_train, y_word_train, X_word_val, y_word_val)
+            
+            # Calculate accuracy metrics
+            binary_accuracy = max(binary_history.get('val_accuracy', [0]))
+            word_accuracy = max(word_history.get('val_accuracy', [0]))
+            
+            # Combined accuracy estimate (product of the two accuracies)
+            combined_accuracy = binary_accuracy * word_accuracy
+            
+            print(f"\n===== Training Complete =====")
+            print(f"Binary Model Accuracy: {binary_accuracy:.4f}")
+            print(f"Word Model Accuracy: {word_accuracy:.4f}")
+            print(f"Estimated Combined Accuracy: {combined_accuracy:.4f}")
+            
+            # Save the combined model performance
+            combined_history = {
+                'binary': binary_history,
+                'word': word_history,
+                'binary_accuracy': float(binary_accuracy),
+                'word_accuracy': float(word_accuracy),
+                'combined_accuracy': float(combined_accuracy)
+            }
+            
+            with open(os.path.join(self.output_dir, 'combined_history.json'), 'w') as f:
+                json.dump(combined_history, f)
+            
+            # Create a minimal combo model file for compatibility with the existing system
+            combo_data = {
+                'binary_model_path': os.path.join('binary_model', 'model.h5'),
+                'word_model_path': os.path.join('word_model', 'model.h5'),
+                'binary_accuracy': float(binary_accuracy),
+                'word_accuracy': float(word_accuracy),
+                'combined_accuracy': float(combined_accuracy),
+                'hierarchical_model': True
+            }
+            
+            with open(os.path.join(self.output_dir, 'hierarchical_model.json'), 'w') as f:
+                json.dump(combo_data, f)
+            
+            # Return the combined accuracy for compatibility with existing code
+            return self.binary_model, combined_history
 
 class RNNPredictor:
-    """Enhanced class for making predictions with a trained RNN model."""
+    """Enhanced class for making predictions with a hierarchical RNN model."""
     
     def __init__(self, model_path):
         """Initialize the predictor with a trained model path."""
@@ -1177,107 +1072,327 @@ class RNNPredictor:
         else:
             self.model_dir = model_path
             
-        # Load model with proper error handling for custom objects
-        try:
-            # First attempt: try loading with custom focal loss function
-            custom_objects = {
-                'focal_loss_fixed': focal_loss()
-            }
-            self.model = models.load_model(
-                os.path.join(self.model_dir, 'model.h5'), 
-                custom_objects=custom_objects
-            )
-            print("Model loaded with custom focal loss")
-        except Exception as e:
-            print(f"Could not load model with focal loss: {e}")
+        # Check if this is a hierarchical model
+        self.hierarchical_model = self._check_if_hierarchical()
+        
+        if self.hierarchical_model:
+            self._load_hierarchical_model()
+        else:
+            self._load_single_model()
+        
+        # Add custom decision parameters
+        self.use_custom_thresholds = True
+        self.use_majority_voting = True
+        self.speech_threshold = 0.55  # Threshold for binary classifier to detect speech
+            
+    def _check_if_hierarchical(self):
+        """Check if the model directory contains a hierarchical model."""
+        # First check for the hierarchical model file
+        hierarchical_file = os.path.join(self.model_dir, 'hierarchical_model.json')
+        if os.path.exists(hierarchical_file):
+            return True
+            
+        # Check preprocessing info for hierarchical flag
+        preprocessing_info_path = os.path.join(self.model_dir, 'preprocessing_info.json')
+        if os.path.exists(preprocessing_info_path):
             try:
-                # Second attempt: try loading without custom objects
-                self.model = models.load_model(os.path.join(self.model_dir, 'model.h5'))
-                print("Model loaded without custom objects")
-            except Exception as e2:
-                print(f"Could not load model directly: {e2}")
-                try:
-                    # Third attempt: rebuild the model from scratch and load weights
-                    print("Attempting to rebuild model and load weights only...")
+                with open(preprocessing_info_path, 'r') as f:
+                    info = json.load(f)
+                    if info.get('hierarchical_model', False):
+                        return True
+            except:
+                pass
+        
+        # Check for binary_model and word_model directories
+        binary_model_dir = os.path.join(self.model_dir, 'binary_model')
+        word_model_dir = os.path.join(self.model_dir, 'word_model')
+        
+        if os.path.exists(binary_model_dir) and os.path.exists(word_model_dir):
+            # Check if model files exist in these directories
+            binary_model_path = os.path.join(binary_model_dir, 'model.h5')
+            word_model_path = os.path.join(word_model_dir, 'model.h5')
+            
+            if os.path.exists(binary_model_path) and os.path.exists(word_model_path):
+                print("Found hierarchical model with binary and word models")
+                return True
+            
+        return False
+        
+
+
+    def _load_hierarchical_model(self):
+            """Load both models for hierarchical prediction."""
+            print("Loading hierarchical model with binary + word classifiers")
+            
+            # Load preprocessing info first - we need this to rebuild models if necessary
+            try:
+                with open(os.path.join(self.model_dir, 'preprocessing_info.json'), 'r') as f:
+                    self.preprocessing_info = json.load(f)
+                    print("Loaded preprocessing info successfully")
+            except Exception as e:
+                print(f"Error loading preprocessing info: {e}")
+                # Create default preprocessing info
+                self.preprocessing_info = {
+                    'eeg_columns': ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4'],
+                    'band_columns': [],
+                    'sequence_length': 40,
+                    'filter_config': {
+                        'apply_bandpass': True,
+                        'lowcut': 4.0,
+                        'highcut': 50.0,
+                        'bandpass_order': 5
+                    },
+                    'has_band_features': False,
+                    'hierarchical_model': True
+                }
+            
+            # Extract relevant info
+            self.eeg_columns = self.preprocessing_info.get('eeg_columns', [])
+            self.band_columns = self.preprocessing_info.get('band_columns', [])
+            self.sequence_length = self.preprocessing_info.get('sequence_length', 40)
+            self.filter_config = self.preprocessing_info.get('filter_config', {})
+            self.has_band_features = self.preprocessing_info.get('has_band_features', False)
+            
+            # Load binary label encoder
+            try:
+                with open(os.path.join(self.model_dir, 'binary_model', 'label_encoder.pkl'), 'rb') as f:
+                    self.binary_encoder = pickle.load(f)
+                    print(f"Loaded binary encoder with classes: {self.binary_encoder.classes_}")
+            except Exception as e:
+                print(f"Error loading binary label encoder: {e}")
+                # Create a default binary encoder
+                self.binary_encoder = LabelEncoder()
+                self.binary_encoder.classes_ = np.array(['sil', 'speech'])
+                
+            # Load word label encoder
+            try:
+                with open(os.path.join(self.model_dir, 'word_model', 'label_encoder.pkl'), 'rb') as f:
+                    self.word_encoder = pickle.load(f)
+                    print(f"Loaded word encoder with classes: {self.word_encoder.classes_}")
+            except Exception as e:
+                print(f"Error loading word label encoder: {e}")
+                # Create a default word encoder
+                self.word_encoder = LabelEncoder()
+                self.word_encoder.classes_ = np.array(['hello', 'yes', 'no', 'goodbye'])
+            
+            # Try to determine feature dimensions for model rebuilding
+            if self.has_band_features:
+                feature_dim = len(self.band_columns)
+            else:
+                feature_dim = len(self.eeg_columns)
+            
+            # Use a safer default if we couldn't get the right dimensions
+            if feature_dim == 0:
+                feature_dim = 14  # Default EEG channels count
+                print(f"Using default feature dimension: {feature_dim}")
+            else:
+                print(f"Determined feature dimension: {feature_dim}")
+            
+            # Determine if we're using transformers from the preprocessing info
+            use_transformer = self.preprocessing_info.get('use_transformer', False)
+            print(f"Model architecture: {'Transformer' if use_transformer else 'Bidirectional GRU'}")
+            
+            # Determine classes counts
+            binary_classes_count = len(self.binary_encoder.classes_)
+            word_classes_count = len(self.word_encoder.classes_)
+            
+            print(f"Binary classes count: {binary_classes_count}")
+            print(f"Word classes count: {word_classes_count}")
+            
+            # Define rebuilt models
+            try:
+                print("Rebuilding binary model from scratch...")
+                # BINARY MODEL
+                binary_input_shape = (self.sequence_length, feature_dim)
+                binary_inputs = tf.keras.Input(shape=binary_input_shape)
+                
+                if use_transformer:
+                    # Transformer-based binary model
+                    x = layers.Conv1D(filters=32, kernel_size=3, padding='same')(binary_inputs)
+                    x = layers.BatchNormalization()(x)
+                    x = layers.Activation('relu')(x)
                     
-                    # Load preprocessing info to determine model structure
-                    preprocessing_info_path = os.path.join(self.model_dir, 'preprocessing_info.json')
-                    if os.path.exists(preprocessing_info_path):
-                        with open(preprocessing_info_path, 'r') as f:
-                            self.preprocessing_info = json.load(f)
-                        
-                        # Get model shape from preprocessing info
-                        sequence_length = self.preprocessing_info.get('sequence_length', 40)
-                        
-                        # Determine feature count
-                        feature_count = 0
-                        if self.preprocessing_info.get('has_band_features', False):
-                            feature_count = len(self.preprocessing_info.get('band_columns', []))
-                        else:
-                            feature_count = len(self.preprocessing_info.get('eeg_columns', []))
-                        
-                        if feature_count == 0:
-                            feature_count = 30  # Default fallback
-                        
-                        # Load label encoder to determine class count
+                    # Attention mechanism
+                    attention = layers.Dense(1, activation='tanh')(x)
+                    attention_weights = layers.Softmax(axis=1)(attention)
+                    context = tf.matmul(tf.transpose(attention_weights, [0, 2, 1]), x)
+                    context = layers.Flatten()(context)
+                    
+                    x = layers.Dense(32, activation='relu')(context)
+                    x = layers.Dropout(0.2)(x)
+                else:
+                    # GRU-based binary model
+                    x = layers.Bidirectional(layers.GRU(64, return_sequences=True))(binary_inputs)
+                    x = layers.GlobalAveragePooling1D()(x)
+                    x = layers.Dense(32, activation='relu')(x)
+                    x = layers.Dropout(0.2)(x)
+                
+                binary_outputs = layers.Dense(binary_classes_count, activation='softmax')(x)
+                self.binary_model = tf.keras.Model(binary_inputs, binary_outputs)
+                
+                # Compile the model
+                self.binary_model.compile(
+                    optimizer='adam',
+                    loss='categorical_crossentropy',
+                    metrics=['accuracy']
+                )
+                
+                # Try to load weights only
+                binary_weights_path = os.path.join(self.model_dir, 'binary_model', 'model_weights.h5')
+                if os.path.exists(binary_weights_path):
+                    self.binary_model.load_weights(binary_weights_path)
+                    print("Loaded binary model weights successfully")
+                else:
+                    # Try to extract weights from the model.h5 file
+                    binary_model_path = os.path.join(self.model_dir, 'binary_model', 'model.h5')
+                    if os.path.exists(binary_model_path):
+                        print("Extracting weights from binary model.h5")
+                        # Save the weights to a separate file first
+                        import h5py
                         try:
-                            with open(os.path.join(self.model_dir, 'label_encoder.pkl'), 'rb') as f:
-                                self.label_encoder = pickle.load(f)
-                            class_count = len(self.label_encoder.classes_)
-                        except:
-                            class_count = 6  # Default fallback
-                        
-                        # Create a simple GRU model as a substitute
-                        inputs = tf.keras.Input(shape=(sequence_length, feature_count))
-                        x = layers.Bidirectional(layers.GRU(64, return_sequences=False))(inputs)
-                        x = layers.Dense(32, activation='relu')(x)
-                        outputs = layers.Dense(class_count, activation='softmax')(x)
-                        
-                        self.model = tf.keras.Model(inputs, outputs)
-                        
-                        # Try to load weights only
-                        self.model.compile(
-                            optimizer='adam',
-                            loss='categorical_crossentropy',
-                            metrics=['accuracy']
-                        )
-                        
-                        # Load weights if possible
-                        weights_path = os.path.join(self.model_dir, 'model_weights.h5')
-                        if os.path.exists(weights_path):
-                            self.model.load_weights(weights_path)
-                            print("Successfully loaded model weights")
-                        else:
-                            # Try to extract weights from the .h5 file
-                            print("Attempting to extract weights from model.h5")
-                            # For this, we would need to save the weights separately
-                            # Let's rely on the substitute model without exact weights
-                            print("Using substitute model with initialized weights")
+                            with h5py.File(binary_model_path, 'r') as h5file:
+                                if 'model_weights' in h5file:
+                                    temp_weights_path = os.path.join(self.model_dir, 'binary_model', 'temp_weights.h5')
+                                    with h5py.File(temp_weights_path, 'w') as wts:
+                                        h5file.copy('model_weights', wts)
+                                    # Now load the weights
+                                    self.binary_model.load_weights(temp_weights_path)
+                                    print("Extracted and loaded binary weights successfully")
+                                else:
+                                    print("Could not find model_weights in the h5 file")
+                        except Exception as h5e:
+                            print(f"Error extracting weights from h5: {h5e}")
+                            # Just use initialized weights
+                            print("Using initialized weights for binary model")
                     else:
-                        raise ValueError("Cannot rebuild model: preprocessing_info.json not found")
-                        
-                except Exception as e3:
-                    print(f"All model loading methods failed: {e3}")
-                    raise ValueError(f"Failed to load model: {str(e)}, {str(e2)}, {str(e3)}")
+                        print("Could not find any weights for binary model - using initialized weights")
+                
+                print("Binary model built and weights loaded (if available)")
+                
+                # WORD MODEL
+                print("Rebuilding word model from scratch...")
+                word_input_shape = (self.sequence_length, feature_dim)
+                word_inputs = tf.keras.Input(shape=word_input_shape)
+                
+                if use_transformer:
+                    # Transformer-based word model
+                    x = layers.Conv1D(filters=32, kernel_size=3, padding='same')(word_inputs)
+                    x = layers.BatchNormalization()(x)
+                    x = layers.Activation('relu')(x)
+                    
+                    # Attention mechanism
+                    attention = layers.Dense(1, activation='tanh')(x)
+                    attention_weights = layers.Softmax(axis=1)(attention)
+                    context = tf.matmul(tf.transpose(attention_weights, [0, 2, 1]), x)
+                    context = layers.Flatten()(context)
+                    
+                    x = layers.Dense(32, activation='relu')(context)
+                    x = layers.Dropout(0.2)(x)
+                else:
+                    # GRU-based word model
+                    x = layers.Bidirectional(layers.GRU(64, return_sequences=True))(word_inputs)
+                    x = layers.GlobalAveragePooling1D()(x)
+                    x = layers.Dense(32, activation='relu')(x)
+                    x = layers.Dropout(0.2)(x)
+                
+                word_outputs = layers.Dense(word_classes_count, activation='softmax')(x)
+                self.word_model = tf.keras.Model(word_inputs, word_outputs)
+                
+                # Compile the model
+                self.word_model.compile(
+                    optimizer='adam',
+                    loss='categorical_crossentropy',
+                    metrics=['accuracy']
+                )
+                
+                # Try to load weights only
+                word_weights_path = os.path.join(self.model_dir, 'word_model', 'model_weights.h5')
+                if os.path.exists(word_weights_path):
+                    self.word_model.load_weights(word_weights_path)
+                    print("Loaded word model weights successfully")
+                else:
+                    # Try to extract weights from the model.h5 file
+                    word_model_path = os.path.join(self.model_dir, 'word_model', 'model.h5')
+                    if os.path.exists(word_model_path):
+                        print("Extracting weights from word model.h5")
+                        # Save the weights to a separate file first
+                        import h5py
+                        try:
+                            with h5py.File(word_model_path, 'r') as h5file:
+                                if 'model_weights' in h5file:
+                                    temp_weights_path = os.path.join(self.model_dir, 'word_model', 'temp_weights.h5')
+                                    with h5py.File(temp_weights_path, 'w') as wts:
+                                        h5file.copy('model_weights', wts)
+                                    # Now load the weights
+                                    self.word_model.load_weights(temp_weights_path)
+                                    print("Extracted and loaded word weights successfully")
+                                else:
+                                    print("Could not find model_weights in the h5 file")
+                        except Exception as h5e:
+                            print(f"Error extracting weights from h5: {h5e}")
+                            # Just use initialized weights
+                            print("Using initialized weights for word model")
+                    else:
+                        print("Could not find any weights for word model - using initialized weights")
+                
+                print("Word model built and weights loaded (if available)")
+                
+            except Exception as rebuild_error:
+                print(f"Error rebuilding models: {rebuild_error}")
+                # Last resort - create very simple models for evaluation
+                print("Creating simple models for evaluation...")
+                
+                # Very simple binary model
+                binary_input = tf.keras.Input(shape=(self.sequence_length, feature_dim))
+                x = layers.Flatten()(binary_input)
+                x = layers.Dense(32, activation='relu')(x)
+                binary_output = layers.Dense(binary_classes_count, activation='softmax')(x)
+                self.binary_model = tf.keras.Model(binary_input, binary_output)
+                self.binary_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+                
+                # Very simple word model
+                word_input = tf.keras.Input(shape=(self.sequence_length, feature_dim))
+                x = layers.Flatten()(word_input)
+                x = layers.Dense(32, activation='relu')(x)
+                word_output = layers.Dense(word_classes_count, activation='softmax')(x)
+                self.word_model = tf.keras.Model(word_input, word_output)
+                self.word_model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+                
+                print("Created simple models for evaluation (NOTE: predictions will be random)")
+            
+            # Print model information
+            print(f"Final binary model input shape: {self.binary_model.input_shape}")
+            print(f"Final word model input shape: {self.word_model.input_shape}")
+
+
+    def _load_single_model(self):
+        """Load a regular single-model classifier for backward compatibility."""
+        print("Loading standard single-model classifier")
         
-        # Print model details for debugging
-        print(f"Loaded model from {self.model_dir}")
-        self.model.summary()
-        
-        # Get model input shape
-        self.input_shape = self.model.input_shape
-        print(f"Model input shape: {self.input_shape}")
-        
+        # Load model
+        model_file = os.path.join(self.model_dir, 'model.h5')
+        if not os.path.exists(model_file):
+            raise ValueError(f"Model file not found at {model_file}")
+            
+        try:
+            # Try loading with focal loss
+            custom_objects = {'focal_loss_fixed': focal_loss()}
+            self.model = models.load_model(model_file, custom_objects=custom_objects)
+        except:
+            # Try loading without custom objects
+            try:
+                self.model = models.load_model(model_file)
+            except Exception as e:
+                raise ValueError(f"Failed to load model: {str(e)}")
+                
         # Load label encoder
         try:
             with open(os.path.join(self.model_dir, 'label_encoder.pkl'), 'rb') as f:
                 self.label_encoder = pickle.load(f)
         except Exception as e:
             print(f"Error loading label encoder: {e}")
-            # Create a placeholder label encoder with common words if needed
             self.label_encoder = LabelEncoder()
-            self.label_encoder.classes_ = np.array(['sil', 'account', 'goodbye', 'hello', 'no', 'yes'])
-            print(f"Created placeholder label encoder with classes: {self.label_encoder.classes_}")
+            self.label_encoder.classes_ = np.array(['sil', 'hello', 'yes', 'no', 'goodbye'])
             
         # Load preprocessing info
         try:
@@ -1285,64 +1400,43 @@ class RNNPredictor:
                 self.preprocessing_info = json.load(f)
         except Exception as e:
             print(f"Error loading preprocessing info: {e}")
-            # Create placeholder preprocessing info
             self.preprocessing_info = {
                 'eeg_columns': ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4'],
                 'band_columns': [],
                 'sequence_length': 40,
+                'words': self.label_encoder.classes_.tolist(),
                 'filter_config': {
                     'apply_bandpass': True,
                     'lowcut': 4.0,
                     'highcut': 50.0,
                     'bandpass_order': 5
                 },
-                'has_band_features': False,
-                'words': self.label_encoder.classes_.tolist()
+                'has_band_features': False
             }
-            print("Created placeholder preprocessing info")
-        
+            
         self.eeg_columns = self.preprocessing_info.get('eeg_columns', [])
         self.band_columns = self.preprocessing_info.get('band_columns', [])
         self.sequence_length = self.preprocessing_info.get('sequence_length', 40)
         self.filter_config = self.preprocessing_info.get('filter_config', {})
         self.has_band_features = self.preprocessing_info.get('has_band_features', False)
         
-        print(f"Model expects {len(self.eeg_columns)} channels and sequence length {self.sequence_length}")
-        print(f"Uses band features: {self.has_band_features}")
-        if self.has_band_features:
-            print(f"Band features: {self.band_columns}")
-        print(f"Supported words: {self.preprocessing_info.get('words', [])}")
-        print(f"Filter configuration: {self.filter_config}")
-        
         # Get silence class index
         self.words = self.preprocessing_info.get('words', [])
         self.silence_idx = self.words.index('sil') if 'sil' in self.words else 0
-        print(f"Silence class index: {self.silence_idx}")
         
         # Initialize custom decision thresholds - lower threshold for speech classes
         self.custom_thresholds = np.ones(len(self.words)) * 0.3  # Base threshold
         if 'sil' in self.words:
             # Higher threshold for silence class
             self.custom_thresholds[self.silence_idx] = 0.7
-        print(f"Using custom decision thresholds: {self.custom_thresholds}")
         
-        # Add attributes to control behavior
-        self.use_custom_thresholds = True
-        self.use_majority_voting = True
+        print(f"Model input shape: {self.model.input_shape}")
+        print(f"Model supports words: {self.label_encoder.classes_}")
         
     def extract_band_powers(self, eeg_data):
         """
         Extract frequency band powers from EEG data.
         This is a simplified version for prediction when we have raw EEG data.
-        
-        Parameters:
-        -----------
-        eeg_data : ndarray
-            EEG data with shape (samples, channels)
-            
-        Returns:
-        --------
-        ndarray: Band powers with shape (samples, channels * 5)
         """
         from scipy import signal
         
@@ -1389,15 +1483,6 @@ class RNNPredictor:
     def preprocess_eeg_data(self, eeg_data):
         """
         Preprocess raw EEG data for prediction.
-        
-        Parameters:
-        -----------
-        eeg_data : ndarray or DataFrame
-            Raw EEG data
-            
-        Returns:
-        --------
-        ndarray: Preprocessed data ready for prediction
         """
         try:
             print(f"Preprocessing EEG data with shape: {eeg_data.shape if hasattr(eeg_data, 'shape') else 'unknown'}")
@@ -1489,68 +1574,10 @@ class RNNPredictor:
             traceback.print_exc()
             print(f"Error preprocessing EEG data: {e}")
             return None
-    
-    def predict_with_custom_thresholds(self, X):
-        """
-        Make predictions using custom class-specific thresholds.
-        
-        Parameters:
-        -----------
-        X : ndarray
-            Preprocessed input data
             
-        Returns:
-        --------
-        tuple: (predicted_class_indices, all_probabilities)
-        """
-        # Get raw probabilities
-        batch_predictions = self.model.predict(X)
-        
-        # Apply custom thresholds to each prediction
-        adjusted_preds = []
-        
-        for sample_probs in batch_predictions:
-            # Default to the highest probability class
-            max_class = np.argmax(sample_probs)
-            max_prob = sample_probs[max_class]
-            
-            # Check if the highest confidence class exceeds its threshold
-            if max_prob >= self.custom_thresholds[max_class]:
-                adjusted_preds.append(max_class)
-            else:
-                # If silence is the highest but doesn't meet threshold
-                if max_class == self.silence_idx:
-                    # Try to find a speech class that meets its (lower) threshold
-                    non_sil_probs = sample_probs.copy()
-                    non_sil_probs[self.silence_idx] = 0  # Zero out silence class
-                    next_class = np.argmax(non_sil_probs)
-                    next_prob = non_sil_probs[next_class]
-                    
-                    # Check if it meets its threshold
-                    if next_prob >= self.custom_thresholds[next_class]:
-                        adjusted_preds.append(next_class)
-                    else:
-                        # Fallback to original max class
-                        adjusted_preds.append(max_class)
-                else:
-                    # Some other class doesn't meet its threshold
-                    adjusted_preds.append(max_class)  # Keep original prediction
-        
-        # Return both adjusted predictions and raw probabilities
-        return np.array(adjusted_preds), batch_predictions
-    
     def predict(self, eeg_data):
         """
-        Make predictions from EEG data with enhanced speech detection.
-        
-        Parameters:
-        -----------
-        eeg_data : ndarray or DataFrame
-            EEG data to predict from
-            
-        Returns:
-        --------
-        dict: Prediction results
+        Make predictions from EEG data using hierarchical approach if available.
         """
         try:
             # Preprocess the data
@@ -1561,70 +1588,11 @@ class RNNPredictor:
                     'error': 'Failed to preprocess EEG data'
                 }
             
-            # Make prediction with custom thresholds
-            print(f"Making prediction with input shape: {X.shape}")
-            adjusted_preds, batch_probabilities = self.predict_with_custom_thresholds(X)
-            
-            # Aggregate predictions from all windows
-            # 1. Count class occurrences across windows for majority voting
-            class_counts = np.bincount(adjusted_preds, minlength=len(self.words))
-            majority_class = np.argmax(class_counts)
-            
-            # 2. Compute mean probability across windows
-            avg_probabilities = np.mean(batch_probabilities, axis=0)
-            
-            # Determine final class - give priority to majority vote but 
-            # consider original probabilities too
-            if class_counts[majority_class] >= len(adjusted_preds) * 0.4:
-                # If a class has at least 40% of votes, use it
-                predicted_class = majority_class
+            if self.hierarchical_model:
+                return self._predict_hierarchical(X)
             else:
-                # Otherwise use highest mean probability
-                predicted_class = np.argmax(avg_probabilities)
-            
-            # Convert to word and get confidence
-            confidence = avg_probabilities[predicted_class]
-            predicted_word = self.label_encoder.inverse_transform([predicted_class])[0]
-            
-            # Return predictions with confidence scores for all words
-            all_words = self.label_encoder.classes_
-            all_confidences = avg_probabilities
-            
-            # Sort predictions by confidence
-            sorted_indices = np.argsort(all_confidences)[::-1]
-            sorted_words = all_words[sorted_indices]
-            sorted_confidences = all_confidences[sorted_indices]
-            
-            # Compile detailed stats about the prediction
-            word_predictions = []
-            for i, (word, conf) in enumerate(zip(sorted_words, sorted_confidences)):
-                word_predictions.append({
-                    'word': word,
-                    'confidence': float(conf),
-                    'votes': int(class_counts[sorted_indices[i]]),
-                    'vote_percentage': float(class_counts[sorted_indices[i]] / len(adjusted_preds)),
-                    'is_threshold_met': conf >= self.custom_thresholds[sorted_indices[i]]
-                })
-            
-            result = {
-                'predicted_word': predicted_word,
-                'confidence': float(confidence),
-                'predictions': word_predictions,
-                'window_count': len(X),
-                'custom_thresholds_used': True,
-                'majority_vote_applied': class_counts[majority_class] >= len(adjusted_preds) * 0.4
-            }
-            
-            # Add explanation of decision for debugging
-            if predicted_word == 'sil':
-                # Extra verification for silence prediction
-                second_best_word = word_predictions[1]['word']
-                second_best_conf = word_predictions[1]['confidence']
-                result['silence_margin'] = float(confidence - second_best_conf)
-                result['silence_confidence_ratio'] = float(confidence / (second_best_conf + 1e-6))
-            
-            return result
-            
+                return self._predict_single_model(X)
+                
         except Exception as e:
             import traceback
             traceback.print_exc()
@@ -1635,22 +1603,359 @@ class RNNPredictor:
                 'confidence': 0.0,
                 'predictions': []
             }
+            
+
+    def _predict_hierarchical(self, X):
+        """
+        Make predictions using the hierarchical model approach.
+        First determine if it's silence or speech, then identify the specific word.
+        """
+        try:
+            print(f"Making hierarchical prediction with input shape: {X.shape}")
+            
+            # Safely get binary model predictions
+            try:
+                binary_probs = self.binary_model.predict(X)
+            except Exception as e:
+                print(f"Error in binary model prediction: {e}")
+                # If binary model fails, default to silence
+                return {
+                    'predicted_word': 'sil',
+                    'confidence': 0.8,  # Default high confidence for silence
+                    'predictions': [{
+                        'word': 'sil',
+                        'confidence': 0.8,
+                        'votes': 1,
+                        'vote_percentage': 1.0,
+                        'is_threshold_met': True
+                    }],
+                    'window_count': len(X),
+                    'binary_result': 'silence',
+                    'binary_confidence': 0.8,
+                    'hierarchical_model': True,
+                    'error': f"Binary model error: {str(e)}"
+                }
+            
+            # Process binary model results
+            binary_indices = np.argmax(binary_probs, axis=1)
+            
+            # Map indices to class names
+            if len(self.binary_encoder.classes_) > max(binary_indices):
+                binary_classes = self.binary_encoder.inverse_transform(binary_indices)
+            else:
+                # Fallback if label encoder doesn't match predictions
+                binary_classes = ['sil' if idx == 0 else 'speech' for idx in binary_indices]
+            
+            # Count votes and get confidences
+            speech_count = sum(1 for cls in binary_classes if cls == 'speech')
+            silence_count = len(binary_classes) - speech_count
+            
+            # Calculate confidences
+            speech_indices = [i for i, cls in enumerate(binary_classes) if cls == 'speech']
+            silence_indices = [i for i, cls in enumerate(binary_classes) if cls != 'speech']
+            
+            speech_confidence = np.mean([binary_probs[i, 1] for i in speech_indices]) if speech_indices else 0
+            silence_confidence = np.mean([binary_probs[i, 0] for i in silence_indices]) if silence_indices else 0
+            
+            # Determine if this is speech using majority voting or threshold
+            is_speech = speech_count > silence_count if self.use_majority_voting else np.mean(binary_probs[:, 1]) > self.speech_threshold
+                
+            # Apply custom thresholds if enabled
+            if self.use_custom_thresholds:
+                # Override based on confidence thresholds
+                if silence_confidence > 0.9 and silence_count > 0:
+                    is_speech = False
+                elif speech_confidence > 0.8 and speech_count > 0:
+                    is_speech = True
+            
+            # If speech detected, predict the word
+            if is_speech:
+                try:
+                    # Get word predictions
+                    word_probs = self.word_model.predict(X)
+                    word_indices = np.argmax(word_probs, axis=1)
+                    
+                    # Map to class names
+                    if len(self.word_encoder.classes_) > max(word_indices):
+                        word_classes = self.word_encoder.inverse_transform(word_indices)
+                    else:
+                        # Fallback on error
+                        print("Word label encoder mismatch - using generic words")
+                        word_classes = [f"word_{idx}" for idx in word_indices]
+                    
+                    # Count word votes and confidences
+                    word_votes = {}
+                    word_confidences = {}
+                    
+                    for i, word_idx in enumerate(word_indices):
+                        word = word_classes[i]
+                        confidence = word_probs[i, word_idx]
+                        
+                        if word not in word_votes:
+                            word_votes[word] = 0
+                            word_confidences[word] = []
+                            
+                        word_votes[word] += 1
+                        word_confidences[word].append(confidence)
+                    
+                    # Find the word with most votes
+                    if word_votes:
+                        predicted_word = max(word_votes.items(), key=lambda x: x[1])[0]
+                        word_conf = np.mean(word_confidences[predicted_word])
+                        
+                        # Scale confidence by speech confidence
+                        scaled_confidence = word_conf * speech_confidence
+                        
+                        # Compile predictions for all words
+                        predictions = []
+                        
+                        # Add silence prediction
+                        predictions.append({
+                            'word': 'sil',
+                            'confidence': float(silence_confidence),
+                            'votes': int(silence_count),
+                            'vote_percentage': float(silence_count / len(binary_classes)),
+                            'is_threshold_met': False  # Since we chose speech
+                        })
+                        
+                        # Add word predictions
+                        for word in self.word_encoder.classes_:
+                            if word in word_votes:
+                                predictions.append({
+                                    'word': word,
+                                    'confidence': float(np.mean(word_confidences[word]) * speech_confidence),
+                                    'votes': int(word_votes[word]),
+                                    'vote_percentage': float(word_votes[word] / len(word_classes)),
+                                    'is_threshold_met': word == predicted_word
+                                })
+                            else:
+                                # Word wasn't predicted in any window
+                                predictions.append({
+                                    'word': word,
+                                    'confidence': 0.0,
+                                    'votes': 0,
+                                    'vote_percentage': 0.0,
+                                    'is_threshold_met': False
+                                })
+                                
+                        # Sort predictions by confidence
+                        predictions.sort(key=lambda x: x['confidence'], reverse=True)
+                        
+                        result = {
+                            'predicted_word': predicted_word,
+                            'confidence': float(scaled_confidence),
+                            'predictions': predictions,
+                            'window_count': len(X),
+                            'binary_result': 'speech',
+                            'binary_confidence': float(speech_confidence),
+                            'word_confidence': float(word_conf),
+                            'hierarchical_model': True,
+                            'custom_thresholds_used': self.use_custom_thresholds,
+                            'majority_vote_applied': self.use_majority_voting
+                        }
+                    else:
+                        # Fallback to silence if no word votes
+                        result = {
+                            'predicted_word': 'sil',
+                            'confidence': float(silence_confidence),
+                            'predictions': [{
+                                'word': 'sil',
+                                'confidence': float(silence_confidence),
+                                'votes': int(silence_count),
+                                'vote_percentage': float(silence_count / len(binary_classes)),
+                                'is_threshold_met': True
+                            }],
+                            'window_count': len(X),
+                            'binary_result': 'silence',
+                            'binary_confidence': float(silence_confidence),
+                            'hierarchical_model': True,
+                            'error': "No word predictions available"
+                        }
+                except Exception as e:
+                    # Error in word model prediction
+                    print(f"Error in word model prediction: {e}")
+                    traceback.print_exc()
+                    
+                    # Return silence as fallback
+                    result = {
+                        'predicted_word': 'sil',
+                        'confidence': float(silence_confidence),
+                        'predictions': [{
+                            'word': 'sil',
+                            'confidence': float(silence_confidence),
+                            'votes': int(silence_count),
+                            'vote_percentage': float(silence_count / len(binary_classes)),
+                            'is_threshold_met': True
+                        }],
+                        'window_count': len(X),
+                        'binary_result': 'silence',
+                        'binary_confidence': float(silence_confidence),
+                        'hierarchical_model': True,
+                        'error': f"Word model error: {str(e)}"
+                    }
+            else:
+                # It's silence - return simplified result
+                result = {
+                    'predicted_word': 'sil',
+                    'confidence': float(silence_confidence),
+                    'predictions': [{
+                        'word': 'sil',
+                        'confidence': float(silence_confidence),
+                        'votes': int(silence_count),
+                        'vote_percentage': float(silence_count / len(binary_classes)),
+                        'is_threshold_met': True
+                    }],
+                    'window_count': len(X),
+                    'binary_result': 'silence',
+                    'binary_confidence': float(silence_confidence),
+                    'hierarchical_model': True,
+                    'custom_thresholds_used': self.use_custom_thresholds,
+                    'majority_vote_applied': self.use_majority_voting
+                }
+                
+                # Add the speech words with zero confidence
+                for word in self.word_encoder.classes_:
+                    result['predictions'].append({
+                        'word': word,
+                        'confidence': 0.0,
+                        'votes': 0,
+                        'vote_percentage': 0.0,
+                        'is_threshold_met': False
+                    })
+                    
+            return result
+        except Exception as e:
+            # Catch any errors in the prediction process
+            print(f"Error in hierarchical prediction: {e}")
+            traceback.print_exc()
+            
+            # Return a safe fallback result
+            return {
+                'predicted_word': 'sil',
+                'confidence': 0.5,
+                'predictions': [{
+                    'word': 'sil',
+                    'confidence': 0.5,
+                    'votes': 1,
+                    'vote_percentage': 1.0,
+                    'is_threshold_met': True
+                }],
+                'window_count': len(X) if hasattr(X, '__len__') else 0,
+                'binary_result': 'error',
+                'hierarchical_model': True,
+                'error': f"Prediction error: {str(e)}"
+            }
+
+    def _predict_single_model(self, X):
+        """
+        Make predictions using the single model approach for backward compatibility.
+        """
+        print(f"Making prediction with single model, input shape: {X.shape}")
+        
+        # Make batch predictions
+        batch_predictions = self.model.predict(X)
+        
+        # Apply custom thresholds to batch predictions if enabled
+        if self.use_custom_thresholds:
+            # Apply class-specific thresholds
+            adjusted_preds = []
+            
+            for sample_probs in batch_predictions:
+                # Default to the highest probability class
+                max_class = np.argmax(sample_probs)
+                max_prob = sample_probs[max_class]
+                
+                # Check if the highest confidence class exceeds its threshold
+                if max_prob >= self.custom_thresholds[max_class]:
+                    adjusted_preds.append(max_class)
+                else:
+                    # If silence is the highest but doesn't meet threshold
+                    if max_class == self.silence_idx:
+                        # Try to find a speech class that meets its (lower) threshold
+                        non_sil_probs = sample_probs.copy()
+                        non_sil_probs[self.silence_idx] = 0  # Zero out silence class
+                        next_class = np.argmax(non_sil_probs)
+                        next_prob = non_sil_probs[next_class]
+                        
+                        # Check if it meets its threshold
+                        if next_prob >= self.custom_thresholds[next_class]:
+                            adjusted_preds.append(next_class)
+                        else:
+                            # Fallback to original max class
+                            adjusted_preds.append(max_class)
+                    else:
+                        # Some other class doesn't meet its threshold
+                        adjusted_preds.append(max_class)  # Keep original prediction
+                        
+            class_preds = np.array(adjusted_preds)
+        else:
+            # Just use argmax without thresholds
+            class_preds = np.argmax(batch_predictions, axis=1)
+            
+        # Apply majority voting if enabled
+        if self.use_majority_voting:
+            # Count occurrences of each class
+            unique_classes, counts = np.unique(class_preds, return_counts=True)
+            majority_class = unique_classes[np.argmax(counts)]
+            predicted_class = majority_class
+        else:
+            # Use mean probabilities instead
+            mean_probs = np.mean(batch_predictions, axis=0)
+            predicted_class = np.argmax(mean_probs)
+            
+        # Get the predicted word and confidence
+        predicted_word = self.label_encoder.inverse_transform([predicted_class])[0]
+        confidence = np.mean([batch_predictions[i, class_preds[i]] for i in range(len(class_preds))])
+        
+        # Get confidence scores for all words
+        all_words = self.label_encoder.classes_
+        mean_confidences = np.mean(batch_predictions, axis=0)
+        
+        # Count votes for each class
+        class_votes = {}
+        for idx in class_preds:
+            word = self.label_encoder.inverse_transform([idx])[0]
+            if word not in class_votes:
+                class_votes[word] = 0
+            class_votes[word] += 1
+            
+        # Compile predictions with votes and confidences
+        predictions = []
+        for i, word in enumerate(all_words):
+            predictions.append({
+                'word': word,
+                'confidence': float(mean_confidences[i]),
+                'votes': int(class_votes.get(word, 0)),
+                'vote_percentage': float(class_votes.get(word, 0) / len(class_preds)),
+                'is_threshold_met': mean_confidences[i] >= self.custom_thresholds[i]
+            })
+            
+        # Sort by confidence
+        predictions.sort(key=lambda x: x['confidence'], reverse=True)
+        
+        # Compile full result
+        result = {
+            'predicted_word': predicted_word,
+            'confidence': float(confidence),
+            'predictions': predictions,
+            'window_count': len(X),
+            'custom_thresholds_used': self.use_custom_thresholds,
+            'majority_vote_applied': self.use_majority_voting
+        }
+        
+        # Add explanation of decision for silence predictions
+        if predicted_word == 'sil':
+            # Extra verification for silence prediction
+            second_best = predictions[1] if len(predictions) > 1 else None
+            if second_best:
+                result['silence_margin'] = float(confidence - second_best['confidence'])
+                result['silence_confidence_ratio'] = float(confidence / (second_best['confidence'] + 1e-6))
+                
+        return result
 
     def evaluate(self, test_dataset_path, apply_filters=True):
         """
-        Evaluate the model on a test dataset and return comprehensive metrics.
-        
-        Parameters:
-        -----------
-        test_dataset_path : str
-            Path to the test dataset CSV file
-        apply_filters : bool
-            Whether to apply the model's filters to the test data
-                
-        Returns:
-        --------
-        dict
-            Dictionary containing evaluation metrics and visualizations
+        Evaluate the model on a test dataset with batch processing for efficiency.
         """
         try:
             print(f"Evaluating model on: {test_dataset_path}")
@@ -1678,14 +1983,6 @@ class RNNPredictor:
             # Get unique words in test dataset
             test_words = df['word_label'].unique()
             print(f"Found {len(test_words)} unique words in test data: {test_words}")
-            
-            # Check overlap with model vocabulary
-            model_words = self.preprocessing_info.get('words', [])
-            common_words = [w for w in test_words if w in model_words]
-            print(f"Common words: {common_words}")
-            
-            if not common_words:
-                raise ValueError("No common words between test dataset and model vocabulary")
             
             # Create sequences and labels
             X_sequences = []
@@ -1717,6 +2014,7 @@ class RNNPredictor:
                 raise ValueError("No matching feature columns found in test data")
             
             # Create sequences with sliding window
+            print("Creating sequences from test data...")
             for i in range(0, len(df) - window_size, stride):
                 # Get window of data
                 window = df.iloc[i:i+window_size]
@@ -1728,9 +2026,15 @@ class RNNPredictor:
                 # Get the label
                 label = window['word_label'].iloc[0]
                 
-                # Skip if label not in model vocabulary
-                if label not in model_words:
-                    continue
+                # For hierarchical model, skip words not in either model
+                if self.hierarchical_model:
+                    # Keep silence words or words in word_classes
+                    if label != 'sil' and label not in self.preprocessing_info.get('word_classes', []):
+                        continue
+                else:
+                    # For single model, skip if label not in model vocabulary
+                    if label not in self.preprocessing_info.get('words', []):
+                        continue
                 
                 # Extract features
                 if self.has_band_features and not any(col.endswith('_delta') for col in df.columns):
@@ -1742,7 +2046,6 @@ class RNNPredictor:
                         self.filter_config.get('apply_bandpass', False) or 
                         self.filter_config.get('apply_notch', False)
                     ):
-                        print(f"Applying filters from model's training configuration to raw EEG")
                         from cleaner.eeg_utils import apply_filters
                         raw_eeg = apply_filters(raw_eeg, self.filter_config)
                     
@@ -1768,10 +2071,64 @@ class RNNPredictor:
             # Convert to numpy arrays
             X_test = np.array(X_sequences)
             
-            # Make batch predictions
-            y_pred_proba = self.model.predict(X_test)
-            y_pred_indices = np.argmax(y_pred_proba, axis=1)
-            y_pred = self.label_encoder.inverse_transform(y_pred_indices)
+            # Make predictions in batches for efficiency
+            if self.hierarchical_model:
+                print(f"Making predictions with hierarchical model in batches...")
+                batch_size = 32  # Adjust as needed for your GPU/CPU
+                
+                # Binary prediction first - in batches
+                total_batches = int(np.ceil(len(X_test) / batch_size))
+                
+                binary_predictions = []
+                for batch_idx in range(total_batches):
+                    start_idx = batch_idx * batch_size
+                    end_idx = min((batch_idx + 1) * batch_size, len(X_test))
+                    X_batch = X_test[start_idx:end_idx]
+                    
+                    if (batch_idx + 1) % 10 == 0:
+                        print(f"Processing batch {batch_idx + 1}/{total_batches}...")
+                    
+                    # Get binary predictions
+                    binary_probs_batch = self.binary_model.predict(X_batch, verbose=0)
+                    binary_indices_batch = np.argmax(binary_probs_batch, axis=1)
+                    binary_predictions.extend(self.binary_encoder.inverse_transform(binary_indices_batch))
+                
+                # Process the results for each sample
+                y_pred = []
+                for i, binary_result in enumerate(binary_predictions):
+                    if binary_result == 'speech':
+                        # For speech, use the word model to predict the word
+                        word_prob = self.word_model.predict(X_test[i:i+1], verbose=0)
+                        word_idx = np.argmax(word_prob, axis=1)[0]
+                        predicted_word = self.word_encoder.inverse_transform([word_idx])[0]
+                        y_pred.append(predicted_word)
+                    else:
+                        # For silence, use 'sil'
+                        y_pred.append('sil')
+                        
+                y_pred = np.array(y_pred)
+            else:
+                # Standard model prediction in batches
+                print(f"Making predictions with standard model in batches...")
+                batch_size = 32
+                total_batches = int(np.ceil(len(X_test) / batch_size))
+                
+                all_predictions = []
+                for batch_idx in range(total_batches):
+                    start_idx = batch_idx * batch_size
+                    end_idx = min((batch_idx + 1) * batch_size, len(X_test))
+                    X_batch = X_test[start_idx:end_idx]
+                    
+                    if (batch_idx + 1) % 10 == 0:
+                        print(f"Processing batch {batch_idx + 1}/{total_batches}...")
+                    
+                    # Get predictions for this batch
+                    y_pred_proba_batch = self.model.predict(X_batch, verbose=0)
+                    y_pred_indices_batch = np.argmax(y_pred_proba_batch, axis=1)
+                    batch_predictions = self.label_encoder.inverse_transform(y_pred_indices_batch)
+                    all_predictions.extend(batch_predictions)
+                
+                y_pred = np.array(all_predictions)
             
             # Calculate accuracy
             accuracy = np.mean(y_pred == y_true)
@@ -1781,8 +2138,38 @@ class RNNPredictor:
             from sklearn.metrics import classification_report, confusion_matrix
             report = classification_report(y_true, y_pred, output_dict=True)
             
-            # Generate confusion matrix
-            cm = confusion_matrix(y_true, y_pred, labels=self.label_encoder.classes_)
+            # Get classes for confusion matrix
+            if self.hierarchical_model:
+                # For hierarchical model, check binary classes and word classes
+                binary_classes = self.preprocessing_info.get('binary_classes', ['sil', 'speech'])
+                word_classes = self.preprocessing_info.get('word_classes', [])
+                
+                # Check if we have 'sil' in the test data
+                has_silence = 'sil' in test_words
+                
+                # Check non-silence words overlap
+                non_silence_test_words = [w for w in test_words if w != 'sil']
+                testable_words = [w for w in non_silence_test_words if w in word_classes]
+                
+                if not has_silence and not testable_words:
+                    raise ValueError("No common words between test dataset and model vocabulary")
+                    
+                print(f"Hierarchical model - Binary classes: {binary_classes}")
+                print(f"Hierarchical model - Word classes: {word_classes}")
+                print(f"Testable silence: {has_silence}")
+                print(f"Testable speech words: {testable_words}")
+            else:
+                # For single model, check against the model's vocabulary
+                model_words = self.preprocessing_info.get('words', [])
+                common_words = [w for w in test_words if w in model_words]
+                print(f"Common words for evaluation: {common_words}")
+                
+                if not common_words:
+                    raise ValueError("No common words between test dataset and model vocabulary")
+            
+            # Generate confusion matrix - filter to only include classes in the test data
+            common_classes = sorted(list(set(np.unique(y_true)).intersection(set(np.unique(y_pred)))))
+            cm = confusion_matrix(y_true, y_pred, labels=common_classes)
             
             # Generate visualizations
             charts = {}
@@ -1795,8 +2182,8 @@ class RNNPredictor:
             
             plt.figure(figsize=(10, 8))
             sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', 
-                    xticklabels=self.label_encoder.classes_,
-                    yticklabels=self.label_encoder.classes_)
+                    xticklabels=common_classes,
+                    yticklabels=common_classes)
             plt.xlabel('Predicted')
             plt.ylabel('True')
             plt.title('Confusion Matrix')
@@ -1825,32 +2212,35 @@ class RNNPredictor:
             class_dist_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
             charts['class_distribution'] = class_dist_b64
             
-            # 3. Per-class confidence
+            # 3. Per-class accuracy
             plt.figure(figsize=(12, 8))
             
-            # Group by predicted class
-            class_confidences = {}
-            for i, pred_class in enumerate(y_pred_indices):
-                word = self.label_encoder.inverse_transform([pred_class])[0]
-                if word not in class_confidences:
-                    class_confidences[word] = []
-                class_confidences[word].append(y_pred_proba[i, pred_class])
-            
-            # Calculate mean confidence per class
-            mean_confidences = {word: np.mean(confs) for word, confs in class_confidences.items()}
-            
+            # Calculate accuracy per class
+            class_accuracies = {}
+            for cls in common_classes:
+                # Find indices where true label is this class
+                indices = [i for i, label in enumerate(y_true) if label == cls]
+                
+                if indices:
+                    # Count correct predictions
+                    correct = sum(1 for i in indices if y_pred[i] == cls)
+                    class_accuracies[cls] = correct / len(indices)
+                else:
+                    class_accuracies[cls] = 0
+                    
             # Plot
-            sns.barplot(x=list(mean_confidences.keys()), y=list(mean_confidences.values()))
-            plt.title('Mean Prediction Confidence by Class')
-            plt.xlabel('Predicted Word')
-            plt.ylabel('Mean Confidence')
+            sns.barplot(x=list(class_accuracies.keys()), y=list(class_accuracies.values()))
+            plt.title('Accuracy by Class')
+            plt.xlabel('Word')
+            plt.ylabel('Accuracy')
+            plt.ylim(0, 1)
             plt.xticks(rotation=45)
             
             buf = io.BytesIO()
             plt.savefig(buf, format='png')
             plt.close()
-            confidence_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-            charts['class_confidence'] = confidence_b64
+            class_accuracies_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+            charts['class_confidence'] = class_accuracies_b64  # Reuse the class_confidence key
             
             # Convert numpy types to Python native types for JSON serialization
             def convert_numpy_types(obj):
@@ -1875,7 +2265,8 @@ class RNNPredictor:
                 'classification_report': report,
                 'confusion_matrix': cm.tolist(),
                 'class_distribution': class_counts,
-                'class_confidences': mean_confidences,
+                'class_accuracies': class_accuracies,
+                'hierarchical_model': self.hierarchical_model,
                 'charts': charts  # Include the charts in the metrics for use in evaluation_detail view
             }
             

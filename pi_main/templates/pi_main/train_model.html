@@ -17,9 +17,12 @@
                         <h5><i class="bi bi-info-circle"></i> Important Notes:</h5>
                         <ul>
                             <li>Your dataset should contain a <strong>word_label</strong> column or word event columns</li>
-                            <li>The model needs <strong>at least two different word classes</strong> to train properly</li>
-                            <li>Speech detection is enhanced with balanced classes and specialized architecture</li>
-                            <li>The model will detect and use frequency band features if available in the dataset</li>
+                            <li>The model will automatically create a two-stage hierarchical classifier:</li>
+                            <ul>
+                                <li><strong>Stage 1:</strong> Determines if the EEG signal represents silence or speech</li>
+                                <li><strong>Stage 2:</strong> If speech is detected, classifies which specific word</li>
+                            </ul>
+                            <li>This approach significantly improves accuracy on imbalanced datasets</li>
                         </ul>
                     </div>
                     
@@ -74,17 +77,6 @@
                                                     {{ form.dataset_path.errors }}
                                                 </div>
                                             {% endif %}
-                                        </div>
-                                        
-                                        <div class="mb-3">
-                                            <label for="{{ form.selected_words.id_for_label }}" class="form-label">
-                                                {{ form.selected_words.label }}
-                                            </label>
-                                            {{ form.selected_words }}
-                                            <small class="form-text text-muted">{{ form.selected_words.help_text }}</small>
-                                            <div id="wordSelectionWarning" class="alert alert-warning mt-2 d-none">
-                                                <i class="bi bi-exclamation-triangle"></i> Please select at least 2 different words for training
-                                            </div>
                                         </div>
                                         
                                         <div class="form-check mb-3">
@@ -291,12 +283,10 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         const datasetSelect = document.getElementById('{{ form.dataset_path.id_for_label }}');
-        const wordSelect = document.getElementById('{{ form.selected_words.id_for_label }}');
         const applyFilteringCheck = document.getElementById('{{ form.apply_filtering.id_for_label }}');
         const trainingForm = document.getElementById('trainingForm');
         const submitBtn = document.getElementById('submitBtn');
         const trainingOverlay = document.getElementById('trainingOverlay');
-        const wordSelectionWarning = document.getElementById('wordSelectionWarning');
         
         // Enhanced parameters elements
         const silenceRatioInput = document.getElementById('{{ form.silence_balance_ratio.id_for_label }}');
@@ -304,116 +294,13 @@
         const transformerCheck = document.getElementById('{{ form.use_transformer.id_for_label }}');
         const augmentationInput = document.getElementById('{{ form.augmentation_factor.id_for_label }}');
         
-        // Function to check if at least 2 words are selected
-        function validateWordSelection() {
-            const selectedWords = Array.from(wordSelect.selectedOptions).map(option => option.value);
-            
-            if (selectedWords.length < 2 && selectedWords.length > 0) {
-                wordSelectionWarning.classList.remove('d-none');
-                return false;
-            } else {
-                wordSelectionWarning.classList.add('d-none');
-                return true;
-            }
-        }
-        
-        // Add validation to the word select
-        wordSelect.addEventListener('change', validateWordSelection);
-        
-        // Function to fetch available words for the selected dataset
-        function updateWordOptions() {
+        // Function to check dataset properties
+        function updateDatasetProperties() {
             const selectedDataset = datasetSelect.value;
             
             if (!selectedDataset) {
                 return;
             }
-            
-            // Clear word options
-            wordSelect.innerHTML = '';
-            
-            // Show loading indicator
-            wordSelect.disabled = true;
-            
-            // Display "loading" option
-            const loadingOption = document.createElement('option');
-            loadingOption.textContent = "Loading words...";
-            loadingOption.disabled = true;
-            wordSelect.appendChild(loadingOption);
-            
-            // Fetch available words via AJAX
-            fetch(`/pi_main/api/dataset-words/?dataset=${selectedDataset}`, {
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                // Clear loading indicator
-                wordSelect.innerHTML = '';
-                
-                if (data.words && Array.isArray(data.words)) {
-                    // Add options for each word
-                    data.words.forEach(word => {
-                        const option = document.createElement('option');
-                        option.value = word;
-                        option.textContent = word;
-                        wordSelect.appendChild(option);
-                    });
-                    
-                    // Add warning if fewer than 2 words
-                    if (data.words.length < 2) {
-                        const alertEl = document.createElement('div');
-                        alertEl.className = 'alert alert-danger mt-2';
-                        alertEl.innerHTML = '<i class="bi bi-exclamation-triangle"></i> Warning: This dataset contains only ' + data.words.length + ' word(s). Models require at least 2 different words to train properly.';
-                        wordSelect.parentNode.appendChild(alertEl);
-                    }
-                    
-                    // Update silence balance ratio based on word count
-                    // If more than 70% of words are 'sil', suggest a lower silence ratio
-                    const silCount = data.words.filter(w => w === 'sil').length;
-                    const wordCount = data.words.length;
-                    if (silCount > 0 && wordCount > 0) {
-                        const silRatio = silCount / wordCount;
-                        if (silRatio > 0.7) {
-                            // Suggest a lower balance ratio (0.3) for highly imbalanced datasets
-                            silenceRatioInput.value = 0.3;
-                            
-                            // Add suggestion
-                            const ratioHint = document.createElement('div');
-                            ratioHint.className = 'alert alert-warning mt-2';
-                            ratioHint.id = 'ratio-hint';
-                            ratioHint.innerHTML = '<i class="bi bi-info-circle"></i> Dataset appears heavily imbalanced toward silence. A lower ratio is recommended.';
-                            
-                            // Remove any existing hint
-                            const existingHint = document.getElementById('ratio-hint');
-                            if (existingHint) {
-                                existingHint.remove();
-                            }
-                            
-                            // Add the hint
-                            silenceRatioInput.parentNode.appendChild(ratioHint);
-                        }
-                    }
-                    
-                    // Enable select
-                    wordSelect.disabled = false;
-                } else {
-                    // No words found
-                    const option = document.createElement('option');
-                    option.textContent = "No words found in dataset";
-                    option.disabled = true;
-                    wordSelect.appendChild(option);
-                }
-            })
-            .catch(error => {
-                console.error('Error fetching words:', error);
-                wordSelect.innerHTML = '';
-                const option = document.createElement('option');
-                option.textContent = "Error loading words";
-                option.disabled = true;
-                wordSelect.appendChild(option);
-                wordSelect.disabled = false;
-            });
             
             // Check if the dataset is already filtered/cleaned
             if (selectedDataset.toLowerCase().includes('clean') || 
@@ -456,26 +343,19 @@
             // fetch(`/pi_main/api/dataset-preview/?dataset=${dataset}`)...
         }
         
-        // Update word options when dataset changes
-        datasetSelect.addEventListener('change', updateWordOptions);
+        // Update dataset properties when dataset changes
+        datasetSelect.addEventListener('change', updateDatasetProperties);
         
         // Handle form submission
         trainingForm.addEventListener('submit', function(e) {
-            // Validate word selection if words are selected
-            if (wordSelect.selectedOptions.length > 0 && !validateWordSelection()) {
-                e.preventDefault();
-                alert("Please select at least 2 different words for training");
-                return false;
-            }
-            
             // Show loading overlay
             trainingOverlay.classList.remove('d-none');
             submitBtn.disabled = true;
         });
         
-        // Initialize word options if dataset is already selected
+        // Initialize dataset properties if dataset is already selected
         if (datasetSelect.value) {
-            updateWordOptions();
+            updateDatasetProperties();
         }
     });
 </script>

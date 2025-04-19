@@ -71,16 +71,38 @@
                                         </div>
                                     </div>
                                     
-                                    <div class="mb-4">
-                                        <h6>Loss</h6>
-                                        <div class="progress" style="height: 20px;">
-                                            <div class="progress-bar bg-info" 
-                                                 role="progressbar" 
-                                                 style="width: {{ 100|sub:model.loss|floatformat:2|mul:100 }}%;" 
-                                                 aria-valuenow="{{ 100|sub:model.loss|floatformat:2|mul:100 }}" 
-                                                 aria-valuemin="0" 
-                                                 aria-valuemax="100">
-                                                {{ model.loss|floatformat:4 }}
+                                    <div id="hierarchicalInfo" class="bg-light p-3 rounded mb-3 d-none">
+                                        <h6><i class="bi bi-diagram-3"></i> Hierarchical Model Metrics</h6>
+                                        <div class="row">
+                                            <div class="col-6">
+                                                <div class="mb-2">
+                                                    <small class="d-block">Binary Classifier (Speech/Silence)</small>
+                                                    <div class="progress" style="height: 10px;">
+                                                        <div id="binaryAccuracyBar" class="progress-bar bg-primary" 
+                                                             role="progressbar" 
+                                                             style="width: 0%;" 
+                                                             aria-valuenow="0" 
+                                                             aria-valuemin="0" 
+                                                             aria-valuemax="100">
+                                                        </div>
+                                                    </div>
+                                                    <small id="binaryAccuracyValue">0%</small>
+                                                </div>
+                                            </div>
+                                            <div class="col-6">
+                                                <div class="mb-2">
+                                                    <small class="d-block">Word Classifier</small>
+                                                    <div class="progress" style="height: 10px;">
+                                                        <div id="wordAccuracyBar" class="progress-bar bg-success" 
+                                                             role="progressbar" 
+                                                             style="width: 0%;" 
+                                                             aria-valuenow="0" 
+                                                             aria-valuemin="0" 
+                                                             aria-valuemax="100">
+                                                        </div>
+                                                    </div>
+                                                    <small id="wordAccuracyValue">0%</small>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -145,20 +167,12 @@
                         <div class="col-md-6">
                             <div class="card mb-4">
                                 <div class="card-header bg-secondary text-white">
-                                    <h5 class="mb-0">Words Supported</h5>
+                                    <h5 class="mb-0">Model Architecture</h5>
                                 </div>
                                 <div class="card-body">
-                                    {% if job.word_list %}
-                                        <div class="d-flex flex-wrap">
-                                            {% for word in job.word_list|split:"," %}
-                                                <span class="badge bg-primary me-2 mb-2">{{ word }}</span>
-                                            {% endfor %}
-                                        </div>
-                                    {% else %}
-                                        <div class="alert alert-info">
-                                            <i class="bi bi-info-circle"></i> All words in the dataset were used for training.
-                                        </div>
-                                    {% endif %}
+                                    <div id="modelArchitecture" class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> Loading model architecture information...
+                                    </div>
                                 </div>
                             </div>
                             
@@ -246,6 +260,9 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+        // Check if this is a hierarchical model
+        checkIfHierarchicalModel();
+        
         // Initialize the training history chart if element exists
         const chartElement = document.getElementById('trainingChart');
         if (chartElement) {
@@ -374,51 +391,123 @@
             });
         }
         
-        // Get filter information from preprocessing_info.json
-        fetch(`/pi_main/api/model-info/?model_id={{ model.id }}`)
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success' && data.filter_config) {
-                    const filterInfo = document.getElementById('filterInfo');
-                    let filterHtml = '<p class="mb-0">The model was trained on data with the following filters:</p><ul class="mt-2">';
+        // Check if this is a hierarchical model
+        function checkIfHierarchicalModel() {
+            fetch(`/pi_main/api/model-info/?model_id={{ model.id }}`)
+                .then(response => response.json())
+                .then(data => {
+                    // Set up model architecture description
+                    const modelArchitecture = document.getElementById('modelArchitecture');
                     
-                    // Add filter details
-                    if (data.filter_config.apply_bandpass) {
-                        filterHtml += `<li>Bandpass filter: <span class="badge bg-secondary">${data.filter_config.lowcut}-${data.filter_config.highcut}Hz</span></li>`;
+                    if (data.status === 'success') {
+                        // Check if this is a hierarchical model
+                        if (data.hierarchical_model === true) {
+                            // It's a hierarchical model
+                            modelArchitecture.innerHTML = `
+                                <h6><i class="bi bi-cpu"></i> Hierarchical Model Architecture</h6>
+                                <p>This model uses a two-stage approach:</p>
+                                <div class="d-flex align-items-center mb-2">
+                                    <span class="badge bg-primary me-2">1</span>
+                                    <strong>Binary Classifier:</strong> Determines if the EEG signal represents silence or speech
+                                </div>
+                                <div class="d-flex align-items-center">
+                                    <span class="badge bg-success me-2">2</span>
+                                    <strong>Word Classifier:</strong> If speech is detected, identifies which specific word
+                                </div>
+                                <p class="mt-2 small text-muted">This approach significantly improves accuracy on imbalanced datasets</p>
+                            `;
+                            
+                            // Show hierarchical metrics
+                            const hierarchicalInfo = document.getElementById('hierarchicalInfo');
+                            hierarchicalInfo.classList.remove('d-none');
+                            
+                            // Try to get combined history for detailed metrics
+                            fetch(`/pi_main/api/training-history/?model_id={{ model.id }}&hierarchical=true`)
+                                .then(response => response.json())
+                                .then(historyData => {
+                                    if (historyData.combined_history) {
+                                        const binaryAcc = historyData.combined_history.binary_accuracy * 100;
+                                        const wordAcc = historyData.combined_history.word_accuracy * 100;
+                                        
+                                        // Update binary accuracy
+                                        const binaryBar = document.getElementById('binaryAccuracyBar');
+                                        const binaryValue = document.getElementById('binaryAccuracyValue');
+                                        binaryBar.style.width = `${binaryAcc}%`;
+                                        binaryBar.setAttribute('aria-valuenow', binaryAcc);
+                                        binaryValue.textContent = `${binaryAcc.toFixed(1)}%`;
+                                        
+                                        // Update word accuracy
+                                        const wordBar = document.getElementById('wordAccuracyBar');
+                                        const wordValue = document.getElementById('wordAccuracyValue');
+                                        wordBar.style.width = `${wordAcc}%`;
+                                        wordBar.setAttribute('aria-valuenow', wordAcc);
+                                        wordValue.textContent = `${wordAcc.toFixed(1)}%`;
+                                    }
+                                })
+                                .catch(error => {
+                                    console.error('Error loading hierarchical metrics:', error);
+                                });
+                        } else {
+                            // Standard model architecture
+                            const archType = data.architecture_type || "Bidirectional GRU";
+                            modelArchitecture.innerHTML = `
+                                <h6><i class="bi bi-cpu"></i> Standard ${archType} Architecture</h6>
+                                <p>This model uses a single classifier architecture to directly predict words from EEG data.</p>
+                                <div class="small text-muted">Features: 
+                                    <span class="badge bg-secondary">Bidirectional layers</span>
+                                    <span class="badge bg-secondary">Attention mechanism</span>
+                                    <span class="badge bg-secondary">Sequence processing</span>
+                                </div>
+                            `;
+                        }
+                        
+                        // Update filter information
+                        if (data.filter_config) {
+                            const filterInfo = document.getElementById('filterInfo');
+                            let filterHtml = '<p class="mb-0">The model was trained on data with the following filters:</p><ul class="mt-2">';
+                            
+                            // Add filter details
+                            if (data.filter_config.apply_bandpass) {
+                                filterHtml += `<li>Bandpass filter: <span class="badge bg-secondary">${data.filter_config.lowcut}-${data.filter_config.highcut}Hz</span></li>`;
+                            }
+                            
+                            if (data.filter_config.apply_highpass) {
+                                filterHtml += `<li>Highpass filter: <span class="badge bg-secondary">${data.filter_config.highpass_cutoff}Hz</span></li>`;
+                            }
+                            
+                            if (data.filter_config.apply_lowpass) {
+                                filterHtml += `<li>Lowpass filter: <span class="badge bg-secondary">${data.filter_config.lowpass_cutoff}Hz</span></li>`;
+                            }
+                            
+                            if (data.filter_config.apply_notch) {
+                                filterHtml += `<li>Notch filter: <span class="badge bg-secondary">${data.filter_config.notch_freq}Hz</span></li>`;
+                            }
+                            
+                            if (data.filter_config.apply_ica) {
+                                filterHtml += `<li>ICA for artifact removal: <span class="badge bg-secondary">${data.filter_config.ica_method}</span></li>`;
+                            }
+                            
+                            if (data.filter_config.normalize_data) {
+                                filterHtml += `<li>Normalization: <span class="badge bg-secondary">Z-score</span></li>`;
+                            }
+                            
+                            if (data.filter_config.remove_outliers) {
+                                filterHtml += `<li>Outlier removal: <span class="badge bg-secondary">Threshold ${data.filter_config.outlier_threshold}</span></li>`;
+                            }
+                            
+                            filterHtml += '</ul><p class="small text-muted mt-2 mb-0">These same filters will be applied to any new data during prediction.</p>';
+                            
+                            filterInfo.innerHTML = filterHtml;
+                        }
                     }
-                    
-                    if (data.filter_config.apply_highpass) {
-                        filterHtml += `<li>Highpass filter: <span class="badge bg-secondary">${data.filter_config.highpass_cutoff}Hz</span></li>`;
-                    }
-                    
-                    if (data.filter_config.apply_lowpass) {
-                        filterHtml += `<li>Lowpass filter: <span class="badge bg-secondary">${data.filter_config.lowpass_cutoff}Hz</span></li>`;
-                    }
-                    
-                    if (data.filter_config.apply_notch) {
-                        filterHtml += `<li>Notch filter: <span class="badge bg-secondary">${data.filter_config.notch_freq}Hz</span></li>`;
-                    }
-                    
-                    if (data.filter_config.apply_ica) {
-                        filterHtml += `<li>ICA for artifact removal: <span class="badge bg-secondary">${data.filter_config.ica_method}</span></li>`;
-                    }
-                    
-                    if (data.filter_config.normalize_data) {
-                        filterHtml += `<li>Normalization: <span class="badge bg-secondary">Z-score</span></li>`;
-                    }
-                    
-                    if (data.filter_config.remove_outliers) {
-                        filterHtml += `<li>Outlier removal: <span class="badge bg-secondary">Threshold ${data.filter_config.outlier_threshold}</span></li>`;
-                    }
-                    
-                    filterHtml += '</ul><p class="small text-muted mt-2 mb-0">These same filters will be applied to any new data during prediction.</p>';
-                    
-                    filterInfo.innerHTML = filterHtml;
-                }
-            })
-            .catch(error => {
-                console.error('Error loading filter configuration:', error);
-            });
+                })
+                .catch(error => {
+                    console.error('Error checking model architecture:', error);
+                    document.getElementById('modelArchitecture').innerHTML = `
+                        <p><i class="bi bi-exclamation-triangle"></i> Could not load model architecture information.</p>
+                    `;
+                });
+        }
     });
 </script>
 {% endblock extra_js %}

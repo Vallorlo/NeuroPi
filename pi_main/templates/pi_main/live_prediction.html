@@ -29,8 +29,9 @@
                                                 {% for model in models %}
                                                     <option value="{{ model.id }}" 
                                                             data-accuracy="{{ model.accuracy|floatformat:2 }}"
+                                                            data-model-type="{{ model.model_type }}"
                                                             {% if request.GET.model == model.id|stringformat:"s" %}selected{% endif %}>
-                                                        {{ model.name }} ({{ model.accuracy|floatformat:2|mul:100 }}%)
+                                                        {{ model.name }} ({{ model.accuracy|floatformat:2|mul:100 }}%{% if model.model_type == 'pytorch' %}, PyTorch{% endif %})
                                                     </option>
                                                 {% endfor %}
                                             </select>
@@ -65,6 +66,15 @@
                                             </label>
                                             <small class="form-text text-muted d-block">Enable filtering to improve signal quality</small>
                                         </div>
+                                        
+                                        <div class="form-check mb-3">
+                                            <input class="form-check-input" type="checkbox" id="useMne" checked>
+                                            <label class="form-check-label" for="useMne">
+                                                Use Advanced Preprocessing
+                                            </label>
+                                            <small class="form-text text-muted d-block">Enable MNE artifact removal for better results</small>
+                                        </div>
+                                        
                                         <div class="d-grid gap-2">
                                             <button type="button" id="connectEEGBtn" class="btn btn-secondary">
                                                 <i class="bi bi-hdd-network"></i> Connect EEG Headset
@@ -93,6 +103,10 @@
                                     <div class="d-flex align-items-center mb-3">
                                         <div id="modelStatus" class="status-indicator bg-danger me-2"></div>
                                         <span>Model Loaded</span>
+                                    </div>
+                                    
+                                    <div id="modelTypeDisplay" class="d-none alert alert-info mb-3">
+                                        <i class="bi bi-info-circle"></i> <span id="modelTypeText"></span>
                                     </div>
                                     
                                     <div id="statusMessage" class="alert alert-info mt-3">
@@ -128,6 +142,9 @@
                                             </div>
                                         </div>
                                         <p id="confidenceValue">Confidence: 0%</p>
+                                        <p id="speechDetection" class="d-none">
+                                            <span class="badge rounded-pill bg-info text-dark">Speech Detected: <span id="speechValue">--</span></span>
+                                        </p>
                                     </div>
                                     
                                     <div id="topPredictions" class="row prediction-grid">
@@ -234,6 +251,8 @@
                     <li>Focus clearly on the word you're thinking about</li>
                     <li>For vocal tests, speak clearly but naturally</li>
                     <li>Try multiple attempts to improve accuracy</li>
+                    <li>PyTorch CNN-LSTM models typically provide better results than TensorFlow models</li>
+                    <li>Enable advanced preprocessing for better artifact removal</li>
                 </ul>
                 
                 <h5>Troubleshooting:</h5>
@@ -241,6 +260,7 @@
                     <li>If the EEG status indicator remains red, try reconnecting or reseating the headset</li>
                     <li>If predictions seem random, try increasing the sample duration</li>
                     <li>Different models may perform better with different participants</li>
+                    <li>If using a PyTorch model, check if speech is being detected correctly</li>
                 </ul>
             </div>
             <div class="modal-footer">
@@ -260,6 +280,7 @@
         const sampleDuration = document.getElementById('sampleDuration');
         const targetWord = document.getElementById('targetWord');
         const applyFiltering = document.getElementById('applyFiltering');
+        const useMne = document.getElementById('useMne');
         const connectEEGBtn = document.getElementById('connectEEGBtn');
         const startPredictionBtn = document.getElementById('startPredictionBtn');
         const eegStatus = document.getElementById('eegStatus');
@@ -276,6 +297,10 @@
         const sampleCount = document.getElementById('sampleCount');
         const sampleRate = document.getElementById('sampleRate');
         const disconnectEEGBtn = document.getElementById('disconnectEEGBtn');
+        const modelTypeDisplay = document.getElementById('modelTypeDisplay');
+        const modelTypeText = document.getElementById('modelTypeText');
+        const speechDetection = document.getElementById('speechDetection');
+        const speechValue = document.getElementById('speechValue');
         
         // Session ID for grouping predictions
         const sessionId = Date.now().toString();
@@ -283,6 +308,32 @@
         // Counter for keeping track of prediction attempts
         let predictionCount = 0;
         
+        // Model type handler
+        modelSelect.addEventListener('change', function() {
+            if (this.value) {
+                modelStatus.className = 'status-indicator bg-success me-2';
+                // Show model type info
+                const modelType = this.options[this.selectedIndex].getAttribute('data-model-type');
+                if (modelType === 'pytorch') {
+                    modelTypeDisplay.classList.remove('d-none');
+                    modelTypeText.textContent = "PyTorch CNN-LSTM model with speech detection";
+                    speechDetection.classList.remove('d-none');
+                } else {
+                    modelTypeDisplay.classList.remove('d-none');
+                    modelTypeText.textContent = "TensorFlow RNN model (legacy)";
+                    speechDetection.classList.add('d-none');
+                }
+                
+                // Enable start button if EEG is connected
+                if (eegStatus.className.includes('bg-success')) {
+                    startPredictionBtn.disabled = false;
+                }
+            } else {
+                modelStatus.className = 'status-indicator bg-danger me-2';
+                modelTypeDisplay.classList.add('d-none');
+                startPredictionBtn.disabled = true;
+            }
+        });
 
         disconnectEEGBtn.addEventListener('click', function() {
             // Show disconnecting status
@@ -326,7 +377,11 @@
         
         // Update Connect EEG button handler to enable the disconnect button
         connectEEGBtn.addEventListener('click', function() {
-            // Rest of the existing code...
+            // Show connecting status
+            eegStatus.className = 'status-indicator bg-warning me-2';
+            statusMessage.className = 'alert alert-warning';
+            statusMessage.textContent = 'Connecting to EEG headset...';
+            connectEEGBtn.disabled = true;
             
             // Call the initialize endpoint
             fetch('/pi_main/api/initialize-eeg/', {
@@ -392,67 +447,6 @@
             localStorage.setItem('predictionInstructionsShown', 'true');
         }
         
-        // Connect EEG button handler
-        connectEEGBtn.addEventListener('click', function() {
-            // Show connecting status
-            eegStatus.className = 'status-indicator bg-warning me-2';
-            statusMessage.className = 'alert alert-warning';
-            statusMessage.textContent = 'Connecting to EEG headset...';
-            connectEEGBtn.disabled = true;
-            
-            // Call the initialize endpoint
-            fetch('/pi_main/api/initialize-eeg/', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.status === 'success') {
-                    // Connection successful
-                    eegStatus.className = 'status-indicator bg-success me-2';
-                    statusMessage.className = 'alert alert-success';
-                    statusMessage.textContent = data.message;
-                    
-                    // Enable start button if model is selected
-                    if (modelSelect.value) {
-                        startPredictionBtn.disabled = false;
-                    }
-                } else {
-                    // Connection failed
-                    eegStatus.className = 'status-indicator bg-danger me-2';
-                    statusMessage.className = 'alert alert-danger';
-                    statusMessage.textContent = data.message || 'Failed to connect to EEG headset';
-                }
-                
-                // Re-enable connect button
-                connectEEGBtn.disabled = false;
-            })
-            .catch(error => {
-                console.error('Error connecting to EEG headset:', error);
-                eegStatus.className = 'status-indicator bg-danger me-2';
-                statusMessage.className = 'alert alert-danger';
-                statusMessage.textContent = 'Error connecting to EEG headset. Please try again.';
-                connectEEGBtn.disabled = false;
-            });
-        });
-        
-        // Model select change handler
-        modelSelect.addEventListener('change', function() {
-            if (this.value) {
-                modelStatus.className = 'status-indicator bg-success me-2';
-                // Enable start button if EEG is connected
-                if (eegStatus.className.includes('bg-success')) {
-                    startPredictionBtn.disabled = false;
-                }
-            } else {
-                modelStatus.className = 'status-indicator bg-danger me-2';
-                startPredictionBtn.disabled = true;
-            }
-        });
-        
         // Start prediction button handler
         startPredictionBtn.addEventListener('click', function() {
             if (!modelSelect.value) {
@@ -466,6 +460,9 @@
             statusMessage.className = 'alert alert-warning';
             statusMessage.textContent = 'Recording EEG data...';
             predictionCount++;
+            
+            // Reset speech detection display
+            speechValue.textContent = '--';
             
             // Get the sample duration
             const duration = parseInt(sampleDuration.value);
@@ -481,6 +478,7 @@
             formData.append('target_word', targetWord.value.trim());
             formData.append('participant', participantSelect.value);
             formData.append('apply_filtering', applyFiltering.checked);
+            formData.append('use_mne', useMne.checked);
             formData.append('session_id', sessionId);
             
             // Start countdown
@@ -580,6 +578,15 @@
                 confidenceBar.className = 'progress-bar bg-danger';
             }
             
+            // Update speech detection display if available
+            if ('is_speech' in predictions) {
+                speechDetection.classList.remove('d-none');
+                speechValue.textContent = predictions.is_speech ? 'Yes' : 'No';
+            } else {
+                // For TensorFlow models
+                speechDetection.classList.add('d-none');
+            }
+            
             // Update top predictions grid
             topPredictions.innerHTML = '';
             
@@ -658,6 +665,16 @@
         // Initialize UI based on selected model (if any)
         if (modelSelect.value) {
             modelStatus.className = 'status-indicator bg-success me-2';
+            
+            // Show model type info
+            const modelType = modelSelect.options[modelSelect.selectedIndex].getAttribute('data-model-type');
+            if (modelType === 'pytorch') {
+                modelTypeDisplay.classList.remove('d-none');
+                modelTypeText.textContent = "PyTorch CNN-LSTM model with speech detection";
+            } else {
+                modelTypeDisplay.classList.remove('d-none');
+                modelTypeText.textContent = "TensorFlow RNN model (legacy)";
+            }
         }
     });
 </script>

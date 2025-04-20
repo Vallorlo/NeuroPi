@@ -46,7 +46,7 @@
                                         <a href="{% url 'pi_main:model_list' %}" class="btn btn-outline-primary">
                                             <i class="bi bi-list-check"></i> View All Models
                                         </a>
-                                        <a href="{% url 'pi_main:prediction' %}" class="btn btn-success">
+                                        <a href="{% url 'pi_main:live_prediction' %}" class="btn btn-success">
                                             <i class="bi bi-lightning-charge"></i> Live Prediction
                                         </a>
                                     </div>
@@ -132,7 +132,7 @@
                                                                 <a href="{% url 'pi_main:model_detail' model.id %}" class="btn btn-sm btn-outline-primary">
                                                                     <i class="bi bi-info-circle"></i>
                                                                 </a>
-                                                                <a href="{% url 'pi_main:prediction' %}?model={{ model.id }}" class="btn btn-sm btn-outline-success">
+                                                                <a href="{% url 'pi_main:live_prediction' %}?model={{ model.id }}" class="btn btn-sm btn-outline-success">
                                                                     <i class="bi bi-lightning-charge"></i>
                                                                 </a>
                                                             </td>

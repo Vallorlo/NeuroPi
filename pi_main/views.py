@@ -11,22 +11,11 @@ import pandas as pd
 from datetime import datetime
 import traceback
 import threading
-from .models import EEGModel, TrainingJob, Prediction, ModelEvaluation
+from .models import EEGModel, TrainingJob, Prediction
 from .forms import ModelTrainingForm, PredictionForm
-from .rnn_model import RNNModelTrainer, RNNPredictor
-# Add this to pi_main/views.py
-
+from .eeg_model import ModelTrainer, ModelPredictor
 from .live_prediction import LiveEEGPredictor
-from .rnn_model import RNNPredictor
-import time
-import traceback
-import json
-from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-import base64
-from django.contrib import messages
-
-
 
 # Global predictor instance to maintain EEG connection across requests
 _eeg_predictor = LiveEEGPredictor()
@@ -65,6 +54,7 @@ def live_predict_api(request):
         target_word = request.POST.get('target_word', '')
         participant = request.POST.get('participant', '')
         apply_filtering = request.POST.get('apply_filtering', 'true').lower() == 'true'
+        use_mne = request.POST.get('use_mne', 'true').lower() == 'true'
         
         # Get model
         try:
@@ -83,14 +73,14 @@ def live_predict_api(request):
         # Collect EEG data
         data, timestamps = eeg_predictor.collect_eeg_data(duration)
         
-        if data is None or not data:
+        if data is None or len(data) == 0:
             return JsonResponse({
                 'error': 'Failed to collect EEG data. Please check the headset connection.'
             }, status=400)
         
-        # Load model
+        # Load model predictor
         try:
-            model_predictor = RNNPredictor(model_path=model.model_path)
+            model_predictor = ModelPredictor(model_path=model.model_path)
         except Exception as e:
             traceback.print_exc()
             return JsonResponse({
@@ -98,30 +88,38 @@ def live_predict_api(request):
             }, status=500)
         
         # Make prediction
-        predictions = eeg_predictor.predict(model_predictor, data, apply_filtering)
+        predictions = eeg_predictor.predict(
+            model_predictor, 
+            data, 
+            apply_filtering=apply_filtering,
+            use_mne=use_mne
+        )
         
         if 'error' in predictions:
             return JsonResponse({'error': predictions['error']}, status=400)
         
-        # Create prediction record
-        # Handle empty target word - ensure it's an empty string not None
-        target_word = target_word if target_word else ""
+        # Extract prediction results
+        predicted_word = predictions.get('predicted_word', 'unknown')
+        confidence = predictions.get('confidence', 0.0)
+        is_speech = predictions.get('is_speech', False)
+        speech_confidence = predictions.get('speech_confidence', 0.0)
         
+        # Create prediction record
         try:
-            # Create prediction record with proper handling of target_word
             prediction = Prediction(
                 model=model,
-                predicted_word=predictions['predicted_word'],
-                confidence=predictions['confidence'],
-                actual_word=target_word,  # This is now allowed to be empty string
-                is_correct=predictions['predicted_word'].lower() == target_word.lower() if target_word else None,
+                predicted_word=predicted_word,
+                confidence=confidence,
+                actual_word=target_word if target_word else None,
+                is_correct=predicted_word.lower() == target_word.lower() if target_word else None,
                 participant=participant,
-                session_id=request.POST.get('session_id', '')
+                session_id=request.POST.get('session_id', ''),
+                is_speech=is_speech,
+                speech_confidence=speech_confidence
             )
             prediction.save()
         except Exception as e:
-            # Log the error but continue - don't fail the entire request just because
-            # saving to the database failed
+            # Log the error but continue
             print(f"Error saving prediction to database: {e}")
             traceback.print_exc()
         
@@ -141,7 +139,7 @@ def live_predict_api(request):
             'message': str(e)
         }, status=500)
     finally:
-        # Always clear the queue after use - important to prevent accumulation of data
+        # Always clear the queue after use
         if eeg_predictor and eeg_predictor.cyHeadset:
             eeg_predictor.cyHeadset.clear_data()
 
@@ -199,79 +197,6 @@ def close_eeg_api(request):
             'message': str(e)
         }, status=500)
 
-def model_info_api(request):
-    """API endpoint to get model information including filter configuration."""
-    model_id = request.GET.get('model_id')
-    
-    if not model_id:
-        return JsonResponse({'error': 'No model ID provided'}, status=400)
-    
-    try:
-        model = EEGModel.objects.get(id=model_id)
-        
-        # Get model directory path
-        model_dir = os.path.join(settings.BASE_DIR, model.model_path)
-        
-        # Check if this is a hierarchical model
-        is_hierarchical = False
-        hierarchical_model_path = os.path.join(model_dir, 'hierarchical_model.json')
-        hierarchical_info = {}
-        
-        if os.path.exists(hierarchical_model_path):
-            is_hierarchical = True
-            with open(hierarchical_model_path, 'r') as f:
-                hierarchical_info = json.load(f)
-        
-        # Try to load preprocessing info
-        preprocessing_info = {}
-        preprocessing_path = os.path.join(model_dir, 'preprocessing_info.json')
-        
-        if os.path.exists(preprocessing_path):
-            with open(preprocessing_path, 'r') as f:
-                preprocessing_info = json.load(f)
-                # Check for hierarchical flag in preprocessing info as well
-                if preprocessing_info.get('hierarchical_model', False):
-                    is_hierarchical = True
-        
-        # Determine architecture type
-        architecture_type = "Transformer" if preprocessing_info.get('use_transformer', False) else "Bidirectional GRU"
-        
-        # Return model information
-        response = {
-            'status': 'success',
-            'model_id': model_id,
-            'model_name': model.name,
-            'filter_config': preprocessing_info.get('filter_config', {}),
-            'eeg_columns': preprocessing_info.get('eeg_columns', []),
-            'band_columns': preprocessing_info.get('band_columns', []),
-            'sequence_length': preprocessing_info.get('sequence_length', 40),
-            'hierarchical_model': is_hierarchical,
-            'architecture_type': architecture_type,
-            'has_band_features': preprocessing_info.get('has_band_features', False),
-            'silence_balance_ratio': preprocessing_info.get('silence_balance_ratio', 1.0)
-        }
-        
-        # Add hierarchical-specific info if available
-        if is_hierarchical:
-            response.update({
-                'binary_classes': preprocessing_info.get('binary_classes', ['sil', 'speech']),
-                'word_classes': preprocessing_info.get('word_classes', []),
-                'binary_accuracy': hierarchical_info.get('binary_accuracy', 0),
-                'word_accuracy': hierarchical_info.get('word_accuracy', 0),
-                'combined_accuracy': hierarchical_info.get('combined_accuracy', 0)
-            })
-        else:
-            response.update({
-                'words': preprocessing_info.get('words', [])
-            })
-        
-        return JsonResponse(response)
-        
-    except EEGModel.DoesNotExist:
-        return JsonResponse({'error': 'Model not found'}, status=404)
-    except Exception as e:
-        return JsonResponse({'error': str(e)}, status=500)
-
 def model_dashboard(request):
     """Main dashboard for the model training and prediction app."""
     # Get latest models
@@ -293,135 +218,14 @@ def model_dashboard(request):
     
     return render(request, 'pi_main/dashboard.html', context)
 
-
-def train_model_background(job_id):
-    """Background process to train the model with enhanced parameters."""
-    job = TrainingJob.objects.get(id=job_id)
-    job.status = 'training'
-    job.save()
-    
-    try:
-        # Load dataset
-        dataset_path = job.dataset_path
-        
-        # Handle datasets in subdirectories (processed_*/file.csv format)
-        if '/' in dataset_path and not os.path.isabs(dataset_path):
-            dataset_path = os.path.join(settings.TRIAL_DIR, dataset_path)
-        else:
-            dataset_path = os.path.join(settings.TRIAL_DIR, dataset_path)
-        
-        # Get enhanced parameters from job metadata or use defaults
-        job_metadata = json.loads(job.metadata) if hasattr(job, 'metadata') and job.metadata else {}
-        
-        # Extract enhanced parameters with defaults if not present
-        silence_balance_ratio = job_metadata.get('silence_balance_ratio', 0.5)
-        use_focal_loss = job_metadata.get('use_focal_loss', True)
-        use_transformer = job_metadata.get('use_transformer', True)
-        augmentation_factor = job_metadata.get('augmentation_factor', 0.3)
-        
-        # Create trainer with enhanced parameters
-        trainer = RNNModelTrainer(
-            dataset_path=dataset_path,
-            model_name=job.model_name,
-            word_list=None,  # No longer using word_list as we're using word_label directly
-            epochs=job.epochs,
-            batch_size=job.batch_size,
-            learning_rate=job.learning_rate,
-            validation_split=job.validation_split,
-            hidden_units=job.hidden_units,
-            dropout_rate=job.dropout_rate,
-            recurrent_dropout=job.recurrent_dropout,
-            apply_filtering=job.apply_filtering,
-            # Enhanced parameters
-            silence_balance_ratio=silence_balance_ratio,
-            use_focal_loss=use_focal_loss,
-            use_transformer=use_transformer,
-            augmentation_factor=augmentation_factor
-        )
-        
-        # Train model
-        model, history = trainer.train()
-        
-        # Save model metadata
-        output_dir = os.path.join(settings.BASE_DIR, 'trained_models', job.model_name)
-        os.makedirs(output_dir, exist_ok=True)
-        
-        # Check if this is a hierarchical model
-        is_hierarchical = False
-        hierarchical_model_path = os.path.join(output_dir, 'hierarchical_model.json')
-        combined_history = None
-        
-        if os.path.exists(hierarchical_model_path):
-            is_hierarchical = True
-            try:
-                with open(hierarchical_model_path, 'r') as f:
-                    hierarchical_info = json.load(f)
-                    combined_accuracy = hierarchical_info.get('combined_accuracy', 0)
-                
-                with open(os.path.join(output_dir, 'combined_history.json'), 'r') as f:
-                    combined_history = json.load(f)
-            except Exception as e:
-                print(f"Error reading hierarchical model info: {e}")
-                combined_accuracy = 0
-        
-        # Create model record with appropriate accuracy
-        if is_hierarchical and combined_history:
-            # Use the combined accuracy from the hierarchical model
-            eeg_model = EEGModel(
-                name=job.model_name,
-                description=job.description,
-                dataset_path=job.dataset_path,
-                model_path=os.path.join('trained_models', job.model_name),
-                accuracy=combined_history.get('combined_accuracy', 0),
-                loss=0.0,  # Not used in hierarchical model
-                training_job=job
-            )
-        else:
-            # Standard model - use the last validation accuracy
-            eeg_model = EEGModel(
-                name=job.model_name,
-                description=job.description,
-                dataset_path=job.dataset_path,
-                model_path=os.path.join('trained_models', job.model_name),
-                accuracy=history.get('val_accuracy', [0])[-1],
-                loss=history.get('val_loss', [0])[-1],
-                training_job=job
-            )
-        
-        eeg_model.save()
-        
-        # Update job status
-        job.status = 'completed'
-        job.save()
-        
-    except Exception as e:
-        # Log error and update job status
-        job.status = 'failed'
-        job.error_message = str(e)
-        job.save()
-        traceback.print_exc()
-
 def train_model(request):
-    """View for creating and starting model training with enhanced parameters."""
+    """View for creating and starting model training."""
     if request.method == 'POST':
         form = ModelTrainingForm(request.POST)
         if form.is_valid():
             training_job = form.save(commit=False)
             training_job.user = request.user.username if request.user.is_authenticated else 'anonymous'
             training_job.status = 'queued'
-            
-            # Store enhanced parameters in metadata field
-            metadata = {
-                'silence_balance_ratio': form.cleaned_data.get('silence_balance_ratio', 0.5),
-                'use_focal_loss': form.cleaned_data.get('use_focal_loss', True),
-                'use_transformer': form.cleaned_data.get('use_transformer', True),
-                'augmentation_factor': form.cleaned_data.get('augmentation_factor', 0.3)
-            }
-            
-            # Check if the model has a metadata field, if so use it
-            if hasattr(training_job, 'metadata'):
-                training_job.metadata = json.dumps(metadata)
-            
             training_job.save()
             
             # Start training in background thread
@@ -435,21 +239,6 @@ def train_model(request):
             try:
                 job = TrainingJob.objects.get(id=retry_job_id)
                 form = ModelTrainingForm(instance=job)
-                
-                # Pre-populate enhanced parameters if available
-                if hasattr(job, 'metadata') and job.metadata:
-                    try:
-                        metadata = json.loads(job.metadata)
-                        if 'silence_balance_ratio' in metadata:
-                            form.fields['silence_balance_ratio'].initial = metadata['silence_balance_ratio']
-                        if 'use_focal_loss' in metadata:
-                            form.fields['use_focal_loss'].initial = metadata['use_focal_loss']
-                        if 'use_transformer' in metadata:
-                            form.fields['use_transformer'].initial = metadata['use_transformer']
-                        if 'augmentation_factor' in metadata:
-                            form.fields['augmentation_factor'].initial = metadata['augmentation_factor']
-                    except:
-                        pass
             except TrainingJob.DoesNotExist:
                 form = ModelTrainingForm()
         else:
@@ -465,138 +254,6 @@ def train_model(request):
     
     return render(request, 'pi_main/train_model.html', context)
 
-def prediction(request):
-    """Interface for EEG prediction with enhanced speech detection."""
-    # Get available models
-    models = EEGModel.objects.filter(status='active').order_by('-created_at')
-    
-    if not models:
-        # If no models are available, redirect to the no models page
-        return render(request, 'pi_main/no_models.html')
-    
-    # Get participant information
-    participants = get_existing_participants()
-    
-    # Create prediction form
-    form = PredictionForm(participants=participants)
-    
-    # Default to empty context
-    context = {
-        'models': models,
-        'participants': participants,
-        'form': form,
-        'prediction_results': None,
-        'recording_status': None
-    }
-    
-    # Check if this is a post request (post-recording prediction)
-    if request.method == 'POST':
-        form = PredictionForm(request.POST, participants=participants)
-        
-        if form.is_valid():
-            try:
-                # Get form data
-                model_id = form.cleaned_data['model'].id
-                duration = form.cleaned_data['sample_duration']
-                participant = form.cleaned_data['participant']
-                
-                # Get enhanced prediction settings
-                use_custom_thresholds = form.cleaned_data.get('use_custom_thresholds', True)
-                use_majority_voting = form.cleaned_data.get('use_majority_voting', True)
-                
-                # Get the model
-                model = get_object_or_404(EEGModel, id=model_id)
-                
-                # Initialize EEG headset
-                eeg_predictor = get_eeg_predictor()
-                if not eeg_predictor.initialized:
-                    success = eeg_predictor.initialize()
-                    if not success:
-                        context['recording_status'] = "error"
-                        context['prediction_results'] = {
-                            'error': 'Failed to initialize EEG headset. Please check the connection.'
-                        }
-                        return render(request, 'pi_main/prediction.html', context)
-                
-                # Collect EEG data
-                context['recording_status'] = "recording"
-                data, timestamps = eeg_predictor.collect_eeg_data(duration)
-                
-                if data is None or not data:
-                    context['recording_status'] = "error"
-                    context['prediction_results'] = {
-                        'error': 'Failed to collect EEG data. Please check the headset connection.'
-                    }
-                    return render(request, 'pi_main/prediction.html', context)
-                
-                # Convert data to DataFrame
-                np_data = np.array(data, dtype=float)
-                
-                # Expected column order for EPOC+ headset
-                sensor_columns = ["COUNTER", 'F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 
-                                'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
-                
-                # Extract only EEG channels (exclude COUNTER)
-                eeg_data = pd.DataFrame(np_data[:, 1:], columns=sensor_columns[1:])
-                
-                # Add timestamp column
-                eeg_data['Timestamp'] = timestamps
-                
-                # Load the model predictor
-                model_predictor = RNNPredictor(model_path=model.model_path)
-                
-                # Store user-defined options - custom predictor properties
-                if hasattr(model_predictor, 'use_custom_thresholds'):
-                    model_predictor.use_custom_thresholds = use_custom_thresholds
-                if hasattr(model_predictor, 'use_majority_voting'):
-                    model_predictor.use_majority_voting = use_majority_voting
-                
-                # Make prediction
-                context['recording_status'] = "processing"
-                predictions = model_predictor.predict(eeg_data)
-                
-                if 'error' in predictions:
-                    context['recording_status'] = "error"
-                    context['prediction_results'] = {
-                        'error': predictions['error']
-                    }
-                else:
-                    context['recording_status'] = "success"
-                    context['prediction_results'] = {
-                        'predicted_word': predictions['predicted_word'],
-                        'confidence': predictions['confidence'],
-                        'predictions': predictions['predictions'],
-                        'samples_collected': len(data),
-                        # Include enhanced prediction details
-                        'custom_thresholds_used': predictions.get('custom_thresholds_used', False),
-                        'majority_vote_applied': predictions.get('majority_vote_applied', False),
-                        'silence_margin': predictions.get('silence_margin', None),
-                        'silence_confidence_ratio': predictions.get('silence_confidence_ratio', None)
-                    }
-                    
-                    # Save the prediction to database
-                    try:
-                        prediction = Prediction(
-                            model=model,
-                            predicted_word=predictions['predicted_word'],
-                            confidence=predictions['confidence'],
-                            participant=participant,
-                            session_id=f"post_recording_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                        )
-                        prediction.save()
-                        context['prediction_results']['prediction_id'] = prediction.id
-                    except Exception as e:
-                        print(f"Error saving prediction to database: {e}")
-            
-            except Exception as e:
-                traceback.print_exc()
-                context['recording_status'] = "error"
-                context['prediction_results'] = {
-                    'error': f"An error occurred: {str(e)}"
-                }
-    
-    return render(request, 'pi_main/prediction.html', context)
-
 def job_detail(request, job_id):
     """View details of a specific training job."""
     job = get_object_or_404(TrainingJob, id=job_id)
@@ -610,6 +267,74 @@ def job_detail(request, job_id):
     
     return render(request, 'pi_main/training_detail.html', {'job': job})
 
+def train_model_background(job_id):
+    """Background process to train the model."""
+    job = TrainingJob.objects.get(id=job_id)
+    job.status = 'training'
+    job.save()
+    
+    try:
+        # Load dataset
+        dataset_path = job.dataset_path
+        if not os.path.isabs(dataset_path):
+            dataset_path = os.path.join(settings.TRIAL_DIR, dataset_path)
+        
+        # Create trainer with parameters
+        trainer = ModelTrainer(
+            dataset_path=dataset_path,
+            model_name=job.model_name,
+            word_list=job.word_list.split(',') if job.word_list else None,
+            epochs=job.epochs,
+            batch_size=job.batch_size,
+            learning_rate=job.learning_rate,
+            validation_split=job.validation_split,
+            hidden_units=job.hidden_units,
+            dropout_rate=job.dropout_rate,
+            recurrent_dropout=job.recurrent_dropout,
+            apply_filtering=job.apply_filtering,
+            use_mne=job.use_mne
+        )
+        
+        # Train model
+        models, history = trainer.train()
+        
+        # Get accuracies from history
+        speech_model, word_model = models
+        speech_history = history['speech_detection']
+        word_history = history['word_classification']
+        
+        speech_acc = speech_history['val_accuracies'][-1]
+        word_acc = word_history['val_accuracies'][-1]
+        combined_acc = (speech_acc + word_acc) / 2
+        
+        # Get loss from word model (for backward compatibility)
+        loss = word_history['val_losses'][-1]
+        
+        # Create model record
+        eeg_model = EEGModel(
+            name=job.model_name,
+            description=job.description,
+            dataset_path=job.dataset_path,
+            model_path=os.path.join('trained_models', job.model_name),
+            accuracy=combined_acc,
+            loss=loss,
+            speech_accuracy=speech_acc,
+            word_accuracy=word_acc,
+            training_job=job
+        )
+        eeg_model.save()
+        
+        # Update job status
+        job.status = 'completed'
+        job.save()
+        
+    except Exception as e:
+        # Log error and update job status
+        job.status = 'failed'
+        job.error_message = str(e)
+        job.save()
+        traceback.print_exc()
+
 def model_list(request):
     """View all trained models."""
     models = EEGModel.objects.all().order_by('-created_at')
@@ -620,8 +345,35 @@ def model_detail(request, model_id):
     model = get_object_or_404(EEGModel, id=model_id)
     job = model.training_job
     
-    return render(request, 'pi_main/model_detail.html', {'model': model, 'job': job})
+    context = {
+        'model': model, 
+        'job': job
+    }
+    
+    return render(request, 'pi_main/model_detail.html', context)
 
+def live_prediction(request):
+    """Interface for live EEG prediction."""
+    # Get available models
+    models = EEGModel.objects.filter(status='active').order_by('-created_at')
+    
+    if not models:
+        # If no models are available, redirect to the no models page
+        return render(request, 'pi_main/no_models.html')
+    
+    # Get participant information
+    participants = get_existing_participants()
+    
+    # Create prediction form
+    form = PredictionForm(participants=participants)
+    
+    context = {
+        'models': models,
+        'participants': participants,
+        'form': form
+    }
+    
+    return render(request, 'pi_main/live_prediction.html', context)
 
 def start_training_api(request):
     """API endpoint to start model training."""
@@ -644,6 +396,8 @@ def start_training_api(request):
             hidden_units=data.get('hidden_units', 64),
             dropout_rate=data.get('dropout_rate', 0.2),
             recurrent_dropout=data.get('recurrent_dropout', 0.2),
+            apply_filtering=data.get('apply_filtering', True),
+            use_mne=data.get('use_mne', True),
             user=request.user.username if request.user.is_authenticated else 'anonymous',
             status='queued'
         )
@@ -654,7 +408,7 @@ def start_training_api(request):
         
         return JsonResponse({
             'status': 'success',
-            'job_id': job.id,
+            'job_id': str(job.id),
             'message': 'Training job started successfully'
         })
         
@@ -675,7 +429,7 @@ def training_status_api(request):
         job = TrainingJob.objects.get(id=job_id)
         
         response = {
-            'id': job.id,
+            'id': str(job.id),
             'status': job.status,
             'progress': job.progress,
             'model_name': job.model_name,
@@ -692,9 +446,11 @@ def training_status_api(request):
             try:
                 model = EEGModel.objects.get(training_job=job)
                 response['model'] = {
-                    'id': model.id,
+                    'id': str(model.id),
                     'accuracy': model.accuracy,
-                    'loss': model.loss
+                    'loss': model.loss,
+                    'speech_accuracy': model.speech_accuracy,
+                    'word_accuracy': model.word_accuracy
                 }
             except EEGModel.DoesNotExist:
                 pass
@@ -707,7 +463,7 @@ def training_status_api(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 def predict_eeg_api(request):
-    """API endpoint for real-time EEG prediction."""
+    """API endpoint for EEG prediction using uploaded data."""
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST method is allowed'}, status=405)
     
@@ -737,20 +493,33 @@ def predict_eeg_api(request):
         if eeg_data is None or len(eeg_data) == 0:
             return JsonResponse({'error': 'No EEG data provided'}, status=400)
         
-        # Load model and predict
-        predictor = RNNPredictor(model_path=model.model_path)
+        # Determine whether to use MNE
+        use_mne = request.POST.get('use_mne', 'true').lower() == 'true'
+        
+        # Load model predictor
+        predictor = ModelPredictor(model_path=model.model_path)
+        
+        # Make prediction
         predictions = predictor.predict(eeg_data)
+        
+        # Extract prediction results
+        predicted_word = predictions.get('predicted_word', 'unknown')
+        confidence = predictions.get('confidence', 0.0)
+        is_speech = predictions.get('is_speech', False)
+        speech_confidence = predictions.get('speech_confidence', 0.0)
         
         # Create prediction record
         target_word = request.POST.get('target_word', '')
         prediction = Prediction(
             model=model,
-            predicted_word=predictions['predicted_word'],
-            confidence=predictions['confidence'],
+            predicted_word=predicted_word,
+            confidence=confidence,
             actual_word=target_word if target_word else None,
-            is_correct=predictions['predicted_word'].lower() == target_word.lower() if target_word else None,
+            is_correct=predicted_word.lower() == target_word.lower() if target_word else None,
             participant=request.POST.get('participant', ''),
-            session_id=request.POST.get('session_id', '')
+            session_id=request.POST.get('session_id', ''),
+            is_speech=is_speech,
+            speech_confidence=speech_confidence
         )
         prediction.save()
         
@@ -759,20 +528,19 @@ def predict_eeg_api(request):
             'status': 'success',
             'predictions': predictions,
             'model_name': model.name,
-            'prediction_id': prediction.id
+            'prediction_id': str(prediction.id)
         })
         
     except Exception as e:
+        traceback.print_exc()
         return JsonResponse({
             'status': 'error',
             'message': str(e)
         }, status=500)
 
-
 def training_history_api(request):
     """API endpoint to get training history for a model."""
     model_id = request.GET.get('model_id')
-    hierarchical = request.GET.get('hierarchical', 'false').lower() == 'true'
     
     if not model_id:
         return JsonResponse({'error': 'No model ID provided'}, status=400)
@@ -780,81 +548,27 @@ def training_history_api(request):
     try:
         model = EEGModel.objects.get(id=model_id)
         
-        # Get model directory path
-        model_dir = os.path.join(settings.BASE_DIR, model.model_path)
+        # Get training history file path
+        history_path = os.path.join(settings.BASE_DIR, model.model_path, 'training_history.json')
         
-        # Check if this is a hierarchical model
-        hierarchical_model_path = os.path.join(model_dir, 'hierarchical_model.json')
-        is_hierarchical = os.path.exists(hierarchical_model_path)
-        
-        # Also check preprocessing info for hierarchical flag
-        preprocessing_path = os.path.join(model_dir, 'preprocessing_info.json')
-        if os.path.exists(preprocessing_path):
-            try:
-                with open(preprocessing_path, 'r') as f:
-                    preprocessing_info = json.load(f)
-                    if preprocessing_info.get('hierarchical_model', False):
-                        is_hierarchical = True
-            except:
-                pass
-        
-        if is_hierarchical:
-            # It's a hierarchical model, handle differently
-            combined_history_path = os.path.join(model_dir, 'combined_history.json')
-            
-            if os.path.exists(combined_history_path):
-                with open(combined_history_path, 'r') as f:
-                    combined_history = json.load(f)
-                
-                if hierarchical:
-                    # Return the full combined history
-                    return JsonResponse({
-                        'status': 'success',
-                        'model_id': model_id,
-                        'hierarchical_model': True,
-                        'combined_history': combined_history
-                    })
-                else:
-                    # Return just one of the histories (binary by default) for the chart
-                    return JsonResponse({
-                        'status': 'success',
-                        'model_id': model_id,
-                        'hierarchical_model': True,
-                        'history': combined_history.get('binary', {})
-                    })
-            else:
-                # Try individual model histories
-                binary_history_path = os.path.join(model_dir, 'binary_model', 'training_history.json')
-                
-                if os.path.exists(binary_history_path):
-                    with open(binary_history_path, 'r') as f:
-                        history = json.load(f)
-                    
-                    return JsonResponse({
-                        'status': 'success',
-                        'model_id': model_id,
-                        'hierarchical_model': True,
-                        'history': history
-                    })
-                else:
-                    return JsonResponse({'error': 'Training history not found'}, status=404)
-        else:
-            # Regular model history
-            history_path = os.path.join(model_dir, 'training_history.json')
-            
-            if not os.path.exists(history_path):
-                return JsonResponse({'error': 'Training history not found'}, status=404)
-            
-            # Read training history
+        if os.path.exists(history_path):
+            # Read full training history
             with open(history_path, 'r') as f:
                 history = json.load(f)
-            
-            return JsonResponse({
-                'status': 'success',
-                'model_id': model_id,
-                'hierarchical_model': False,
-                'history': history
-            })
+        else:
+            # Check for backward-compatible history
+            bc_history_path = os.path.join(settings.BASE_DIR, model.model_path, 'backward_compatible_history.json')
+            if os.path.exists(bc_history_path):
+                with open(bc_history_path, 'r') as f:
+                    history = json.load(f)
+            else:
+                return JsonResponse({'error': 'Training history not found'}, status=404)
+        
+        return JsonResponse({
+            'status': 'success',
+            'model_id': model_id,
+            'history': history
+        })
         
     except EEGModel.DoesNotExist:
         return JsonResponse({'error': 'Model not found'}, status=404)
@@ -902,11 +616,7 @@ def dataset_words_api(request):
     try:
         # Get full path if relative
         if not os.path.isabs(dataset):
-            # Check if the dataset is in a subdirectory (processed_*/file.csv format)
-            if '/' in dataset:
-                dataset_path = os.path.join(settings.TRIAL_DIR, dataset)
-            else:
-                dataset_path = os.path.join(settings.TRIAL_DIR, dataset)
+            dataset_path = os.path.join(settings.TRIAL_DIR, dataset)
         else:
             dataset_path = dataset
             
@@ -916,16 +626,8 @@ def dataset_words_api(request):
         # Find word event columns
         word_event_columns = [col for col in df.columns if col.endswith('_event')]
         
-        # If no event columns, check for 'word' column (present in combined datasets)
-        if not word_event_columns and 'word' in df.columns:
-            # Get unique words from the 'word' column
-            words = df['word'].unique().tolist()
-        else:
-            # Extract words from event column names
-            words = [col.replace('_event', '') for col in word_event_columns]
-        
-        # Sort words alphabetically
-        words.sort()
+        # Extract words from column names
+        words = [col.replace('_event', '') for col in word_event_columns]
         
         return JsonResponse({
             'status': 'success',
@@ -1006,233 +708,6 @@ def delete_job(request, job_id):
         # If an error occurs, redirect to dashboard with error message
         print(f"Error deleting job: {e}")
         return redirect('pi_main:model_dashboard')
-
-
-def model_evaluate(request, model_id):
-    """View for evaluating a model on a test dataset with robust error handling."""
-    model = get_object_or_404(EEGModel, id=model_id)
-    
-    # Get available test datasets
-    test_datasets = get_test_datasets()
-    
-    # Check if we're processing an evaluation
-    if request.method == 'POST':
-        test_dataset = request.POST.get('test_dataset')
-        # Get apply_filters parameter
-        apply_filters = request.POST.get('apply_filters') == 'on'
-        
-        if not test_dataset:
-            # If no dataset selected, redirect with error
-            messages.error(request, "Please select a test dataset")
-            return redirect('pi_main:model_evaluate', model_id=model_id)
-        
-        try:
-            # Load the model with robust error handling
-            print(f"Loading model from {model.model_path}")
-            try:
-                predictor = RNNPredictor(model_path=model.model_path)
-                print("Model loaded successfully")
-            except Exception as e:
-                print(f"Error loading model: {e}")
-                messages.error(request, f"Error loading model: {str(e)}")
-                return redirect('pi_main:model_evaluate', model_id=model_id)
-            
-            # Evaluate the model with apply_filters parameter
-            print(f"Evaluating model on {test_dataset}")
-            try:
-                results = predictor.evaluate(test_dataset, apply_filters=apply_filters)
-                print("Evaluation completed successfully")
-            except Exception as e:
-                print(f"Error during evaluation: {e}")
-                traceback.print_exc()
-                messages.error(request, f"Error during evaluation: {str(e)}")
-                return redirect('pi_main:model_evaluate', model_id=model_id)
-            
-            if not results.get('success', False):
-                error_message = results.get('error', 'Unknown error during evaluation')
-                messages.error(request, f"Evaluation failed: {error_message}")
-                return redirect('pi_main:model_evaluate', model_id=model_id)
-            
-            # Save the evaluation results to the model
-            try:
-                evaluation = ModelEvaluation(
-                    model=model,
-                    dataset_path=test_dataset,
-                    accuracy=results['metrics']['accuracy'],
-                    eval_data=json.dumps(results['metrics'])  # This should now work with the convert_numpy_types function
-                )
-                evaluation.save()
-                print(f"Evaluation saved with ID: {evaluation.id}")
-            except Exception as e:
-                print(f"Error saving evaluation: {e}")
-                traceback.print_exc()
-                messages.error(request, f"Error saving evaluation: {str(e)}")
-                return redirect('pi_main:model_evaluate', model_id=model_id)
-            
-            # Redirect to the evaluation detail view
-            return redirect('pi_main:evaluation_detail', evaluation_id=evaluation.id)
-            
-        except Exception as e:
-            traceback.print_exc()
-            messages.error(request, f"Error during evaluation process: {str(e)}")
-            return redirect('pi_main:model_evaluate', model_id=model_id)
-    
-    # Get previous evaluations for this model
-    evaluations = ModelEvaluation.objects.filter(model=model).order_by('-created_at')
-    
-    context = {
-        'model': model,
-        'test_datasets': test_datasets,
-        'evaluations': evaluations
-    }
-    
-    return render(request, 'pi_main/model_evaluate.html', context)
-
-
-def evaluation_detail(request, evaluation_id):
-    """View details of a specific model evaluation."""
-    evaluation = get_object_or_404(ModelEvaluation, id=evaluation_id)
-    
-    try:
-        # Parse evaluation data
-        eval_data = json.loads(evaluation.eval_data) if evaluation.eval_data else {}
-        
-        # Create charts dict (will be populated either from disk or re-generated)
-        charts = {}
-        
-        # Check if we have charts in the eval_data
-        if 'charts' in eval_data:
-            charts = eval_data['charts']
-        else:
-            # Try to find chart files on disk (legacy support)
-            try:
-                eval_dir = os.path.join(settings.BASE_DIR, evaluation.model.model_path, 'evaluation')
-                
-                if os.path.exists(eval_dir):
-                    # Look for evaluation files matching this evaluation
-                    chart_files = {}
-                    for filename in os.listdir(eval_dir):
-                        if filename.startswith('evaluation_') and filename.endswith('.json'):
-                            try:
-                                with open(os.path.join(eval_dir, filename), 'r') as f:
-                                    file_data = json.load(f)
-                                
-                                # Check if this is the right evaluation
-                                if file_data.get('dataset_path') == evaluation.dataset_path:
-                                    # Get PNG files with matching timestamp
-                                    timestamp = filename.replace('evaluation_', '').replace('.json', '')
-                                    
-                                    for img_file in os.listdir(eval_dir):
-                                        if img_file.startswith(f'chart_{timestamp}_'):
-                                            chart_type = img_file.replace(f'chart_{timestamp}_', '').replace('.png', '')
-                                            chart_files[chart_type] = os.path.join(eval_dir, img_file)
-                            except:
-                                continue
-                    
-                    # If we found chart files, use them
-                    for chart_type, file_path in chart_files.items():
-                        with open(file_path, 'rb') as f:
-                            chart_data = base64.b64encode(f.read()).decode('utf-8')
-                            charts[chart_type] = chart_data
-            except Exception as e:
-                print(f"Error looking for chart files: {e}")
-            
-            # If no chart files were found, we'll regenerate them
-            if not charts:
-                try:
-                    # Load the model and regenerate the charts
-                    predictor = RNNPredictor(model_path=evaluation.model.model_path)
-                    results = predictor.evaluate(evaluation.dataset_path)
-                    
-                    if results.get('success', False):
-                        charts = results.get('charts', {})
-                        
-                        # Store charts in eval_data for future use
-                        if charts:
-                            eval_data['charts'] = charts
-                            evaluation.eval_data = json.dumps(eval_data)
-                            evaluation.save()
-                except Exception as e:
-                    print(f"Error regenerating charts: {e}")
-    
-    except Exception as e:
-        traceback.print_exc()
-        messages.error(request, f"Error loading evaluation details: {str(e)}")
-        eval_data = {}
-        charts = {}
-    
-    # Prepare data for template - ensure charts are available
-    context = {
-        'evaluation': evaluation,
-        'charts': charts,
-        'metrics': eval_data,
-        'model': evaluation.model
-    }
-    
-    return render(request, 'pi_main/evaluation_detail.html', context)
-
-
-def delete_evaluation(request, evaluation_id):
-    """Delete a model evaluation."""
-    if request.method != 'POST':
-        return redirect('pi_main:model_list')
-    
-    try:
-        evaluation = get_object_or_404(ModelEvaluation, id=evaluation_id)
-        model_id = evaluation.model.id
-        evaluation.delete()
-        
-        return redirect('pi_main:model_evaluate', model_id=model_id)
-        
-    except Exception as e:
-        print(f"Error deleting evaluation: {e}")
-        return redirect('pi_main:model_list')
-
-def get_test_datasets():
-    """Get list of available test datasets."""
-    test_datasets = []
-    base_dir = settings.TRIAL_DIR
-    
-    if os.path.exists(base_dir):
-        # Look for test datasets
-        for file in os.listdir(base_dir):
-            if file.endswith('.csv') and ('test' in file.lower() or 'eval' in file.lower()):
-                file_path = os.path.join(base_dir, file)
-                file_size = os.path.getsize(file_path) / (1024 * 1024)  # Size in MB
-                
-                # Get modification date
-                mod_time = os.path.getmtime(file_path)
-                mod_date = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d')
-                
-                test_datasets.append({
-                    'name': file,
-                    'path': file,
-                    'size': f'{file_size:.2f} MB',
-                    'date': mod_date
-                })
-        
-        # Also look in subfolders
-        for item in os.listdir(base_dir):
-            sub_dir = os.path.join(base_dir, item)
-            if os.path.isdir(sub_dir):
-                for file in os.listdir(sub_dir):
-                    if file.endswith('.csv') and ('test' in file.lower() or 'eval' in file.lower()):
-                        file_path = os.path.join(sub_dir, file)
-                        rel_path = os.path.join(item, file)
-                        file_size = os.path.getsize(file_path) / (1024 * 1024)  # Size in MB
-                        
-                        # Get modification date
-                        mod_time = os.path.getmtime(file_path)
-                        mod_date = datetime.fromtimestamp(mod_time).strftime('%Y-%m-%d')
-                        
-                        test_datasets.append({
-                            'name': f'{item}/{file}',
-                            'path': rel_path,
-                            'size': f'{file_size:.2f} MB',
-                            'date': mod_date
-                        })
-    
-    return sorted(test_datasets, key=lambda x: x['date'], reverse=True)
 
 # Helper functions
 def get_available_datasets():

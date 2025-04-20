@@ -1,1 +1,0 @@
-{"binary_model_path": "binary_model\\model.h5", "word_model_path": "word_model\\model.h5", "binary_accuracy": 0.7487562298774719, "word_accuracy": 0.7189054489135742, "combined_accuracy": 0.5382849335668993, "hierarchical_model": true}

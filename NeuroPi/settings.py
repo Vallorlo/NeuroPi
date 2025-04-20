@@ -40,10 +40,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'trials',
     'plot.apps.PlotConfig',
-    'processor',
-    'cleaner', 
+    'preprocessor', 
     'pi_main',
-    'eeg_transformer.apps.EegTransformerConfig',  
 ]
 
 MIDDLEWARE = [

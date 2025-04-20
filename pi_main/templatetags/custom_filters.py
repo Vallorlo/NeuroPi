@@ -1,6 +1,5 @@
 from django import template
-import os
-from itertools import zip_longest
+
 register = template.Library()
 
 @register.filter
@@ -18,33 +17,9 @@ def mul(value, arg):
     
 
 @register.filter
-def basename(value):
-    """Get the basename of a path."""
-    return os.path.basename(value)
-
-@register.filter
 def sub(value, arg):
     """Subtract the argument from the value"""
     try:
         return float(value) - float(arg)
     except (ValueError, TypeError):
         return None
-    
-
-@register.filter
-def get_item(dictionary, key):
-    """Get an item from a dictionary with the given key."""
-    return dictionary.get(key)
-
-
-
-@register.filter
-def zip(value, arg):
-    """Zip two lists together, like Python's zip function."""
-    return zip_longest(value, arg) if value and arg else []
-
-
-@register.filter
-def zip_lists(value, arg):
-    """Zip two lists together, like Python's zip function."""
-    return [(x, y) for x, y in zip(value or [], arg or [])]

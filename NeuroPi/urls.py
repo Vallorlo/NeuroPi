@@ -25,9 +25,6 @@ urlpatterns = [
     path('about/', views.about ), 
     path('trials/', include('trials.urls')),
     path('plot/', include('plot.urls')),
-    path('processor/', include('processor.urls')), 
-    path('cleaner/', include('cleaner.urls')),
+    path('preprocessor/', include('preprocessor.urls')), 
     path('pi_main/', include('pi_main.urls', namespace='pi_main')),  
-    path('eeg_transformer/', include('eeg_transformer.urls', namespace='eeg_transformer')),  
-
 ]

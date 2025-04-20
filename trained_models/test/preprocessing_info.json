@@ -1,1 +1,0 @@
-{"eeg_columns": ["F3", "FC5", "AF3", "F7", "T7", "P7", "O1", "O2", "P8", "T8", "F8", "AF4", "FC6", "F4"], "band_columns": [], "sequence_length": 40, "binary_classes": ["sil", "speech"], "word_classes": ["goodbye", "hello", "please", "sorry", "thankyou"], "filter_config": {}, "has_band_features": false, "silence_balance_ratio": 0.5, "hierarchical_model": true}

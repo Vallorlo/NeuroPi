@@ -62,16 +62,15 @@
                     </div>
                 </div>
             </div>
-            <!-- Processing card -->
+            <!-- Preprocessing card -->
             <div class="col-12 col-sm-6 col-md-4 col-lg-3">
                 <div class="card h-100 shadow-lg">
                     <div class="card-body text-center p-4">
                         <i class="bi bi-cpu text-danger" style="font-size: 3rem;"></i>
-                        <h2 class="card-title mt-3">Processing</h2>
-                        <p class="card-text">Process raw EEG data with advanced filtering, artifact removal, and feature extraction to prepare for analysis.</p>
+                        <h2 class="card-title mt-3">Preprocessing</h2>
+                        <p class="card-text">Process raw EEG data by defining classes and combine all trials into a single combined dataset.</p>
                         <div class="mt-2">
-                            <a href="/processor" class="btn btn-outline-danger me-2">Process</a>
-                            <a href="/cleaner" class="btn btn-outline-danger">Clean</a>
+                            <a href="/preprocessor" class="btn btn-outline-danger me-2">Process</a>
                         </div>
                     </div>
                 </div>
@@ -96,7 +95,6 @@
                         <p class="card-text">Train and deploy RNN models to recognize speech patterns from EEG data and make real-time predictions.</p>
                         <div class="mt-2">
                             <a href="{% url 'pi_main:model_dashboard' %}" class="btn btn-outline-warning me-2">Models</a>
-                            <a href="{% url 'pi_main:prediction' %}" class="btn btn-outline-warning">Predict</a>
                         </div>
                     </div>
                 </div>

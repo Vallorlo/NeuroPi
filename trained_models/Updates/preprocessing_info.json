@@ -1,1 +1,0 @@
-{"eeg_columns": ["F3", "FC5", "AF3", "F7", "T7", "P7", "O1", "O2", "P8", "T8", "F8", "AF4", "FC6", "F4"], "word_event_columns": ["goodbye_event", "hello_event", "please_event", "sorry_event", "thankyou_event"], "sequence_length": 80, "words": ["goodbye", "hello", "please", "sorry", "thankyou"]}

@@ -16,6 +16,8 @@ from .forms import ModelTrainingForm, PredictionForm
 from .eeg_model import ModelTrainer, ModelPredictor
 from .live_prediction import LiveEEGPredictor
 from django.views.decorators.csrf import csrf_exempt
+from .model_evaluation import ModelEvaluator
+
 
 # Global predictor instance to maintain EEG connection across requests
 _eeg_predictor = LiveEEGPredictor()
@@ -796,3 +798,238 @@ def get_existing_participants():
                 participants.append(participant_name)
     
     return sorted(participants)
+
+
+def validate_model(request, model_id):
+    """View to validate a model with a labeled dataset."""
+    model = get_object_or_404(EEGModel, id=model_id)
+    
+    if request.method == 'POST':
+        # Handle uploaded validation file or use selected file
+        validation_file = request.FILES.get('validation_file')
+        selected_file = request.POST.get('selected_file')
+        
+        if validation_file:
+            # Save uploaded file
+            filename = f"validation_{model.name}_{int(time.time())}.csv"
+            filepath = os.path.join(settings.TRIAL_DIR, filename)
+            with open(filepath, 'wb+') as destination:
+                for chunk in validation_file.chunks():
+                    destination.write(chunk)
+        elif selected_file:
+            filepath = selected_file
+        else:
+            return JsonResponse({'error': 'No validation file provided'}, status=400)
+        
+        # Get validation parameters
+        apply_filtering = request.POST.get('apply_filtering', 'true').lower() == 'true'
+        use_mne = request.POST.get('use_mne', 'true').lower() == 'true'
+        
+        try:
+            # Initialize evaluator
+            evaluator = ModelEvaluator(model.model_path)
+            
+            # Run validation
+            results = evaluator.validate(
+                filepath,
+                apply_filtering=apply_filtering,
+                use_mne=use_mne,
+                verbose=True
+            )
+            
+            # Store validation results in session
+            request.session['validation_results'] = {
+                'model_id': str(model.id),
+                'accuracy': float(results['accuracy']),
+                'precision': float(results['precision']),
+                'recall': float(results['recall']),
+                'f1': float(results['f1']),
+                'word_accuracies': {k: float(v) for k, v in results['word_accuracies'].items()}
+            }
+            
+            return redirect('pi_main:validation_results', model_id=model.id)
+            
+        except Exception as e:
+            return render(request, 'pi_main/validate_model.html', {
+                'model': model,
+                'error': str(e),
+                'available_files': get_available_datasets()
+            })
+    
+    # GET request - show validation form
+    return render(request, 'pi_main/validate_model.html', {
+        'model': model,
+        'available_files': get_available_datasets()
+    })
+
+def validation_results(request, model_id):
+    """View to display validation results."""
+    model = get_object_or_404(EEGModel, id=model_id)
+    
+    # Get validation results from session
+    results = request.session.get('validation_results', None)
+    
+    if not results or results.get('model_id') != str(model_id):
+        # No validation results in session
+        return redirect('pi_main:validate_model', model_id=model.id)
+    
+    # Check if confusion matrix image exists
+    confusion_matrix_path = os.path.join(settings.BASE_DIR, model.model_path, 'confusion_matrix.png')
+    has_confusion_matrix = os.path.exists(confusion_matrix_path)
+    
+    # Check if detailed results exist
+    detailed_results_path = os.path.join(settings.BASE_DIR, model.model_path, 'validation_results.csv')
+    has_detailed_results = os.path.exists(detailed_results_path)
+    
+    # Load detailed results if available
+    detailed_results = None
+    if has_detailed_results:
+        try:
+            detailed_results = pd.read_csv(detailed_results_path)
+            # Count occurrences where prediction matches ground truth
+            detailed_results['correct'] = detailed_results['predicted_label'] == detailed_results['true_label']
+            
+            # Group by true label and calculate accuracy
+            accuracy_by_word = detailed_results.groupby('true_label')['correct'].mean()
+            
+            # Convert to list of dicts for template
+            accuracy_by_word = [
+                {'word': word, 'accuracy': float(acc)} 
+                for word, acc in accuracy_by_word.items()
+            ]
+            
+            # Sort by accuracy (descending)
+            accuracy_by_word.sort(key=lambda x: x['accuracy'], reverse=True)
+        except Exception as e:
+            accuracy_by_word = []
+            print(f"Error loading detailed results: {e}")
+    else:
+        accuracy_by_word = [
+            {'word': word, 'accuracy': acc}
+            for word, acc in results['word_accuracies'].items()
+        ]
+        accuracy_by_word.sort(key=lambda x: x['accuracy'], reverse=True)
+    
+    context = {
+        'model': model,
+        'results': results,
+        'has_confusion_matrix': has_confusion_matrix,
+        'confusion_matrix_url': f'/media/{model.model_path}/confusion_matrix.png' if has_confusion_matrix else None,
+        'has_detailed_results': has_detailed_results,
+        'accuracy_by_word': accuracy_by_word
+    }
+    
+    return render(request, 'pi_main/validation_results.html', context)
+
+def test_model(request, model_id):
+    """View to test a model with an unlabeled dataset."""
+    model = get_object_or_404(EEGModel, id=model_id)
+    
+    if request.method == 'POST':
+        # Handle uploaded test file or use selected file
+        test_file = request.FILES.get('test_file')
+        selected_file = request.POST.get('selected_file')
+        
+        if test_file:
+            # Save uploaded file
+            filename = f"test_{model.name}_{int(time.time())}.csv"
+            filepath = os.path.join(settings.TRIAL_DIR, filename)
+            with open(filepath, 'wb+') as destination:
+                for chunk in test_file.chunks():
+                    destination.write(chunk)
+        elif selected_file:
+            filepath = selected_file
+        else:
+            return JsonResponse({'error': 'No test file provided'}, status=400)
+        
+        # Get test parameters
+        apply_filtering = request.POST.get('apply_filtering', 'true').lower() == 'true'
+        use_mne = request.POST.get('use_mne', 'true').lower() == 'true'
+        
+        try:
+            # Initialize evaluator
+            evaluator = ModelEvaluator(model.model_path)
+            
+            # Run test
+            output_path = evaluator.test(
+                filepath,
+                apply_filtering=apply_filtering,
+                use_mne=use_mne,
+                verbose=True
+            )
+            
+            # Store test results path in session
+            request.session['test_results_path'] = output_path
+            
+            return redirect('pi_main:test_results', model_id=model.id)
+            
+        except Exception as e:
+            return render(request, 'pi_main/test_model.html', {
+                'model': model,
+                'error': str(e),
+                'available_files': get_available_datasets()
+            })
+    
+    # GET request - show test form
+    return render(request, 'pi_main/test_model.html', {
+        'model': model,
+        'available_files': get_available_datasets()
+    })
+
+def test_results(request, model_id):
+    """View to display test results."""
+    model = get_object_or_404(EEGModel, id=model_id)
+    
+    # Get test results path from session
+    results_path = request.session.get('test_results_path', None)
+    
+    if not results_path or not os.path.exists(results_path):
+        # No test results available
+        return redirect('pi_main:test_model', model_id=model.id)
+    
+    try:
+        # Load and process results
+        results_df = pd.read_csv(results_path)
+        
+        # Get word prediction counts
+        word_counts = results_df['predicted_word'].value_counts()
+        word_percentages = (word_counts / len(results_df) * 100).round(1)
+        
+        # Combine into a list of dicts
+        word_stats = [
+            {'word': word, 'count': count, 'percentage': word_percentages[word]}
+            for word, count in word_counts.items()
+        ]
+        
+        # Sort by count (descending)
+        word_stats.sort(key=lambda x: x['count'], reverse=True)
+        
+        # Calculate overall speech statistics
+        speech_count = results_df['is_speech'].sum()
+        speech_percentage = (speech_count / len(results_df) * 100).round(1)
+        
+        # Get average confidence
+        avg_confidence = results_df['confidence'].mean().round(3)
+        avg_speech_confidence = results_df['speech_confidence'].mean().round(3)
+        
+        # Add download link
+        download_url = f'/media/{os.path.relpath(results_path, settings.BASE_DIR)}'
+        
+        context = {
+            'model': model,
+            'word_stats': word_stats,
+            'speech_count': int(speech_count),
+            'speech_percentage': speech_percentage,
+            'avg_confidence': avg_confidence,
+            'avg_speech_confidence': avg_speech_confidence,
+            'total_sequences': len(results_df),
+            'download_url': download_url
+        }
+        
+        return render(request, 'pi_main/test_results.html', context)
+        
+    except Exception as e:
+        return render(request, 'pi_main/test_results.html', {
+            'model': model,
+            'error': str(e)
+        })

@@ -16,6 +16,10 @@ import json
 import pickle
 from django.conf import settings
 
+# Define standard EPOC+ EEG channels - use this consistently throughout the code
+# These are the actual 14 EEG signal channels without COUNTER or metadata
+EEG_CHANNELS = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+
 # Try importing MNE for advanced artifact removal
 try:
     import mne
@@ -30,9 +34,8 @@ torch.manual_seed(42)
 np.random.seed(42)
 
 # Define constants
-EEG_CHANNELS = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
-SEQUENCE_LENGTH = 50  # We'll use sequences of 50 time steps
-BATCH_SIZE = 32
+SEQUENCE_LENGTH = 80  # We'll use sequences of 50 time steps
+BATCH_SIZE = 256
 LEARNING_RATE = 0.001
 NUM_EPOCHS = 50
 SAMPLING_RATE = 128  # EPOC+ sampling rate is 128 Hz
@@ -168,6 +171,7 @@ def preprocess_with_mne(eeg_data, verbose=False):
 
 def apply_basic_filtering(eeg_data):
     """Apply basic filtering to raw EEG data (fallback if MNE fails)"""
+    
     # Make sure we're working with numerical data, not strings
     try:
         filtered_data = eeg_data.astype(float)
@@ -181,6 +185,7 @@ def apply_basic_filtering(eeg_data):
                 except:
                     filtered_data[i, j] = 0.0  # Default value if conversion fails
     
+    # Continue with filtering
     for channel in range(filtered_data.shape[1]):
         # Bandpass filter (0.5-45 Hz)
         b, a = signal.butter(4, [0.5, 45], btype='bandpass', fs=SAMPLING_RATE)
@@ -194,6 +199,7 @@ def apply_basic_filtering(eeg_data):
     filtered_data = filtered_data - np.mean(filtered_data, axis=0)
     
     return filtered_data
+
 
 def create_sequences(X, y, seq_length):
     """Create sequences from time series data"""
@@ -280,9 +286,6 @@ class WordClassificationModel(nn.Module):
         self.conv3 = nn.Conv1d(128, 256, kernel_size=3, padding=1)
         self.dropout1 = nn.Dropout(0.3)
         self.maxpool = nn.MaxPool1d(2)
-        
-        # Calculate sequence length after pooling (divided by 4 due to two pooling layers)
-        seq_length_after_pooling = sequence_length // 4
         
         # LSTM layers
         self.lstm = nn.LSTM(256, 256, num_layers=2, batch_first=True, dropout=0.3)
@@ -481,25 +484,26 @@ class EEGSpeechPipeline:
             # Speech detection
             speech_output = self.speech_model(X)
             speech_prob = torch.softmax(speech_output, dim=1)
-            is_speech = speech_prob[0, 1].item() > 0.5
+            is_speech = speech_prob[0, 1].item() > 0.35
+            speech_confidence = speech_prob[0, 1].item()
             
             if is_speech:
-                # Word classification
+                # Word classification - only run on speech samples
                 word_output = self.word_model(X)
                 word_prob = torch.softmax(word_output, dim=1)
                 _, predicted_word = torch.max(word_prob, 1)
                 
                 return {
                     "is_speech": True,
-                    "speech_confidence": speech_prob[0, 1].item(),
+                    "speech_confidence": speech_confidence,
                     "word": self.word_classes[predicted_word.item()],
                     "confidence": word_prob[0, predicted_word.item()].item()
                 }
             else:
                 return {
                     "is_speech": False,
-                    "speech_confidence": speech_prob[0, 0].item(),
-                    "word": "silence",
+                    "speech_confidence": speech_confidence,
+                    "word": "silence",  # Word is always silence if speech model says no speech
                     "confidence": speech_prob[0, 0].item()
                 }
     
@@ -531,7 +535,9 @@ class EEGSpeechPipeline:
         batch_size = 32
         
         # Overall predictions
-        all_word_probs = []
+        speech_segments = []
+        speech_probabilities = []
+        word_predictions = []
         
         # Process in batches
         with torch.no_grad():
@@ -543,57 +549,109 @@ class EEGSpeechPipeline:
                 speech_probs = torch.softmax(speech_outputs, dim=1)
                 is_speech = speech_probs[:, 1] > 0.5
                 
-                # Word classification for speech segments
-                word_outputs = self.word_model(batch)
-                word_probs = torch.softmax(word_outputs, dim=1)
+                # Store speech detection results
+                speech_segments.extend(is_speech.cpu().numpy())
+                speech_probabilities.extend(speech_probs[:, 1].cpu().numpy())
                 
-                # Store word probabilities, weighted by speech probability
+                # Word classification only for speech segments
                 for j in range(batch.size(0)):
                     if is_speech[j]:
-                        # For speech segments, use word classification probs
-                        all_word_probs.append(word_probs[j].cpu().numpy())
+                        # Only run word classifier on speech segments
+                        word_output = self.word_model(batch[j:j+1])
+                        word_probs = torch.softmax(word_output, dim=1)
+                        _, predicted_class = torch.max(word_probs, 1)
+                        
+                        word_predictions.append({
+                            "word": self.word_classes[predicted_class.item()],
+                            "confidence": word_probs[0, predicted_class.item()].item(),
+                            "probs": word_probs[0].cpu().numpy()
+                        })
                     else:
-                        # For non-speech, create array with high prob for silence
-                        silence_prob = np.zeros(len(self.word_classes))
-                        all_word_probs.append(silence_prob)  # All zeros = silence
+                        # Skip word classification for non-speech segments
+                        word_predictions.append({
+                            "word": "silence",
+                            "confidence": speech_probs[j, 0].item(),
+                            "probs": None
+                        })
         
-        # Average word probabilities across all segments
-        if all_word_probs:
-            avg_word_probs = np.mean(all_word_probs, axis=0)
-            predicted_class = np.argmax(avg_word_probs)
-            confidence = avg_word_probs[predicted_class]
-            predicted_word = self.word_classes[predicted_class]
-            
-            # Calculate speech confidence
-            speech_confidence = 0.7  # Default value
-            
-            # Create predictions array with all words and confidences
-            predictions = [
-                {"word": word, "confidence": float(prob)}
-                for word, prob in zip(self.word_classes, avg_word_probs)
-            ]
-            
-            # Sort predictions by confidence
-            predictions = sorted(predictions, key=lambda x: x["confidence"], reverse=True)
-            
-            result = {
-                "predicted_word": predicted_word,
-                "confidence": float(confidence),
-                "is_speech": speech_confidence > 0.5,
-                "speech_confidence": float(speech_confidence),
-                "predictions": predictions
-            }
-        else:
-            # Fallback if no predictions
-            result = {
+        # Decide on final prediction
+        if not speech_segments:
+            return {
                 "predicted_word": "unknown",
                 "confidence": 0.0,
                 "is_speech": False,
                 "speech_confidence": 0.0,
                 "predictions": []
             }
+        
+        # Calculate speech confidence
+        speech_confidence = np.mean(speech_probabilities)
+        is_speech_overall = speech_confidence > 0.5
+        
+        if is_speech_overall and word_predictions:
+            # Only consider word predictions from speech segments
+            speech_word_predictions = [p for i, p in enumerate(word_predictions) if speech_segments[i]]
             
-        return result
+            if speech_word_predictions:
+                # Count occurrences of each word
+                word_counts = {}
+                word_confs = {}
+                
+                for pred in speech_word_predictions:
+                    word = pred["word"]
+                    conf = pred["confidence"]
+                    
+                    if word not in word_counts:
+                        word_counts[word] = 0
+                        word_confs[word] = []
+                    
+                    word_counts[word] += 1
+                    word_confs[word].append(conf)
+                
+                # Find most common word
+                predicted_word = max(word_counts.items(), key=lambda x: x[1])[0]
+                predicted_confidence = np.mean(word_confs[predicted_word])
+                
+                # Create predictions list for all possible words
+                predictions = []
+                for word in self.word_classes:
+                    if word in word_counts:
+                        predictions.append({
+                            "word": word,
+                            "confidence": float(np.mean(word_confs[word]))
+                        })
+                    else:
+                        predictions.append({
+                            "word": word,
+                            "confidence": 0.0
+                        })
+                
+                # Sort by confidence
+                predictions = sorted(predictions, key=lambda x: x["confidence"], reverse=True)
+                
+                return {
+                    "predicted_word": predicted_word,
+                    "confidence": float(predicted_confidence),
+                    "is_speech": True,
+                    "speech_confidence": float(speech_confidence),
+                    "predictions": predictions
+                }
+            else:
+                return {
+                    "predicted_word": "silence",
+                    "confidence": float(1.0 - speech_confidence),
+                    "is_speech": False,
+                    "speech_confidence": float(speech_confidence),
+                    "predictions": []
+                }
+        else:
+            return {
+                "predicted_word": "silence",
+                "confidence": float(1.0 - speech_confidence),
+                "is_speech": False,
+                "speech_confidence": float(speech_confidence),
+                "predictions": []
+            }
 
 class ModelTrainer:
     """Class for training CNN-LSTM models on EEG data."""
@@ -647,9 +705,14 @@ class ModelTrainer:
         df = pd.read_csv(full_path)
         print(f"Dataset loaded with shape: {df.shape}")
         
-        # Identify EEG channels and event columns
-        self.eeg_columns = [col for col in df.columns if col not in ['Timestamp'] 
-                           and not col.endswith('_event')]
+        # Explicitly define EEG channels - ONLY these should be used as features
+        # This matches the EPOC+ headset's 14 channels
+        self.eeg_columns = EEG_CHANNELS
+        
+        # Verify that all EEG channels exist in the dataframe
+        missing_channels = [ch for ch in self.eeg_columns if ch not in df.columns]
+        if missing_channels:
+            raise ValueError(f"Missing EEG channels in dataset: {missing_channels}")
         
         # Find word event columns
         self.word_event_columns = [col for col in df.columns if col.endswith('_event')]
@@ -665,7 +728,7 @@ class ModelTrainer:
         if not self.word_event_columns:
             raise ValueError("No word event columns found in the dataset")
         
-        # Extract features (EEG channels)
+        # Extract features (EEG channels only)
         X_raw = df[self.eeg_columns].values
         
         # Create binary labels for speech vs. silence classification
@@ -708,10 +771,28 @@ class ModelTrainer:
         for i in range(len(X_raw) - self.sequence_length + 1):
             y_word_seq.append(word_labels[i + self.sequence_length - 1])
         
-        # Encode word labels
+        # Create separate datasets for word classification (speech only)
+        speech_mask = y_speech_seq == 1  # Find samples that are speech
+        X_seq_speech_only = X_seq[speech_mask]
+        word_labels_speech_only = [y_word_seq[i] for i in range(len(y_speech_seq)) if speech_mask[i]]
+        
+        # Remove 'sil' from the word labels (since we're only using speech samples)
+        unique_words = list(set(word_labels_speech_only))
+        if 'sil' in unique_words:
+            unique_words.remove('sil')
+        
+        # Encode word labels for speech-only samples
         self.label_encoder = LabelEncoder()
-        self.label_encoder.fit(list(set(y_word_seq)))
-        y_word_encoded = self.label_encoder.transform(y_word_seq)
+        self.label_encoder.fit(unique_words)  # Only fit on actual words, not silence
+        y_word_encoded_speech_only = []
+        for word in word_labels_speech_only:
+            if word == 'sil':  # This shouldn't happen, but just in case
+                continue
+            y_word_encoded_speech_only.append(self.label_encoder.transform([word])[0])
+        
+        y_word_encoded_speech_only = np.array(y_word_encoded_speech_only)
+        
+        print(f"Created speech-only dataset with {len(X_seq_speech_only)} samples")
         
         # Save preprocessing info
         preprocessing_info = {
@@ -732,8 +813,8 @@ class ModelTrainer:
         with open(os.path.join(self.output_dir, 'scaler.pkl'), 'wb') as f:
             pickle.dump(self.scaler, f)
         
-        print(f"Preprocessing complete. Created {len(X_seq)} sequences.")
-        return X_seq, y_speech_seq, y_word_encoded, preprocessing_info
+        print(f"Preprocessing complete. Created {len(X_seq)} sequences for speech detection and {len(X_seq_speech_only)} sequences for word classification.")
+        return X_seq, y_speech_seq, X_seq_speech_only, y_word_encoded_speech_only, preprocessing_info
     
     def train(self):
         """Train the models on the preprocessed data."""
@@ -741,29 +822,35 @@ class ModelTrainer:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Using device: {device}")
         
-        # Preprocess data
-        X_seq, y_speech_seq, y_word_encoded, preprocessing_info = self.preprocess_data()
+        # First, get the modified datasets from preprocess_data
+        X_seq, y_speech_seq, X_seq_speech_only, y_word_encoded_speech_only, preprocessing_info = self.preprocess_data()
         
-        # Split into train and validation sets for speech detection
+        # Split data for speech detection model
         X_train, X_val, y_speech_train, y_speech_val = train_test_split(
             X_seq, y_speech_seq, test_size=self.validation_split, random_state=42, stratify=y_speech_seq
         )
         
-        # Split into train and validation sets for word classification
-        _, _, y_word_train, y_word_val = train_test_split(
-            X_seq, y_word_encoded, test_size=self.validation_split, random_state=42, stratify=y_speech_seq
-        )
+        # Split data for word classification model (speech-only data)
+        if len(X_seq_speech_only) > 0:
+            X_word_train, X_word_val, y_word_train, y_word_val = train_test_split(
+                X_seq_speech_only, y_word_encoded_speech_only, 
+                test_size=self.validation_split, random_state=42
+            )
+        else:
+            raise ValueError("No speech samples found for word classification model training")
         
         print(f"Training data shape: {X_train.shape}")
         print(f"Speech labels shape: {y_speech_train.shape}")
+        print(f"Word-only training data shape: {X_word_train.shape}")
         print(f"Word labels shape: {y_word_train.shape}")
         
-        # Create datasets
+        # Create datasets for speech detection model
         speech_train_dataset = EEGDataset(X_train, y_speech_train)
         speech_val_dataset = EEGDataset(X_val, y_speech_val)
         
-        word_train_dataset = EEGDataset(X_train, y_word_train)
-        word_val_dataset = EEGDataset(X_val, y_word_val)
+        # Create datasets for word classification model (speech-only)
+        word_train_dataset = EEGDataset(X_word_train, y_word_train)
+        word_val_dataset = EEGDataset(X_word_val, y_word_val)
         
         # Create dataloaders
         speech_train_loader = DataLoader(speech_train_dataset, batch_size=self.batch_size, shuffle=True)
@@ -783,7 +870,7 @@ class ModelTrainer:
         self.word_model = WordClassificationModel(
             input_channels=len(self.eeg_columns),
             sequence_length=self.sequence_length,
-            num_classes=len(self.label_encoder.classes_)
+            num_classes=len(self.label_encoder.classes_)  # This excludes 'sil'
         )
         
         # Define loss functions and optimizers

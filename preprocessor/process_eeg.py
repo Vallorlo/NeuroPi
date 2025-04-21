@@ -670,12 +670,14 @@ def get_files_to_process(root_dir, selected_participants=None, selected_words=No
     
     return files_to_process
 
+
 def process_file_with_segments(eeg_file_path, segments, word, output_dir=None, 
                        reprocess=False, participant=None, stage=None, attempt=None):
     """
     Process a file with manually adjusted segments.
     Used in manual processing mode.
-    Enhanced with centralized file management and reprocessing option.
+    Enhanced with centralized file management, reprocessing option, and
+    support for word-specific labeling for Validation recordings.
     """
     try:
         # Read EEG data
@@ -720,15 +722,46 @@ def process_file_with_segments(eeg_file_path, segments, word, output_dir=None,
         if 'word_label' not in eeg_data.columns:
             eeg_data['word_label'] = 'sil'  # Initialize with silence
         
-        # Create word-specific event column
-        event_column = f"{word}_event"
-        eeg_data[event_column] = False  # Initialize to False
+        # Check if this is a Validation recording
+        is_validation = False
+        if word == "validation":
+            is_validation = True
+        
+        # Create word-specific event column if not exists
+        if f"{word}_event" not in eeg_data.columns:
+            eeg_data[f"{word}_event"] = False
         
         # Mark events where speech is detected
-        for start_time, end_time in segments:
+        for segment in segments:
+            start_time, end_time = segment[0], segment[1]
             mask = (eeg_data['Timestamp'] >= start_time) & (eeg_data['Timestamp'] <= end_time)
-            eeg_data.loc[mask, 'word_label'] = word
-            eeg_data.loc[mask, event_column] = True
+            
+            if is_validation and len(segment) >= 3 and segment[2]:
+                # For Validation with specific word label
+                segment_word = segment[2]
+                
+                # Set the word label
+                eeg_data.loc[mask, 'word_label'] = segment_word
+                
+                # Mark general speech event
+                eeg_data.loc[mask, 'speech_event'] = True
+                
+                # Create and mark word-specific event column
+                word_event_col = f"{segment_word}_event"
+                if word_event_col not in eeg_data.columns:
+                    eeg_data[word_event_col] = False
+                eeg_data.loc[mask, word_event_col] = True
+                
+                print(f"Marked segment with word '{segment_word}' from {start_time:.3f}s to {end_time:.3f}s")
+            else:
+                # For regular processing or Validation segments without labels
+                eeg_data.loc[mask, 'word_label'] = word
+                
+                # Mark appropriate event column
+                event_column = 'speech_event' if is_validation else f"{word}_event"
+                eeg_data.loc[mask, event_column] = True
+                
+                print(f"Marked '{word}' event from {start_time:.3f}s to {end_time:.3f}s")
         
         # Get standardized output path using helper function
         if output_dir and participant and word and stage and attempt:

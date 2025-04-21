@@ -141,6 +141,9 @@
                                                 <th>Start Time (s)</th>
                                                 <th>End Time (s)</th>
                                                 <th>Duration (s)</th>
+                                                {% if file_data.word == 'validation' %}
+                                                <th>Word</th>
+                                                {% endif %}
                                                 <th>Actions</th>
                                             </tr>
                                         </thead>
@@ -188,9 +191,24 @@
         // Store segments for submission
         let currentSegments = [];
         
+        // Check if this is a validation recording
+        const isValidationRecording = "{{ file_data.word }}" === "validation";
+        
         // Initialize with auto-detected segments if available
         if (speechSegments && speechSegments.length > 0) {
-            currentSegments = JSON.parse(JSON.stringify(speechSegments)); // Deep copy
+            // For Validation recordings, ensure segments have a word field
+            if (isValidationRecording) {
+                currentSegments = speechSegments.map(segment => {
+                    // If segment already has a word label, use it
+                    if (segment.length >= 3) {
+                        return segment;
+                    }
+                    // Otherwise add an empty word label
+                    return [...segment, ""];
+                });
+            } else {
+                currentSegments = JSON.parse(JSON.stringify(speechSegments)); // Deep copy
+            }
             console.log("Initialized with auto-detected segments");
         } else {
             console.log("No speech segments detected automatically");
@@ -275,8 +293,11 @@
                 const newStart = Math.max(0, clickTime - 0.25);
                 const newEnd = Math.min(wavesurfer.getDuration(), clickTime + 0.25);
                 
-                // Add new segment
-                const newSegment = [newStart, newEnd];
+                // Add new segment with or without word field based on file type
+                const newSegment = isValidationRecording ? 
+                    [newStart, newEnd, ""] : 
+                    [newStart, newEnd];
+                
                 currentSegments.push(newSegment);
                 
                 // Update visualizations
@@ -344,7 +365,14 @@
             
             // Default to a 0.5 second segment in the middle of the signal
             const midPoint = maxTime / 2;
-            const newSegment = [midPoint - 0.25, midPoint + 0.25];
+            
+            // For Validation recordings, include a word field
+            let newSegment;
+            if (isValidationRecording) {
+                newSegment = [midPoint - 0.25, midPoint + 0.25, ""];
+            } else {
+                newSegment = [midPoint - 0.25, midPoint + 0.25];
+            }
             
             currentSegments.push(newSegment);
             updateSegmentsTable();
@@ -381,7 +409,19 @@
             
             if (confirm('Reset to auto-detected segments?')) {
                 if (speechSegments && speechSegments.length > 0) {
-                    currentSegments = JSON.parse(JSON.stringify(speechSegments)); // Deep copy
+                    // For Validation recordings, ensure segments have a word field
+                    if (isValidationRecording) {
+                        currentSegments = speechSegments.map(segment => {
+                            // If segment already has a word label, use it
+                            if (segment.length >= 3) {
+                                return segment;
+                            }
+                            // Otherwise add an empty word label
+                            return [...segment, ""];
+                        });
+                    } else {
+                        currentSegments = JSON.parse(JSON.stringify(speechSegments)); // Deep copy
+                    }
                 } else {
                     currentSegments = [];
                 }
@@ -408,11 +448,13 @@
             
             tbody.innerHTML = '';
             
+            const colSpan = isValidationRecording ? 6 : 5;
+            
             if (currentSegments.length === 0) {
                 // Add a row indicating no segments
                 const row = document.createElement('tr');
                 row.innerHTML = `
-                    <td colspan="5" class="text-center">No speech segments defined. Click "Add Segment" to create one.</td>
+                    <td colspan="${colSpan}" class="text-center">No speech segments defined. Click "Add Segment" to create one.</td>
                 `;
                 tbody.appendChild(row);
             } else {
@@ -425,11 +467,24 @@
                     const end = parseFloat(segment[1]) || (start + 0.5);
                     const duration = end - start;
                     
-                    row.innerHTML = `
+                    // Get word label if available (for Validation recordings)
+                    const wordLabel = segment.length >= 3 ? segment[2] : "";
+                    
+                    let rowHtml = `
                         <td>${index + 1}</td>
                         <td><input type="number" class="form-control segment-start" value="${start.toFixed(3)}" min="0" step="0.001" data-index="${index}"></td>
                         <td><input type="number" class="form-control segment-end" value="${end.toFixed(3)}" min="0" step="0.001" data-index="${index}"></td>
                         <td>${duration.toFixed(3)}</td>
+                    `;
+                    
+                    // Add word input for Validation recordings
+                    if (isValidationRecording) {
+                        rowHtml += `
+                            <td><input type="text" class="form-control segment-word" value="${wordLabel}" placeholder="Enter word" data-index="${index}"></td>
+                        `;
+                    }
+                    
+                    rowHtml += `
                         <td>
                             <button type="button" class="btn btn-danger btn-sm delete-segment" data-index="${index}">
                                 <i class="bi bi-trash"></i>
@@ -437,6 +492,7 @@
                         </td>
                     `;
                     
+                    row.innerHTML = rowHtml;
                     tbody.appendChild(row);
                 });
             }
@@ -519,6 +575,28 @@
                     {% endif %}
                 });
             });
+            
+            // Update segment word (only for Validation recordings)
+            if (isValidationRecording) {
+                document.querySelectorAll('.segment-word').forEach(input => {
+                    input.addEventListener('change', function() {
+                        console.log("Segment word changed");
+                        
+                        const index = parseInt(this.dataset.index);
+                        const word = this.value.trim();
+                        
+                        // Ensure the segment array has space for the word (at index 2)
+                        if (currentSegments[index].length < 3) {
+                            currentSegments[index].push(word);
+                        } else {
+                            currentSegments[index][2] = word;
+                        }
+                        
+                        // Update hidden field for form submission
+                        document.getElementById('segments_json').value = JSON.stringify(currentSegments);
+                    });
+                });
+            }
             
             // Delete segment
             document.querySelectorAll('.delete-segment').forEach(button => {

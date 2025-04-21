@@ -5,8 +5,8 @@ import time
 from django.conf import settings
 from trials.data.aq_raw import EEG
 
-# Import filters from eeg_model
-from .eeg_model import apply_basic_filtering, preprocess_with_mne, MNE_AVAILABLE
+# Import filters and constants from eeg_model
+from .eeg_model import apply_basic_filtering, preprocess_with_mne, MNE_AVAILABLE, EEG_CHANNELS
 
 headset = EEG()
 
@@ -22,8 +22,7 @@ class LiveEEGPredictor:
             'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4'
         ]
         # Standard 14 EEG channels (excluding COUNTER)
-        self.eeg_channels = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 
-                            'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+        self.eeg_channels = EEG_CHANNELS
     
     def initialize(self):
         """Initialize the EEG headset connection."""
@@ -163,28 +162,27 @@ class LiveEEGPredictor:
             else:
                 np_data = data
             
-            # Extract only the sensor channels (skip COUNTER if present)
+            # Extract only the sensor channels (Skip COUNTER if present)
+            # For 15-column data: [COUNTER, F3, FC5, AF3, F7, T7, P7, O1, O2, P8, T8, F8, AF4, FC6, F4]
+            # For 14-column data: [F3, FC5, AF3, F7, T7, P7, O1, O2, P8, T8, F8, AF4, FC6, F4]
             if np_data.shape[1] > len(self.eeg_channels):
-                sensor_data = np_data[:, 1:].T  # Transpose to get channels x samples
+                print(f"Input data has {np_data.shape[1]} columns, extracting only the 14 EEG channels")
+                # Skip the first column (COUNTER)
+                sensor_data = np_data[:, 1:15]
             else:
-                sensor_data = np_data.T  # Assume data is already without COUNTER
+                print(f"Input data has {np_data.shape[1]} columns, assuming these are the EEG channels")
+                sensor_data = np_data
             
             # Apply advanced filtering if requested
             if apply_filtering:
                 print("Applying filtering...")
                 if use_mne and MNE_AVAILABLE:
                     print("Using MNE for advanced artifact removal...")
-                    # Transpose to get samples x channels for MNE
-                    sensor_data = sensor_data.T
+                    # Already in samples x channels format
                     sensor_data = preprocess_with_mne(sensor_data)
                 else:
                     print("Using basic bandpass filtering...")
-                    # Transpose to get samples x channels for basic filtering
-                    sensor_data = sensor_data.T
                     sensor_data = apply_basic_filtering(sensor_data)
-            else:
-                # Transpose to match expected format (samples x channels)
-                sensor_data = sensor_data.T
             
             # Get the expected shape from the model if provided
             expected_shape = None
@@ -193,22 +191,21 @@ class LiveEEGPredictor:
                 
                 if sequence_length:
                     # Get list of channels the model was trained on
-                    model_channels = model_predictor.preprocessing_info.get('eeg_columns', self.eeg_channels)
+                    model_channels = model_predictor.preprocessing_info.get('eeg_channels', self.eeg_channels)
                     print(f"Model expects channels: {model_channels}")
                     
                     # Check if all expected channels are present
-                    all_channels_present = all(ch in self.eeg_channels for ch in model_channels)
-                    if not all_channels_present:
-                        print("Warning: Not all channels expected by the model are available")
-                
-                # Match the sequence length
-                if sequence_length and sensor_data.shape[0] > sequence_length:
-                    print(f"Trimming data to match sequence length: {sequence_length}")
-                    sensor_data = sensor_data[:sequence_length]
-                elif sequence_length and sensor_data.shape[0] < sequence_length:
-                    print(f"Padding data to match sequence length: {sequence_length}")
-                    padding = np.zeros((sequence_length - sensor_data.shape[0], sensor_data.shape[1]))
-                    sensor_data = np.vstack((sensor_data, padding))
+                    if sensor_data.shape[1] != len(model_channels):
+                        print(f"Warning: Model expects {len(model_channels)} channels, but input has {sensor_data.shape[1]}")
+                    
+                    # Match the sequence length
+                    if sequence_length and sensor_data.shape[0] > sequence_length:
+                        print(f"Trimming data to match sequence length: {sequence_length}")
+                        sensor_data = sensor_data[:sequence_length]
+                    elif sequence_length and sensor_data.shape[0] < sequence_length:
+                        print(f"Padding data to match sequence length: {sequence_length}")
+                        padding = np.zeros((sequence_length - sensor_data.shape[0], sensor_data.shape[1]))
+                        sensor_data = np.vstack((sensor_data, padding))
             
             # Print shape information for debugging
             print(f"Preprocessed data shape: {sensor_data.shape}")
@@ -239,7 +236,6 @@ class LiveEEGPredictor:
             if not data.any():
                 return {'error': 'No EEG data available for prediction'}
             
-            print(data)
             # Get timestamps for this data collection
             timestamps = [i/128 for i in range(len(data))]  # Assuming 128 Hz sampling rate
             

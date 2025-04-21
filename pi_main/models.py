@@ -18,8 +18,9 @@ class TrainingJob(models.Model):
     dataset_path = models.CharField(max_length=255)
     word_list = models.TextField(blank=True, help_text="Comma-separated list of words to include")
     
-    # Added field for filtering option
-    apply_filtering = models.BooleanField(default=False, help_text="Whether to apply bandpass filtering during preprocessing")
+    # Filtering and preprocessing options
+    apply_filtering = models.BooleanField(default=True, help_text="Whether to apply bandpass filtering during preprocessing")
+    use_mne = models.BooleanField(default=True, help_text="Whether to use advanced MNE preprocessing")
     
     # Training parameters
     epochs = models.IntegerField(default=50)
@@ -62,6 +63,8 @@ class EEGModel(models.Model):
     # Model performance
     accuracy = models.FloatField(default=0.0)
     loss = models.FloatField(default=0.0)
+    speech_accuracy = models.FloatField(default=0.0, help_text="Accuracy of speech detection model")
+    word_accuracy = models.FloatField(default=0.0, help_text="Accuracy of word classification model")
     
     # Relationship to training job
     training_job = models.OneToOneField(
@@ -104,9 +107,11 @@ class Prediction(models.Model):
     input_data_path = models.CharField(max_length=255, blank=True)
     predicted_word = models.CharField(max_length=100)
     confidence = models.FloatField(default=0.0)
+    is_speech = models.BooleanField(null=True, help_text="Whether the input was classified as speech")
+    speech_confidence = models.FloatField(default=0.0, help_text="Confidence of speech detection")
     
     # Optional reference to actual word (if known)
-    actual_word = models.CharField(max_length=100, blank=True, null=True)  # Added null=True
+    actual_word = models.CharField(max_length=100, blank=True, null=True) 
     is_correct = models.BooleanField(null=True)
     
     # Session information

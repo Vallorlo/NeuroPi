@@ -11,9 +11,20 @@
             <div class="card shadow">
                 <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
                     <h1 class="mb-0">Model: {{ model.name }}</h1>
-                    <span class="badge bg-light text-dark">
-                        {{ model.accuracy|floatformat:2|mul:100 }}% Accuracy
-                    </span>
+                    <div>
+                        {% if model.model_type == 'pytorch' %}
+                            <span class="badge bg-info text-dark me-2">
+                                PyTorch CNN-LSTM
+                            </span>
+                        {% else %}
+                            <span class="badge bg-secondary text-white me-2">
+                                TensorFlow RNN
+                            </span>
+                        {% endif %}
+                        <span class="badge bg-light text-dark">
+                            {{ model.accuracy|floatformat:2|mul:100 }}% Accuracy
+                        </span>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div class="row mb-4">
@@ -27,6 +38,10 @@
                                         <li class="list-group-item d-flex justify-content-between align-items-center">
                                             <span><strong>Model Name:</strong></span>
                                             <span>{{ model.name }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Architecture:</strong></span>
+                                            <span>{{ model.get_model_type_display }}</span>
                                         </li>
                                         <li class="list-group-item d-flex justify-content-between align-items-center">
                                             <span><strong>Status:</strong></span>
@@ -57,33 +72,77 @@
                                     <h5 class="mb-0">Performance Metrics</h5>
                                 </div>
                                 <div class="card-body">
-                                    <div class="mb-4">
-                                        <h6>Accuracy</h6>
-                                        <div class="progress" style="height: 20px;">
-                                            <div class="progress-bar bg-success" 
-                                                 role="progressbar" 
-                                                 style="width: {{ model.accuracy|floatformat:2|mul:100 }}%;" 
-                                                 aria-valuenow="{{ model.accuracy|floatformat:2|mul:100 }}" 
-                                                 aria-valuemin="0" 
-                                                 aria-valuemax="100">
-                                                {{ model.accuracy|floatformat:2|mul:100 }}%
+                                    {% if model.model_type == 'pytorch' %}
+                                        <div class="mb-4">
+                                            <h6>Overall Accuracy</h6>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar bg-success" 
+                                                     role="progressbar" 
+                                                     style="width: {{ model.accuracy|floatformat:2|mul:100 }}%;" 
+                                                     aria-valuenow="{{ model.accuracy|floatformat:2|mul:100 }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                    {{ model.accuracy|floatformat:2|mul:100 }}%
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
-                                    
-                                    <div class="mb-4">
-                                        <h6>Loss</h6>
-                                        <div class="progress" style="height: 20px;">
-                                            <div class="progress-bar bg-info" 
-                                                 role="progressbar" 
-                                                 style="width: {{ 100|sub:model.loss|floatformat:2|mul:100 }}%;" 
-                                                 aria-valuenow="{{ 100|sub:model.loss|floatformat:2|mul:100 }}" 
-                                                 aria-valuemin="0" 
-                                                 aria-valuemax="100">
-                                                {{ model.loss|floatformat:4 }}
+                                        
+                                        <div class="mb-4">
+                                            <h6>Speech Detection Accuracy</h6>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar bg-info" 
+                                                     role="progressbar" 
+                                                     style="width: {{ model.speech_accuracy|floatformat:2|mul:100 }}%;" 
+                                                     aria-valuenow="{{ model.speech_accuracy|floatformat:2|mul:100 }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                    {{ model.speech_accuracy|floatformat:2|mul:100 }}%
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                        
+                                        <div class="mb-4">
+                                            <h6>Word Classification Accuracy</h6>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar bg-warning" 
+                                                     role="progressbar" 
+                                                     style="width: {{ model.word_accuracy|floatformat:2|mul:100 }}%;" 
+                                                     aria-valuenow="{{ model.word_accuracy|floatformat:2|mul:100 }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                    {{ model.word_accuracy|floatformat:2|mul:100 }}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% else %}
+                                        <div class="mb-4">
+                                            <h6>Accuracy</h6>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar bg-success" 
+                                                     role="progressbar" 
+                                                     style="width: {{ model.accuracy|floatformat:2|mul:100 }}%;" 
+                                                     aria-valuenow="{{ model.accuracy|floatformat:2|mul:100 }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                    {{ model.accuracy|floatformat:2|mul:100 }}%
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="mb-4">
+                                            <h6>Loss</h6>
+                                            <div class="progress" style="height: 20px;">
+                                                <div class="progress-bar bg-info" 
+                                                     role="progressbar" 
+                                                     style="width: {{ 100|sub:model.loss|floatformat:2|mul:100 }}%;" 
+                                                     aria-valuenow="{{ 100|sub:model.loss|floatformat:2|mul:100 }}" 
+                                                     aria-valuemin="0" 
+                                                     aria-valuemax="100">
+                                                    {{ model.loss|floatformat:4 }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endif %}
                                     
                                     <div id="trainingChart" style="height: 250px;"></div>
                                 </div>
@@ -133,9 +192,25 @@
                                             <span><strong>Dropout Rate:</strong></span>
                                             <span>{{ job.dropout_rate|floatformat:2 }}</span>
                                         </li>
+                                        {% if model.model_type == 'tensorflow' %}
                                         <li class="list-group-item d-flex justify-content-between align-items-center">
                                             <span><strong>Recurrent Dropout:</strong></span>
                                             <span>{{ job.recurrent_dropout|floatformat:2 }}</span>
+                                        </li>
+                                        {% endif %}
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Preprocessing:</strong></span>
+                                            <span>
+                                                {% if job.apply_filtering %}
+                                                    <span class="badge bg-success">Bandpass Filtering</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">No Filtering</span>
+                                                {% endif %}
+                                                
+                                                {% if job.use_mne %}
+                                                    <span class="badge bg-info">MNE Artifact Removal</span>
+                                                {% endif %}
+                                            </span>
                                         </li>
                                     </ul>
                                 </div>
@@ -171,6 +246,12 @@
                                         <a href="{% url 'pi_main:live_prediction' %}?model={{ model.id }}" class="btn btn-success">
                                             <i class="bi bi-lightning-charge"></i> Use for Live Prediction
                                         </a>
+                                        <a href="{% url 'pi_main:validate_model' model.id %}" class="btn btn-primary mb-2">
+                                            <i class="bi bi-check-circle"></i> Validate Model
+                                        </a>
+                                        <a href="{% url 'pi_main:test_model' model.id %}" class="btn btn-warning mb-2">
+                                            <i class="bi bi-lightning-charge"></i> Test Model
+                                        </a>
                                         <button type="button" class="btn btn-outline-primary" id="toggleStatusBtn">
                                             {% if model.status == 'active' %}
                                                 <i class="bi bi-archive"></i> Archive Model
@@ -186,6 +267,62 @@
                             </div>
                         </div>
                     </div>
+                    
+                    {% if model.model_type == 'pytorch' %}
+                    <div class="row mt-4">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">Advanced Model Architecture</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="card mb-3">
+                                                <div class="card-header bg-primary text-white">
+                                                    <h6 class="mb-0">Speech Detection Model</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <p><strong>Type:</strong> CNN-LSTM</p>
+                                                    <p><strong>Accuracy:</strong> {{ model.speech_accuracy|floatformat:2|mul:100 }}%</p>
+                                                    <p><strong>Purpose:</strong> Detects whether speech is present in the EEG data</p>
+                                                    <p><strong>Architecture:</strong></p>
+                                                    <ul>
+                                                        <li>Convolutional layers for spatial features</li>
+                                                        <li>LSTM layers for temporal patterns</li>
+                                                        <li>Binary classification (speech/silence)</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="card mb-3">
+                                                <div class="card-header bg-success text-white">
+                                                    <h6 class="mb-0">Word Classification Model</h6>
+                                                </div>
+                                                <div class="card-body">
+                                                    <p><strong>Type:</strong> CNN-LSTM with Attention</p>
+                                                    <p><strong>Accuracy:</strong> {{ model.word_accuracy|floatformat:2|mul:100 }}%</p>
+                                                    <p><strong>Purpose:</strong> Classifies specific words from EEG data</p>
+                                                    <p><strong>Architecture:</strong></p>
+                                                    <ul>
+                                                        <li>Multi-layer CNN for feature extraction</li>
+                                                        <li>Bidirectional LSTM for sequence processing</li>
+                                                        <li>Attention mechanism for focusing on important signals</li>
+                                                        <li>Multi-class classification (all words)</li>
+                                                    </ul>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> This dual-model architecture first determines if speech is present, then classifies the specific word. This approach improves accuracy by specializing each model for its specific task.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
                     
                     <div class="d-flex justify-content-between mt-4">
                         <a href="{% url 'pi_main:model_list' %}" class="btn btn-outline-secondary">
@@ -234,86 +371,147 @@
                 .then(data => {
                     if (data.history) {
                         const ctx = chartElement.getContext('2d');
-                        new Chart(ctx, {
-                            type: 'line',
-                            data: {
-                                labels: Array.from({length: data.history.accuracy.length}, (_, i) => i + 1),
-                                datasets: [
-                                    {
-                                        label: 'Accuracy',
-                                        data: data.history.accuracy,
-                                        borderColor: 'rgba(40, 167, 69, 1)',
-                                        backgroundColor: 'rgba(40, 167, 69, 0.1)',
-                                        tension: 0.1,
-                                        yAxisID: 'y'
-                                    },
-                                    {
-                                        label: 'Validation Accuracy',
-                                        data: data.history.val_accuracy,
-                                        borderColor: 'rgba(0, 123, 255, 1)',
-                                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
-                                        tension: 0.1,
-                                        yAxisID: 'y'
-                                    },
-                                    {
-                                        label: 'Loss',
-                                        data: data.history.loss,
-                                        borderColor: 'rgba(220, 53, 69, 1)',
-                                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
-                                        tension: 0.1,
-                                        yAxisID: 'y1'
-                                    },
-                                    {
-                                        label: 'Validation Loss',
-                                        data: data.history.val_loss,
-                                        borderColor: 'rgba(255, 193, 7, 1)',
-                                        backgroundColor: 'rgba(255, 193, 7, 0.1)',
-                                        tension: 0.1,
-                                        yAxisID: 'y1'
-                                    }
-                                ]
-                            },
-                            options: {
-                                responsive: true,
-                                scales: {
-                                    x: {
-                                        title: {
-                                            display: true,
-                                            text: 'Epoch'
-                                        }
-                                    },
-                                    y: {
-                                        type: 'linear',
-                                        display: true,
-                                        position: 'left',
-                                        title: {
-                                            display: true,
-                                            text: 'Accuracy'
+                        
+                        // Check if we're dealing with a PyTorch model
+                        const isPyTorch = {% if model.model_type == 'pytorch' %}true{% else %}false{% endif %};
+                        
+                        if (isPyTorch && data.history.speech_detection) {
+                            // This is a PyTorch model with speech and word models
+                            const combinedChart = new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: Array.from({length: data.history.word_classification.accuracy.length}, (_, i) => i + 1),
+                                    datasets: [
+                                        {
+                                            label: 'Word Classification Accuracy',
+                                            data: data.history.word_classification.val_accuracies,
+                                            borderColor: 'rgba(40, 167, 69, 1)',
+                                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                            tension: 0.1,
+                                            yAxisID: 'y'
                                         },
-                                        min: 0,
-                                        max: 1
-                                    },
-                                    y1: {
-                                        type: 'linear',
-                                        display: true,
-                                        position: 'right',
-                                        title: {
-                                            display: true,
-                                            text: 'Loss'
-                                        },
-                                        grid: {
-                                            drawOnChartArea: false
+                                        {
+                                            label: 'Speech Detection Accuracy',
+                                            data: data.history.speech_detection.val_accuracies,
+                                            borderColor: 'rgba(0, 123, 255, 1)',
+                                            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                                            tension: 0.1,
+                                            yAxisID: 'y'
                                         }
-                                    }
+                                    ]
                                 },
-                                plugins: {
-                                    title: {
-                                        display: true,
-                                        text: 'Training History'
+                                options: {
+                                    responsive: true,
+                                    scales: {
+                                        x: {
+                                            title: {
+                                                display: true,
+                                                text: 'Epoch'
+                                            }
+                                        },
+                                        y: {
+                                            type: 'linear',
+                                            display: true,
+                                            position: 'left',
+                                            title: {
+                                                display: true,
+                                                text: 'Accuracy'
+                                            },
+                                            min: 0,
+                                            max: 1
+                                        }
+                                    },
+                                    plugins: {
+                                        title: {
+                                            display: true,
+                                            text: 'Training History'
+                                        }
                                     }
                                 }
-                            }
-                        });
+                            });
+                        } else {
+                            // Legacy TensorFlow model or backward-compatible format
+                            new Chart(ctx, {
+                                type: 'line',
+                                data: {
+                                    labels: Array.from({length: data.history.accuracy.length}, (_, i) => i + 1),
+                                    datasets: [
+                                        {
+                                            label: 'Accuracy',
+                                            data: data.history.accuracy,
+                                            borderColor: 'rgba(40, 167, 69, 1)',
+                                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                                            tension: 0.1,
+                                            yAxisID: 'y'
+                                        },
+                                        {
+                                            label: 'Validation Accuracy',
+                                            data: data.history.val_accuracy,
+                                            borderColor: 'rgba(0, 123, 255, 1)',
+                                            backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                                            tension: 0.1,
+                                            yAxisID: 'y'
+                                        },
+                                        {
+                                            label: 'Loss',
+                                            data: data.history.loss,
+                                            borderColor: 'rgba(220, 53, 69, 1)',
+                                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                                            tension: 0.1,
+                                            yAxisID: 'y1'
+                                        },
+                                        {
+                                            label: 'Validation Loss',
+                                            data: data.history.val_loss,
+                                            borderColor: 'rgba(255, 193, 7, 1)',
+                                            backgroundColor: 'rgba(255, 193, 7, 0.1)',
+                                            tension: 0.1,
+                                            yAxisID: 'y1'
+                                        }
+                                    ]
+                                },
+                                options: {
+                                    responsive: true,
+                                    scales: {
+                                        x: {
+                                            title: {
+                                                display: true,
+                                                text: 'Epoch'
+                                            }
+                                        },
+                                        y: {
+                                            type: 'linear',
+                                            display: true,
+                                            position: 'left',
+                                            title: {
+                                                display: true,
+                                                text: 'Accuracy'
+                                            },
+                                            min: 0,
+                                            max: 1
+                                        },
+                                        y1: {
+                                            type: 'linear',
+                                            display: true,
+                                            position: 'right',
+                                            title: {
+                                                display: true,
+                                                text: 'Loss'
+                                            },
+                                            grid: {
+                                                drawOnChartArea: false
+                                            }
+                                        }
+                                    },
+                                    plugins: {
+                                        title: {
+                                            display: true,
+                                            text: 'Training History'
+                                        }
+                                    }
+                                }
+                            });
+                        }
                     }
                 })
                 .catch(error => {

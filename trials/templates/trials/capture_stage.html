@@ -46,10 +46,29 @@
                                     </span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Microphone:</strong></span>
+                                    <span class="badge bg-secondary rounded-pill">{{ microphone_name|default:"Default" }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span><strong>Attempt:</strong></span>
                                     <span class="badge bg-warning text-dark">{{ attempt_number }} of {{ max_attempts }}</span>
                                 </li>
                             </ul>
+                            
+                            <!-- Navigation buttons -->
+                            <div class="d-flex justify-content-between mt-3">
+                                <a href="{% url 'word_trials' %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-arrow-left"></i> Back to Stages
+                                </a>
+                                <form method="post" action="{% url 'word_trials' %}">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="existing_participant" value="{{ participant_name }}">
+                                    <input type="hidden" name="microphone_index" value="{{ microphone_index }}">
+                                    <button type="submit" class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-chat-square-text"></i> Change Word
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                     
@@ -59,6 +78,7 @@
                         </div>
                         <div class="card-body">
                             <ol class="ulguide">
+                                <li>Click "Check EEG Connection" to ensure good signal quality</li>
                                 <li>Click "Start Capture" to begin EEG and audio recording</li>
                                 <li>Follow the stage instructions:
                                     {% if stage == 'stage1' %}
@@ -73,8 +93,8 @@
                                         Think about saying "{{ word }}" while performing the motion
                                     {% endif %}
                                 </li>
-                                <li>Use the "Add Timestamp" button to mark important moments</li>
-                                <li>Recording will automatically stop after 30 seconds</li>
+                                <li>Use the "Add Timestamp" button to mark each time you say/think the word</li>
+                                <li>Recording will automatically stop after 90 seconds <strong>OR</strong> after 15 timestamps</li>
                             </ol>
                         </div>
                     </div>
@@ -124,6 +144,22 @@
                                 <h5 class="mb-0">Capture Controls</h5>
                             </div>
                             <div class="card-body text-center">
+                                <!-- EEG Quality Check Button -->
+                                <button type="button" id="checkConnectionBtn" class="btn btn-lg btn-info mb-3 w-100">
+                                    <i class="bi bi-broadcast"></i> Check EEG Connection
+                                </button>
+                                
+                                <!-- Quality Check Result Area -->
+                                <div id="qualityCheckResult" class="alert alert-info mb-3" style="display: none;">
+                                    <div class="text-center mb-2">
+                                        <div class="spinner-border text-primary" role="status" id="qualitySpinner">
+                                            <span class="visually-hidden">Checking...</span>
+                                        </div>
+                                    </div>
+                                    <h5 id="qualityHeading">Checking EEG connection quality...</h5>
+                                    <div id="qualityDetails"></div>
+                                </div>
+                                
                                 <form method="post" id="captureForm">
                                     {% csrf_token %}
                                     
@@ -145,17 +181,33 @@
                                 
                                 <div id="captureStatus" class="alert alert-info mt-3" style="display: none;">
                                     <span id="statusText">Preparing to start capture...</span>
+                                    
+                                    <!-- Timestamp Progress Indicator -->
+                                    <div id="timestampProgress" class="mt-2" style="display: none;">
+                                        <p>Timestamps: <span id="timestampCount">0</span>/15 needed</p>
+                                        <div class="progress">
+                                            <div id="timestampProgressBar" class="progress-bar bg-success" role="progressbar" 
+                                                style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="15"></div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- Audio level visualizer -->
+                        <!-- Improved real-time audio level visualizer -->
                         <div class="card mb-4" id="audioVisualizer" style="display: none;">
-                            <div class="card-header bg-secondary text-white">
-                                <h5 class="mb-0">Audio Level</h5>
+                            <div class="card-header bg-secondary text-white d-flex justify-content-between align-items-center">
+                                <div>
+                                    <h5 class="mb-0"><i class="bi bi-mic-fill me-2"></i>Audio Level</h5>
+                                    <small>Using: {{ microphone_name|default:"Default" }}</small>
+                                </div>
+                                <span class="badge bg-dark text-success" id="audioDbLevel">-∞ dB</span>
                             </div>
-                            <div class="card-body text-center">
-                                <canvas id="audioMeter" width="400" height="80"></canvas>
+                            <div class="card-body text-center p-2">
+                                <canvas id="audioMeter" width="400" height="60"></canvas>
+                                <div class="form-text text-center mt-1">
+                                    Speak normally to test microphone levels
+                                </div>
                             </div>
                         </div>
                     {% endif %}
@@ -179,19 +231,6 @@
                     </div>
                 </div>
             </div>
-            
-            <div class="d-flex justify-content-between mt-4">
-                <a href="{% url 'word_trials' %}?word={{ word }}" class="btn btn-outline-primary">
-                    <i class="bi bi-arrow-left"></i> Back to Stage Selection
-                </a>
-                
-                <!-- If this is a completed attempt, add view data button -->
-                {% if captured_data %}
-                <a href="{% url 'eeg_view' %}?user={{ participant_name }}" class="btn btn-outline-info">
-                    <i class="bi bi-graph-up"></i> View EEG Data
-                </a>
-                {% endif %}
-            </div>
         </div>
     </div>
 </div>
@@ -209,15 +248,157 @@ document.addEventListener('DOMContentLoaded', function() {
     const statusText = document.getElementById('statusText');
     const audioVisualizer = document.getElementById('audioVisualizer');
     const audioCanvas = document.getElementById('audioMeter');
+    const audioDbLevel = document.getElementById('audioDbLevel');
+    const timestampProgress = document.getElementById('timestampProgress');
+    const timestampCount = document.getElementById('timestampCount');
+    const timestampProgressBar = document.getElementById('timestampProgressBar');
+    const checkConnectionBtn = document.getElementById('checkConnectionBtn');
+    const qualityCheckResult = document.getElementById('qualityCheckResult');
+    const qualityHeading = document.getElementById('qualityHeading');
+    const qualityDetails = document.getElementById('qualityDetails');
+    const qualitySpinner = document.getElementById('qualitySpinner');
+    
+    // Audio visualization variables
+    let audioContext = null;
+    let microphone = null;
+    let analyser = null;
+    let audioDataArray = null;
+    let audioVisualizationTimer = null;
+    let lastLevel;  // For level smoothing
+    let peakLevel;  // For peak indicator
+    let peakTime;   // For peak decay
     
     let captureStartTime = null;
     let isCapturing = false;
     let captureTimer = null;
-    let captureDuration = 30; // seconds
+    let captureDuration = 90; // seconds
     
     // Check if there are existing timestamps
     if (timestampsList && timestampsList.children.length > 0) {
         timestampsContainer.style.display = 'block';
+    }
+    
+    // Connection quality check
+    if (checkConnectionBtn) {
+        checkConnectionBtn.addEventListener('click', function() {
+            // Show checking UI
+            qualityCheckResult.style.display = 'block';
+            qualityHeading.textContent = 'Checking EEG connection quality...';
+            qualityDetails.innerHTML = '';
+            qualitySpinner.style.display = 'inline-block';
+            qualityCheckResult.className = 'alert alert-info';
+            
+            // Disable buttons during check
+            checkConnectionBtn.disabled = true;
+            startCaptureBtn.disabled = true;
+            
+            // Make AJAX request to check quality
+            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+            
+            fetch('{% url "check_eeg_connection" %}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': csrfToken
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Hide spinner
+                qualitySpinner.style.display = 'none';
+                
+                if (!data.success) {
+                    // Show error
+                    qualityCheckResult.className = 'alert alert-danger';
+                    qualityHeading.textContent = 'Error checking EEG connection';
+                    qualityDetails.textContent = data.error || 'Unknown error occurred';
+                    return;
+                }
+                
+                const quality = data.quality;
+                
+                // Color code based on overall quality
+                let alertClass = 'alert-success';
+                let icon = '<i class="bi bi-check-circle-fill me-2"></i>';
+                
+                if (quality.overall === 'poor') {
+                    alertClass = 'alert-danger';
+                    icon = '<i class="bi bi-exclamation-triangle-fill me-2"></i>';
+                } else if (quality.overall === 'fair') {
+                    alertClass = 'alert-warning';
+                    icon = '<i class="bi bi-exclamation-circle-fill me-2"></i>';
+                }
+                
+                qualityCheckResult.className = `alert ${alertClass}`;
+                
+                // Set heading
+                qualityHeading.innerHTML = `${icon} EEG Connection Quality: <strong>${quality.overall.toUpperCase()}</strong>`;
+                
+                // Build details
+                let detailsHtml = '';
+                
+                if (quality.message) {
+                    detailsHtml += `<p>${quality.message}</p>`;
+                }
+                
+                if (quality.stats) {
+                    detailsHtml += `<p>Channels: ${quality.stats.good} good, ${quality.stats.fair} fair, ${quality.stats.poor} poor</p>`;
+                }
+                
+                // Channel details
+                if (quality.channels && Object.keys(quality.channels).length > 0) {
+                    detailsHtml += '<div class="mt-3"><h6>Channel Details:</h6><div class="row">';
+                    
+                    for (const [channel, channelQuality] of Object.entries(quality.channels)) {
+                        let badgeClass = 'bg-success';
+                        if (channelQuality === 'fair') badgeClass = 'bg-warning';
+                        if (channelQuality === 'poor') badgeClass = 'bg-danger';
+                        
+                        detailsHtml += `
+                            <div class="col-md-3 col-6 mb-2">
+                                <span>${channel}: <span class="badge ${badgeClass}">${channelQuality}</span></span>
+                            </div>
+                        `;
+                    }
+                    
+                    detailsHtml += '</div></div>';
+                }
+                
+                // Add recommendations
+                if (quality.overall === 'poor') {
+                    detailsHtml += `
+                        <div class="alert alert-warning mt-3">
+                            <h6>Recommendations:</h6>
+                            <ul>
+                                <li>Ensure the headset is properly placed</li>
+                                <li>Make sure all sensors have good contact with the scalp</li>
+                                <li>Moisten the sensors with saline solution</li>
+                                <li>Check that the headset is charged</li>
+                                <li>Reduce electronic interference in the room</li>
+                            </ul>
+                        </div>
+                    `;
+                    
+                    // Keep start button disabled for poor quality
+                    startCaptureBtn.disabled = true;
+                } else {
+                    // Enable start button for fair or good quality
+                    startCaptureBtn.disabled = false;
+                }
+                
+                qualityDetails.innerHTML = detailsHtml;
+            })
+            .catch(error => {
+                qualitySpinner.style.display = 'none';
+                qualityCheckResult.className = 'alert alert-danger';
+                qualityHeading.textContent = 'Error connecting to server';
+                qualityDetails.textContent = error.message;
+            })
+            .finally(() => {
+                // Re-enable check button
+                checkConnectionBtn.disabled = false;
+            });
+        });
     }
 
     // Start capture button
@@ -233,6 +414,7 @@ document.addEventListener('DOMContentLoaded', function() {
             timestampBtn.style.display = 'block';
             timestampBtn.disabled = false;
             startCaptureBtn.disabled = true;
+            checkConnectionBtn.disabled = true;
             captureProgress.style.display = 'block';
             captureStatus.style.display = 'block';
             audioVisualizer.style.display = 'block';
@@ -243,8 +425,17 @@ document.addEventListener('DOMContentLoaded', function() {
             }
             timestampsContainer.style.display = 'block';
             
+            // Initialize timestamp progress
+            timestampProgress.style.display = 'block';
+            timestampCount.textContent = '0';
+            timestampProgressBar.style.width = '0%';
+            timestampProgressBar.setAttribute('aria-valuenow', '0');
+            
             // Update status text
             statusText.textContent = 'Starting data collection...';
+            
+            // Start real-time audio visualization
+            startAudioVisualization();
             
             // Submit the form to start data collection
             captureForm.submit();
@@ -292,6 +483,18 @@ document.addEventListener('DOMContentLoaded', function() {
             listItem.appendChild(badge);
             timestampsList.appendChild(listItem);
             
+            // Update timestamp progress
+            const count = timestampsList.children.length;
+            timestampCount.textContent = count;
+            const percentage = Math.min(100, (count / 15) * 100);
+            timestampProgressBar.style.width = `${percentage}%`;
+            timestampProgressBar.setAttribute('aria-valuenow', count);
+            
+            // If we reach 15 timestamps, show a message
+            if (count >= 15) {
+                statusText.textContent = 'Reached 15 timestamps, completing capture soon...';
+            }
+            
             // Send to server via AJAX
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
             
@@ -316,92 +519,308 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Audio visualization function for UI feedback
+    // More accurate real-time audio visualization with proper calibration
     function startAudioVisualization() {
         if (!audioCanvas) return;
         
-        const ctx = audioCanvas.getContext('2d');
-        ctx.fillStyle = '#f0f0f0';
-        ctx.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
-        
-        // Simulated audio levels
-        let audioTimer = setInterval(() => {
-            drawAudioLevel(ctx, audioCanvas.width, audioCanvas.height);
-        }, 100);
-        
-        // Store timer ID for cleanup
-        audioCanvas.dataset.timerId = audioTimer;
+        try {
+            // Check if the browser supports Web Audio API
+            if (!window.AudioContext && !window.webkitAudioContext) {
+                console.warn('Web Audio API not supported. Using simulated audio visualization.');
+                startSimulatedAudioVisualization();
+                return;
+            }
+            
+            // Create audio context
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            
+            // Request microphone access with proper error handling
+            navigator.mediaDevices.getUserMedia({ 
+                audio: { 
+                    echoCancellation: false,
+                    noiseSuppression: false,
+                    autoGainControl: false
+                }, 
+                video: false 
+            })
+            .then(stream => {
+                // Create microphone source
+                microphone = audioContext.createMediaStreamSource(stream);
+                
+                // Create analyser node with optimized settings
+                analyser = audioContext.createAnalyser();
+                analyser.fftSize = 1024; // Higher for better frequency resolution
+                analyser.smoothingTimeConstant = 0.5; // More responsive but still smooth
+                
+                // Connect microphone to analyser
+                microphone.connect(analyser);
+                
+                // Create data array for audio data
+                audioDataArray = new Uint8Array(analyser.frequencyBinCount);
+                
+                console.log("Audio visualization started with real microphone input");
+                
+                // Start visualization loop
+                audioVisualizationTimer = setInterval(() => {
+                    updateAudioVisualization();
+                }, 50); // Update every 50ms (20fps)
+            })
+            .catch(error => {
+                console.error('Error accessing microphone:', error);
+                console.warn('Falling back to simulated audio visualization.');
+                startSimulatedAudioVisualization();
+            });
+        } catch (error) {
+            console.error('Error setting up audio visualization:', error);
+            console.warn('Falling back to simulated audio visualization.');
+            startSimulatedAudioVisualization();
+        }
     }
     
-    function stopAudioVisualization() {
+    // Improved update function with better level calculation
+    function updateAudioVisualization() {
+        if (!analyser || !audioCanvas) return;
+        
+        // Get audio frequency data (frequency domain)
+        analyser.getByteFrequencyData(audioDataArray);
+        
+        // Calculate RMS (root mean square) for better level representation
+        let sum = 0;
+        let rms = 0;
+        
+        // Focus on vocal frequencies (approximately 300-3000 Hz)
+        // For 1024 FFT size at 44.1kHz, this is roughly bins 7-70
+        const vocalLowBin = Math.floor(300 * analyser.fftSize / audioContext.sampleRate);
+        const vocalHighBin = Math.floor(3000 * analyser.fftSize / audioContext.sampleRate);
+        
+        let count = 0;
+        for (let i = vocalLowBin; i <= vocalHighBin; i++) {
+            if (i < audioDataArray.length) {
+                sum += (audioDataArray[i] / 255.0) * (audioDataArray[i] / 255.0);
+                count++;
+            }
+        }
+        
+        if (count > 0) {
+            rms = Math.sqrt(sum / count);
+        }
+        
+        // Apply some dynamic range compression to make the visualization more responsive
+        // This makes quiet sounds more visible while preventing loud sounds from maxing out
+        let normalizedLevel = 0;
+        if (rms > 0) {
+            // Apply a logarithmic curve (similar to how we hear)
+            normalizedLevel = Math.pow(rms, 0.6); // Less aggressive compression
+            
+            // Cap at 1.0
+            normalizedLevel = Math.min(normalizedLevel, 1.0);
+        }
+        
+        // Smooth transitions between values
+        const smoothingFactor = 0.3;
+        if (typeof lastLevel !== 'undefined') {
+            normalizedLevel = lastLevel * (1 - smoothingFactor) + normalizedLevel * smoothingFactor;
+        }
+        lastLevel = normalizedLevel;
+        
+        // Convert to dB (approximate)
+        let dbLevel = -100;
+        if (normalizedLevel > 0) {
+            // Map normalized level 0-1 to a more useful dB range (-60 to 0)
+            dbLevel = 20 * Math.log10(normalizedLevel) * 1.5; // Scale factor to make it more readable
+            dbLevel = Math.max(-60, dbLevel); // Limit lower range
+        }
+        
+        // Update dB display with color coding
+        if (audioDbLevel) {
+            let dbColor = "text-success"; // Green for low levels
+            if (dbLevel > -15) dbColor = "text-danger"; // Red for high levels
+            else if (dbLevel > -30) dbColor = "text-warning"; // Yellow for medium levels
+            
+            audioDbLevel.className = `badge bg-dark ${dbColor}`;
+            audioDbLevel.textContent = dbLevel > -60 ? `${dbLevel.toFixed(1)} dB` : "-∞ dB";
+        }
+        
+        // Draw visualization with the processed level
+        drawAudioLevel(normalizedLevel);
+    }
+    
+    // Enhanced drawing function with better visual feedback
+    function drawAudioLevel(level) {
         if (!audioCanvas) return;
         
-        // Clear the visualization timer
-        const timerId = audioCanvas.dataset.timerId;
-        if (timerId) {
-            clearInterval(parseInt(timerId));
-            delete audioCanvas.dataset.timerId;
-        }
-        
-        // Draw empty visualization
         const ctx = audioCanvas.getContext('2d');
-        ctx.fillStyle = '#f0f0f0';
-        ctx.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
-    }
-    
-    function drawAudioLevel(ctx, width, height) {
-        // Simulate audio level (higher when speaking, lower when silent)
-        let level = Math.random() * 0.6; // Base random level
+        const width = audioCanvas.width;
+        const height = audioCanvas.height;
         
-        // Occasionally simulate speech with higher levels
-        if (Math.random() > 0.7) {
-            level = 0.5 + Math.random() * 0.5; // Higher level for "speech"
-        }
-        
-        // Clear canvas
-        ctx.fillStyle = '#f0f0f0';
+        // Clear canvas with a gradient background
+        const gradient = ctx.createLinearGradient(0, 0, 0, height);
+        gradient.addColorStop(0, '#f8f9fa');
+        gradient.addColorStop(1, '#e9ecef');
+        ctx.fillStyle = gradient;
         ctx.fillRect(0, 0, width, height);
         
-        // Draw level bar
+        // Draw level bar with color gradient based on level
         const barWidth = Math.floor(level * width);
         
-        // Color gradient based on level
-        let color = '#28a745'; // Green for low
-        if (level > 0.7) color = '#dc3545'; // Red for high
-        else if (level > 0.4) color = '#ffc107'; // Yellow for medium
+        // Create level-based color gradient
+        const barGradient = ctx.createLinearGradient(0, 0, width, 0);
+        barGradient.addColorStop(0, '#28a745');    // Green
+        barGradient.addColorStop(0.6, '#ffc107');  // Yellow
+        barGradient.addColorStop(1, '#dc3545');    // Red
         
-        ctx.fillStyle = color;
-        ctx.fillRect(0, 0, barWidth, height);
+        ctx.fillStyle = barGradient;
         
-        // Draw level markers
-        ctx.fillStyle = '#6c757d';
-        for (let i = 0.2; i <= 1; i += 0.2) {
-            const x = Math.floor(i * width);
+        // Draw rounded bar
+        const cornerRadius = 3;
+        if (barWidth > cornerRadius * 2) {
+            ctx.beginPath();
+            ctx.moveTo(0, cornerRadius);
+            ctx.arcTo(0, 0, cornerRadius, 0, cornerRadius);
+            ctx.lineTo(barWidth - cornerRadius, 0);
+            ctx.arcTo(barWidth, 0, barWidth, cornerRadius, cornerRadius);
+            ctx.lineTo(barWidth, height - cornerRadius);
+            ctx.arcTo(barWidth, height, barWidth - cornerRadius, height, cornerRadius);
+            ctx.lineTo(cornerRadius, height);
+            ctx.arcTo(0, height, 0, height - cornerRadius, cornerRadius);
+            ctx.closePath();
+            ctx.fill();
+        } else if (barWidth > 0) {
+            // If bar is too small for rounded corners, draw a simple rectangle
+            ctx.fillRect(0, 0, barWidth, height);
+        }
+        
+        // Draw level markers with labels
+        ctx.fillStyle = 'rgba(108, 117, 125, 0.5)';
+        ctx.font = '10px Arial';
+        
+        const markers = [0.2, 0.4, 0.6, 0.8, 1.0];
+        markers.forEach(marker => {
+            const x = Math.floor(marker * width);
             ctx.fillRect(x, 0, 1, height);
+            
+            // Draw dB value instead of percentage
+            const dbValue = Math.round(20 * Math.log10(marker) * 1.5);
+            const label = dbValue > -100 ? `${dbValue} dB` : "-∞";
+            
+            ctx.fillText(label, x + 3, height - 5);
+        });
+        
+        // Draw peak indicator
+        if (typeof peakLevel === 'undefined' || level > peakLevel) {
+            peakLevel = level;
+            peakTime = Date.now();
+        } else if (Date.now() - peakTime > 1000) {
+            // Gradually lower peak after 1 second
+            peakLevel = Math.max(level, peakLevel * 0.95);
+        }
+        
+        const peakX = Math.floor(peakLevel * width);
+        if (peakX > 0) {
+            ctx.fillStyle = 'rgba(220, 53, 69, 0.8)';
+            ctx.fillRect(peakX, 0, 2, height);
         }
     }
     
-    // Start visualizations when the page loads
-    if (startCaptureBtn) {
-        startAudioVisualization();
+    // Simple simulated audio visualization as fallback
+    function startSimulatedAudioVisualization() {
+        // Clear any existing variables
+        lastLevel = undefined;
+        peakLevel = undefined;
         
+        audioVisualizationTimer = setInterval(() => {
+            // Simulate audio level with more realistic values
+            const baseLevel = 0.05; // Low baseline level (room noise)
+            
+            // Occasional vocal-like sounds
+            let level = baseLevel;
+            if (Math.random() > 0.7) { // 30% chance of "speech"
+                // Voice-like levels that vary somewhat naturally
+                level = 0.2 + Math.random() * 0.3 * Math.sin(Date.now() / 100);
+            }
+            
+            // Convert to dB for display
+            const dbLevel = level > 0 ? 20 * Math.log10(level) * 1.5 : -100;
+            
+            // Update UI elements
+            if (audioDbLevel) {
+                let dbColor = "text-success";
+                if (dbLevel > -15) dbColor = "text-danger";
+                else if (dbLevel > -30) dbColor = "text-warning";
+                
+                audioDbLevel.className = `badge bg-dark ${dbColor}`;
+                audioDbLevel.textContent = dbLevel > -60 ? `${dbLevel.toFixed(1)} dB` : "-∞ dB";
+            }
+            
+            // Draw level bar
+            drawAudioLevel(level);
+        }, 50);
+    }
+    
+    // Stop audio visualization
+    function stopAudioVisualization() {
+        // Clear visualization timer
+        if (audioVisualizationTimer) {
+            clearInterval(audioVisualizationTimer);
+            audioVisualizationTimer = null;
+        }
+        
+        // Close audio context and disconnect microphone
+        if (microphone) {
+            microphone.disconnect();
+            microphone = null;
+        }
+        
+        if (audioContext && audioContext.state !== 'closed') {
+            if (audioContext.close) {
+                audioContext.close();
+            }
+            audioContext = null;
+        }
+        
+        analyser = null;
+        audioDataArray = null;
+        
+        // Clear canvas
+        if (audioCanvas) {
+            const ctx = audioCanvas.getContext('2d');
+            ctx.fillStyle = '#f0f0f0';
+            ctx.fillRect(0, 0, audioCanvas.width, audioCanvas.height);
+        }
+    }
+    
+    // Handle progress timer
+    if (startCaptureBtn) {
         // Start progress timer for the UI
         let elapsed = 0;
         captureTimer = setInterval(function() {
             elapsed++;
+            
+            // Update progress bar
+            if (progressBar) {
+                const percentage = Math.min(100, (elapsed / captureDuration) * 100);
+                progressBar.style.width = `${percentage}%`;
+                progressBar.setAttribute('aria-valuenow', elapsed);
+            }
+            
             if (elapsed >= captureDuration) {
                 clearInterval(captureTimer);
                 stopAudioVisualization();
             }
         }, 1000);
     }
+    
+    // Clean up on page unload
+    window.addEventListener('beforeunload', function() {
+        stopAudioVisualization();
+    });
 });
 </script>
 
 <style>
     #audioMeter {
         width: 100%;
-        height: 80px;
+        height: 60px;
         background-color: #f0f0f0;
         border-radius: 4px;
     }

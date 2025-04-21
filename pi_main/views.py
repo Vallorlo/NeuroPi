@@ -13,16 +13,11 @@ import traceback
 import threading
 from .models import EEGModel, TrainingJob, Prediction
 from .forms import ModelTrainingForm, PredictionForm
-from .rnn_model import RNNModelTrainer, RNNPredictor
-# Add this to pi_main/views.py
-
+from .eeg_model import ModelTrainer, ModelPredictor
 from .live_prediction import LiveEEGPredictor
-from .rnn_model import RNNPredictor
-import time
-import traceback
-import json
-from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
+from .model_evaluation import ModelEvaluator
+
 
 # Global predictor instance to maintain EEG connection across requests
 _eeg_predictor = LiveEEGPredictor()
@@ -61,6 +56,7 @@ def live_predict_api(request):
         target_word = request.POST.get('target_word', '')
         participant = request.POST.get('participant', '')
         apply_filtering = request.POST.get('apply_filtering', 'true').lower() == 'true'
+        use_mne = request.POST.get('use_mne', 'true').lower() == 'true'
         
         # Get model
         try:
@@ -79,14 +75,14 @@ def live_predict_api(request):
         # Collect EEG data
         data, timestamps = eeg_predictor.collect_eeg_data(duration)
         
-        if data is None or not data:
+        if data is None or len(data) == 0:
             return JsonResponse({
                 'error': 'Failed to collect EEG data. Please check the headset connection.'
             }, status=400)
         
-        # Load model
+        # Load model predictor
         try:
-            model_predictor = RNNPredictor(model_path=model.model_path)
+            model_predictor = ModelPredictor(model_path=model.model_path)
         except Exception as e:
             traceback.print_exc()
             return JsonResponse({
@@ -94,30 +90,38 @@ def live_predict_api(request):
             }, status=500)
         
         # Make prediction
-        predictions = eeg_predictor.predict(model_predictor, data, apply_filtering)
+        predictions = eeg_predictor.predict(
+            model_predictor, 
+            data, 
+            apply_filtering=apply_filtering,
+            use_mne=use_mne
+        )
         
         if 'error' in predictions:
             return JsonResponse({'error': predictions['error']}, status=400)
         
-        # Create prediction record
-        # Handle empty target word - ensure it's an empty string not None
-        target_word = target_word if target_word else ""
+        # Extract prediction results
+        predicted_word = predictions.get('predicted_word', 'unknown')
+        confidence = predictions.get('confidence', 0.0)
+        is_speech = predictions.get('is_speech', False)
+        speech_confidence = predictions.get('speech_confidence', 0.0)
         
+        # Create prediction record
         try:
-            # Create prediction record with proper handling of target_word
             prediction = Prediction(
                 model=model,
-                predicted_word=predictions['predicted_word'],
-                confidence=predictions['confidence'],
-                actual_word=target_word,  # This is now allowed to be empty string
-                is_correct=predictions['predicted_word'].lower() == target_word.lower() if target_word else None,
+                predicted_word=predicted_word,
+                confidence=confidence,
+                actual_word=target_word if target_word else None,
+                is_correct=predicted_word.lower() == target_word.lower() if target_word else None,
                 participant=participant,
-                session_id=request.POST.get('session_id', '')
+                session_id=request.POST.get('session_id', ''),
+                is_speech=is_speech,
+                speech_confidence=speech_confidence
             )
             prediction.save()
         except Exception as e:
-            # Log the error but continue - don't fail the entire request just because
-            # saving to the database failed
+            # Log the error but continue
             print(f"Error saving prediction to database: {e}")
             traceback.print_exc()
         
@@ -137,7 +141,7 @@ def live_predict_api(request):
             'message': str(e)
         }, status=500)
     finally:
-        # Always clear the queue after use - important to prevent accumulation of data
+        # Always clear the queue after use
         if eeg_predictor and eeg_predictor.cyHeadset:
             eeg_predictor.cyHeadset.clear_data()
 
@@ -273,10 +277,12 @@ def train_model_background(job_id):
     
     try:
         # Load dataset
-        dataset_path = os.path.join(settings.TRIAL_DIR, job.dataset_path)
+        dataset_path = job.dataset_path
+        if not os.path.isabs(dataset_path):
+            dataset_path = os.path.join(settings.TRIAL_DIR, dataset_path)
         
-        # Create trainer with apply_filtering parameter
-        trainer = RNNModelTrainer(
+        # Create trainer with parameters
+        trainer = ModelTrainer(
             dataset_path=dataset_path,
             model_name=job.model_name,
             word_list=job.word_list.split(',') if job.word_list else None,
@@ -287,20 +293,24 @@ def train_model_background(job_id):
             hidden_units=job.hidden_units,
             dropout_rate=job.dropout_rate,
             recurrent_dropout=job.recurrent_dropout,
-            apply_filtering=job.apply_filtering  # Pass the filtering option
+            apply_filtering=job.apply_filtering,
+            use_mne=job.use_mne
         )
         
         # Train model
-        model, history = trainer.train()
+        models, history = trainer.train()
         
-        # Save model metadata
-        output_dir = os.path.join(settings.BASE_DIR, 'trained_models', job.model_name)
-        os.makedirs(output_dir, exist_ok=True)
+        # Get accuracies from history
+        speech_model, word_model = models
+        speech_history = history['speech_detection']
+        word_history = history['word_classification']
         
-        # Save training history
-        history_path = os.path.join(output_dir, 'training_history.json')
-        with open(history_path, 'w') as f:
-            json.dump(history, f)
+        speech_acc = speech_history['val_accuracies'][-1]
+        word_acc = word_history['val_accuracies'][-1]
+        combined_acc = (speech_acc + word_acc) / 2
+        
+        # Get loss from word model (for backward compatibility)
+        loss = word_history['val_losses'][-1]
         
         # Create model record
         eeg_model = EEGModel(
@@ -308,8 +318,10 @@ def train_model_background(job_id):
             description=job.description,
             dataset_path=job.dataset_path,
             model_path=os.path.join('trained_models', job.model_name),
-            accuracy=history.get('val_accuracy', [0])[-1],
-            loss=history.get('val_loss', [0])[-1],
+            accuracy=combined_acc,
+            loss=loss,
+            speech_accuracy=speech_acc,
+            word_accuracy=word_acc,
             training_job=job
         )
         eeg_model.save()
@@ -335,7 +347,12 @@ def model_detail(request, model_id):
     model = get_object_or_404(EEGModel, id=model_id)
     job = model.training_job
     
-    return render(request, 'pi_main/model_detail.html', {'model': model, 'job': job})
+    context = {
+        'model': model, 
+        'job': job
+    }
+    
+    return render(request, 'pi_main/model_detail.html', context)
 
 def live_prediction(request):
     """Interface for live EEG prediction."""
@@ -381,6 +398,8 @@ def start_training_api(request):
             hidden_units=data.get('hidden_units', 64),
             dropout_rate=data.get('dropout_rate', 0.2),
             recurrent_dropout=data.get('recurrent_dropout', 0.2),
+            apply_filtering=data.get('apply_filtering', True),
+            use_mne=data.get('use_mne', True),
             user=request.user.username if request.user.is_authenticated else 'anonymous',
             status='queued'
         )
@@ -391,7 +410,7 @@ def start_training_api(request):
         
         return JsonResponse({
             'status': 'success',
-            'job_id': job.id,
+            'job_id': str(job.id),
             'message': 'Training job started successfully'
         })
         
@@ -412,7 +431,7 @@ def training_status_api(request):
         job = TrainingJob.objects.get(id=job_id)
         
         response = {
-            'id': job.id,
+            'id': str(job.id),
             'status': job.status,
             'progress': job.progress,
             'model_name': job.model_name,
@@ -429,9 +448,11 @@ def training_status_api(request):
             try:
                 model = EEGModel.objects.get(training_job=job)
                 response['model'] = {
-                    'id': model.id,
+                    'id': str(model.id),
                     'accuracy': model.accuracy,
-                    'loss': model.loss
+                    'loss': model.loss,
+                    'speech_accuracy': model.speech_accuracy,
+                    'word_accuracy': model.word_accuracy
                 }
             except EEGModel.DoesNotExist:
                 pass
@@ -444,7 +465,7 @@ def training_status_api(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 def predict_eeg_api(request):
-    """API endpoint for real-time EEG prediction."""
+    """API endpoint for EEG prediction using uploaded data."""
     if request.method != 'POST':
         return JsonResponse({'error': 'Only POST method is allowed'}, status=405)
     
@@ -474,20 +495,33 @@ def predict_eeg_api(request):
         if eeg_data is None or len(eeg_data) == 0:
             return JsonResponse({'error': 'No EEG data provided'}, status=400)
         
-        # Load model and predict
-        predictor = RNNPredictor(model_path=model.model_path)
+        # Determine whether to use MNE
+        use_mne = request.POST.get('use_mne', 'true').lower() == 'true'
+        
+        # Load model predictor
+        predictor = ModelPredictor(model_path=model.model_path)
+        
+        # Make prediction
         predictions = predictor.predict(eeg_data)
+        
+        # Extract prediction results
+        predicted_word = predictions.get('predicted_word', 'unknown')
+        confidence = predictions.get('confidence', 0.0)
+        is_speech = predictions.get('is_speech', False)
+        speech_confidence = predictions.get('speech_confidence', 0.0)
         
         # Create prediction record
         target_word = request.POST.get('target_word', '')
         prediction = Prediction(
             model=model,
-            predicted_word=predictions['predicted_word'],
-            confidence=predictions['confidence'],
+            predicted_word=predicted_word,
+            confidence=confidence,
             actual_word=target_word if target_word else None,
-            is_correct=predictions['predicted_word'].lower() == target_word.lower() if target_word else None,
+            is_correct=predicted_word.lower() == target_word.lower() if target_word else None,
             participant=request.POST.get('participant', ''),
-            session_id=request.POST.get('session_id', '')
+            session_id=request.POST.get('session_id', ''),
+            is_speech=is_speech,
+            speech_confidence=speech_confidence
         )
         prediction.save()
         
@@ -496,10 +530,11 @@ def predict_eeg_api(request):
             'status': 'success',
             'predictions': predictions,
             'model_name': model.name,
-            'prediction_id': prediction.id
+            'prediction_id': str(prediction.id)
         })
         
     except Exception as e:
+        traceback.print_exc()
         return JsonResponse({
             'status': 'error',
             'message': str(e)
@@ -518,12 +553,18 @@ def training_history_api(request):
         # Get training history file path
         history_path = os.path.join(settings.BASE_DIR, model.model_path, 'training_history.json')
         
-        if not os.path.exists(history_path):
-            return JsonResponse({'error': 'Training history not found'}, status=404)
-        
-        # Read training history
-        with open(history_path, 'r') as f:
-            history = json.load(f)
+        if os.path.exists(history_path):
+            # Read full training history
+            with open(history_path, 'r') as f:
+                history = json.load(f)
+        else:
+            # Check for backward-compatible history
+            bc_history_path = os.path.join(settings.BASE_DIR, model.model_path, 'backward_compatible_history.json')
+            if os.path.exists(bc_history_path):
+                with open(bc_history_path, 'r') as f:
+                    history = json.load(f)
+            else:
+                return JsonResponse({'error': 'Training history not found'}, status=404)
         
         return JsonResponse({
             'status': 'success',
@@ -757,3 +798,238 @@ def get_existing_participants():
                 participants.append(participant_name)
     
     return sorted(participants)
+
+
+def validate_model(request, model_id):
+    """View to validate a model with a labeled dataset."""
+    model = get_object_or_404(EEGModel, id=model_id)
+    
+    if request.method == 'POST':
+        # Handle uploaded validation file or use selected file
+        validation_file = request.FILES.get('validation_file')
+        selected_file = request.POST.get('selected_file')
+        
+        if validation_file:
+            # Save uploaded file
+            filename = f"validation_{model.name}_{int(time.time())}.csv"
+            filepath = os.path.join(settings.TRIAL_DIR, filename)
+            with open(filepath, 'wb+') as destination:
+                for chunk in validation_file.chunks():
+                    destination.write(chunk)
+        elif selected_file:
+            filepath = selected_file
+        else:
+            return JsonResponse({'error': 'No validation file provided'}, status=400)
+        
+        # Get validation parameters
+        apply_filtering = request.POST.get('apply_filtering', 'true').lower() == 'true'
+        use_mne = request.POST.get('use_mne', 'true').lower() == 'true'
+        
+        try:
+            # Initialize evaluator
+            evaluator = ModelEvaluator(model.model_path)
+            
+            # Run validation
+            results = evaluator.validate(
+                filepath,
+                apply_filtering=apply_filtering,
+                use_mne=use_mne,
+                verbose=True
+            )
+            
+            # Store validation results in session
+            request.session['validation_results'] = {
+                'model_id': str(model.id),
+                'accuracy': float(results['accuracy']),
+                'precision': float(results['precision']),
+                'recall': float(results['recall']),
+                'f1': float(results['f1']),
+                'word_accuracies': {k: float(v) for k, v in results['word_accuracies'].items()}
+            }
+            
+            return redirect('pi_main:validation_results', model_id=model.id)
+            
+        except Exception as e:
+            return render(request, 'pi_main/validate_model.html', {
+                'model': model,
+                'error': str(e),
+                'available_files': get_available_datasets()
+            })
+    
+    # GET request - show validation form
+    return render(request, 'pi_main/validate_model.html', {
+        'model': model,
+        'available_files': get_available_datasets()
+    })
+
+def validation_results(request, model_id):
+    """View to display validation results."""
+    model = get_object_or_404(EEGModel, id=model_id)
+    
+    # Get validation results from session
+    results = request.session.get('validation_results', None)
+    
+    if not results or results.get('model_id') != str(model_id):
+        # No validation results in session
+        return redirect('pi_main:validate_model', model_id=model.id)
+    
+    # Check if confusion matrix image exists
+    confusion_matrix_path = os.path.join(settings.BASE_DIR, model.model_path, 'confusion_matrix.png')
+    has_confusion_matrix = os.path.exists(confusion_matrix_path)
+    
+    # Check if detailed results exist
+    detailed_results_path = os.path.join(settings.BASE_DIR, model.model_path, 'validation_results.csv')
+    has_detailed_results = os.path.exists(detailed_results_path)
+    
+    # Load detailed results if available
+    detailed_results = None
+    if has_detailed_results:
+        try:
+            detailed_results = pd.read_csv(detailed_results_path)
+            # Count occurrences where prediction matches ground truth
+            detailed_results['correct'] = detailed_results['predicted_label'] == detailed_results['true_label']
+            
+            # Group by true label and calculate accuracy
+            accuracy_by_word = detailed_results.groupby('true_label')['correct'].mean()
+            
+            # Convert to list of dicts for template
+            accuracy_by_word = [
+                {'word': word, 'accuracy': float(acc)} 
+                for word, acc in accuracy_by_word.items()
+            ]
+            
+            # Sort by accuracy (descending)
+            accuracy_by_word.sort(key=lambda x: x['accuracy'], reverse=True)
+        except Exception as e:
+            accuracy_by_word = []
+            print(f"Error loading detailed results: {e}")
+    else:
+        accuracy_by_word = [
+            {'word': word, 'accuracy': acc}
+            for word, acc in results['word_accuracies'].items()
+        ]
+        accuracy_by_word.sort(key=lambda x: x['accuracy'], reverse=True)
+    
+    context = {
+        'model': model,
+        'results': results,
+        'has_confusion_matrix': has_confusion_matrix,
+        'confusion_matrix_url': f'/media/{model.model_path}/confusion_matrix.png' if has_confusion_matrix else None,
+        'has_detailed_results': has_detailed_results,
+        'accuracy_by_word': accuracy_by_word
+    }
+    
+    return render(request, 'pi_main/validation_results.html', context)
+
+def test_model(request, model_id):
+    """View to test a model with an unlabeled dataset."""
+    model = get_object_or_404(EEGModel, id=model_id)
+    
+    if request.method == 'POST':
+        # Handle uploaded test file or use selected file
+        test_file = request.FILES.get('test_file')
+        selected_file = request.POST.get('selected_file')
+        
+        if test_file:
+            # Save uploaded file
+            filename = f"test_{model.name}_{int(time.time())}.csv"
+            filepath = os.path.join(settings.TRIAL_DIR, filename)
+            with open(filepath, 'wb+') as destination:
+                for chunk in test_file.chunks():
+                    destination.write(chunk)
+        elif selected_file:
+            filepath = selected_file
+        else:
+            return JsonResponse({'error': 'No test file provided'}, status=400)
+        
+        # Get test parameters
+        apply_filtering = request.POST.get('apply_filtering', 'true').lower() == 'true'
+        use_mne = request.POST.get('use_mne', 'true').lower() == 'true'
+        
+        try:
+            # Initialize evaluator
+            evaluator = ModelEvaluator(model.model_path)
+            
+            # Run test
+            output_path = evaluator.test(
+                filepath,
+                apply_filtering=apply_filtering,
+                use_mne=use_mne,
+                verbose=True
+            )
+            
+            # Store test results path in session
+            request.session['test_results_path'] = output_path
+            
+            return redirect('pi_main:test_results', model_id=model.id)
+            
+        except Exception as e:
+            return render(request, 'pi_main/test_model.html', {
+                'model': model,
+                'error': str(e),
+                'available_files': get_available_datasets()
+            })
+    
+    # GET request - show test form
+    return render(request, 'pi_main/test_model.html', {
+        'model': model,
+        'available_files': get_available_datasets()
+    })
+
+def test_results(request, model_id):
+    """View to display test results."""
+    model = get_object_or_404(EEGModel, id=model_id)
+    
+    # Get test results path from session
+    results_path = request.session.get('test_results_path', None)
+    
+    if not results_path or not os.path.exists(results_path):
+        # No test results available
+        return redirect('pi_main:test_model', model_id=model.id)
+    
+    try:
+        # Load and process results
+        results_df = pd.read_csv(results_path)
+        
+        # Get word prediction counts
+        word_counts = results_df['predicted_word'].value_counts()
+        word_percentages = (word_counts / len(results_df) * 100).round(1)
+        
+        # Combine into a list of dicts
+        word_stats = [
+            {'word': word, 'count': count, 'percentage': word_percentages[word]}
+            for word, count in word_counts.items()
+        ]
+        
+        # Sort by count (descending)
+        word_stats.sort(key=lambda x: x['count'], reverse=True)
+        
+        # Calculate overall speech statistics
+        speech_count = results_df['is_speech'].sum()
+        speech_percentage = (speech_count / len(results_df) * 100).round(1)
+        
+        # Get average confidence
+        avg_confidence = results_df['confidence'].mean().round(3)
+        avg_speech_confidence = results_df['speech_confidence'].mean().round(3)
+        
+        # Add download link
+        download_url = f'/media/{os.path.relpath(results_path, settings.BASE_DIR)}'
+        
+        context = {
+            'model': model,
+            'word_stats': word_stats,
+            'speech_count': int(speech_count),
+            'speech_percentage': speech_percentage,
+            'avg_confidence': avg_confidence,
+            'avg_speech_confidence': avg_speech_confidence,
+            'total_sequences': len(results_df),
+            'download_url': download_url
+        }
+        
+        return render(request, 'pi_main/test_results.html', context)
+        
+    except Exception as e:
+        return render(request, 'pi_main/test_results.html', {
+            'model': model,
+            'error': str(e)
+        })

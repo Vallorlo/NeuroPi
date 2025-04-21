@@ -23,15 +23,6 @@ class ModelTrainingForm(forms.ModelForm):
         widget=forms.SelectMultiple(attrs={'class': 'form-select', 'size': '5'})
     )
     
-    # Add filtering option
-    apply_filtering = forms.BooleanField(
-        required=False,
-        initial=False,
-        label='Apply Bandpass Filter (4-50Hz)',
-        help_text='Enable if your data has not been pre-filtered',
-        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
-    )
-    
     class Meta:
         model = TrainingJob
         fields = [
@@ -39,7 +30,7 @@ class ModelTrainingForm(forms.ModelForm):
             'epochs', 'batch_size', 'learning_rate', 
             'validation_split', 'hidden_units', 
             'dropout_rate', 'recurrent_dropout',
-            'apply_filtering'
+            'apply_filtering', 'use_mne'
         ]
         widgets = {
             'model_name': forms.TextInput(attrs={'class': 'form-control'}),
@@ -51,6 +42,8 @@ class ModelTrainingForm(forms.ModelForm):
             'hidden_units': forms.NumberInput(attrs={'class': 'form-control', 'min': 8, 'max': 512}),
             'dropout_rate': forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'max': 0.5, 'step': 0.05}),
             'recurrent_dropout': forms.NumberInput(attrs={'class': 'form-control', 'min': 0, 'max': 0.5, 'step': 0.05}),
+            'apply_filtering': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'use_mne': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
         }
         help_texts = {
             'model_name': 'A unique name for your model',
@@ -58,9 +51,11 @@ class ModelTrainingForm(forms.ModelForm):
             'batch_size': 'Number of samples per batch (1-256)',
             'learning_rate': 'Learning rate for the optimizer (0.0001-0.1)',
             'validation_split': 'Fraction of data to use for validation (0.1-0.5)',
-            'hidden_units': 'Number of units in the RNN layer (8-512)',
+            'hidden_units': 'Number of units in the hidden layers (8-512)',
             'dropout_rate': 'Dropout rate for regularization (0-0.5)',
             'recurrent_dropout': 'Recurrent dropout rate (0-0.5)',
+            'apply_filtering': 'Enable bandpass filtering (4-50Hz) for signal quality',
+            'use_mne': 'Use advanced MNE artifact removal (recommended)'
         }
     
     def __init__(self, *args, **kwargs):
@@ -71,6 +66,10 @@ class ModelTrainingForm(forms.ModelForm):
         
         # Set up word choices (will be updated via JavaScript based on selected dataset)
         self.fields['selected_words'].choices = self.get_word_choices()
+        
+        # Set default values
+        self.fields['apply_filtering'].initial = True
+        self.fields['use_mne'].initial = True
     
     def get_dataset_choices(self):
         """Get choices for dataset selection."""
@@ -139,6 +138,14 @@ class PredictionForm(forms.Form):
         min_value=1,
         max_value=30,
         widget=forms.NumberInput(attrs={'class': 'form-control'})
+    )
+    
+    use_mne = forms.BooleanField(
+        required=False,
+        initial=True,
+        label='Use Advanced Preprocessing',
+        help_text='Enable advanced artifact removal for better results',
+        widget=forms.CheckboxInput(attrs={'class': 'form-check-input'})
     )
     
     def __init__(self, *args, **kwargs):

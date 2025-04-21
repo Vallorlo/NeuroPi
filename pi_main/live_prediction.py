@@ -4,11 +4,11 @@ import numpy as np
 import time
 from django.conf import settings
 from trials.data.aq_raw import EEG
-from scipy import signal
 
+# Import filters and constants from eeg_model
+from .eeg_model import apply_basic_filtering, preprocess_with_mne, MNE_AVAILABLE, EEG_CHANNELS
 
 headset = EEG()
-
 
 class LiveEEGPredictor:
     """Class for collecting EEG data and making real-time predictions."""
@@ -22,8 +22,7 @@ class LiveEEGPredictor:
             'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4'
         ]
         # Standard 14 EEG channels (excluding COUNTER)
-        self.eeg_channels = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 
-                            'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+        self.eeg_channels = EEG_CHANNELS
     
     def initialize(self):
         """Initialize the EEG headset connection."""
@@ -108,7 +107,7 @@ class LiveEEGPredictor:
                     packet = list_values[1:]
                     
                     if packet:
-                        data.append([counter] + packet)
+                        data.append([float(counter)] + [float(v) for v in packet])
                         timestamps.append(time.time() - start_time)
                     else:
                         print("Packet is empty, skipping sample.")
@@ -128,7 +127,7 @@ class LiveEEGPredictor:
                 print("No data collected.")
                 return None, None
             
-            return data, timestamps
+            return np.array(data), timestamps
             
         except Exception as e:
             print(f"Error in collect_eeg_data: {e}")
@@ -140,39 +139,7 @@ class LiveEEGPredictor:
             if self.cyHeadset:
                 self.cyHeadset.clear_data()
     
-    def apply_bandpass_filter(self, eeg_data, lowcut=4.0, highcut=50.0, fs=128.0, order=5):
-        """
-        Apply a bandpass filter to the EEG data.
-        
-        Parameters:
-        eeg_data (ndarray): EEG data array (channels x samples)
-        lowcut (float): Lower cutoff frequency in Hz
-        highcut (float): Upper cutoff frequency in Hz
-        fs (float): Sampling frequency in Hz
-        order (int): Filter order
-        
-        Returns:
-        ndarray: Filtered EEG data
-        """
-        try:
-            nyq = 0.5 * fs
-            low = lowcut / nyq
-            high = highcut / nyq
-            
-            b, a = signal.butter(order, [low, high], btype='band')
-            
-            # Apply filter to each channel
-            filtered_data = np.zeros_like(eeg_data)
-            for i in range(eeg_data.shape[0]):
-                filtered_data[i] = signal.filtfilt(b, a, eeg_data[i])
-            
-            return filtered_data
-        except Exception as e:
-            print(f"Error applying bandpass filter: {e}")
-            # Return original data if filtering fails
-            return eeg_data
-    
-    def preprocess_data(self, data, timestamps, apply_filtering=True, model_predictor=None):
+    def preprocess_data(self, data, timestamps, apply_filtering=True, model_predictor=None, use_mne=False):
         """
         Preprocess the collected EEG data for prediction.
         
@@ -181,6 +148,7 @@ class LiveEEGPredictor:
         timestamps (list): List of timestamps
         apply_filtering (bool): Whether to apply bandpass filtering
         model_predictor: Model predictor object to get expected input shape
+        use_mne (bool): Whether to use MNE for advanced preprocessing
         
         Returns:
         ndarray: Preprocessed EEG data ready for prediction
@@ -188,16 +156,33 @@ class LiveEEGPredictor:
         try:
             print("Starting preprocessing of EEG data...")
             
-            # Convert to numpy array
-            np_data = np.array(data, dtype=float)
+            # Convert to numpy array if not already
+            if not isinstance(data, np.ndarray):
+                np_data = np.array(data, dtype=float)
+            else:
+                np_data = data
             
-            # Extract only the sensor channels (skip COUNTER)
-            sensor_data = np_data[:, 1:].T  # Transpose to get channels x samples
+            # Extract only the sensor channels (Skip COUNTER if present)
+            # For 15-column data: [COUNTER, F3, FC5, AF3, F7, T7, P7, O1, O2, P8, T8, F8, AF4, FC6, F4]
+            # For 14-column data: [F3, FC5, AF3, F7, T7, P7, O1, O2, P8, T8, F8, AF4, FC6, F4]
+            if np_data.shape[1] > len(self.eeg_channels):
+                print(f"Input data has {np_data.shape[1]} columns, extracting only the 14 EEG channels")
+                # Skip the first column (COUNTER)
+                sensor_data = np_data[:, 1:15]
+            else:
+                print(f"Input data has {np_data.shape[1]} columns, assuming these are the EEG channels")
+                sensor_data = np_data
             
-            # Apply bandpass filtering if requested
+            # Apply advanced filtering if requested
             if apply_filtering:
-                print("Applying bandpass filter...")
-                sensor_data = self.apply_bandpass_filter(sensor_data)
+                print("Applying filtering...")
+                if use_mne and MNE_AVAILABLE:
+                    print("Using MNE for advanced artifact removal...")
+                    # Already in samples x channels format
+                    sensor_data = preprocess_with_mne(sensor_data)
+                else:
+                    print("Using basic bandpass filtering...")
+                    sensor_data = apply_basic_filtering(sensor_data)
             
             # Get the expected shape from the model if provided
             expected_shape = None
@@ -206,75 +191,27 @@ class LiveEEGPredictor:
                 
                 if sequence_length:
                     # Get list of channels the model was trained on
-                    model_channels = model_predictor.preprocessing_info.get('eeg_columns', self.eeg_channels)
+                    model_channels = model_predictor.preprocessing_info.get('eeg_channels', self.eeg_channels)
                     print(f"Model expects channels: {model_channels}")
                     
                     # Check if all expected channels are present
-                    all_channels_present = all(ch in self.eeg_channels for ch in model_channels)
-                    if not all_channels_present:
-                        print("Warning: Not all channels expected by the model are available")
-                
-                # Match the sequence length
-                if sequence_length and sensor_data.shape[1] > sequence_length:
-                    print(f"Trimming data to match sequence length: {sequence_length}")
-                    sensor_data = sensor_data[:, :sequence_length]
-                elif sequence_length and sensor_data.shape[1] < sequence_length:
-                    print(f"Padding data to match sequence length: {sequence_length}")
-                    padding = np.zeros((sensor_data.shape[0], sequence_length - sensor_data.shape[1]))
-                    sensor_data = np.hstack((sensor_data, padding))
-            
-            # Reshape the data to match the expected input shape of the model
-            # Most models expect shape: (batch_size, sequence_length, features)
-            print(f"Sensor data shape before reshaping: {sensor_data.shape}")
-            
-            # Attempt to match the model's expected shape
-            if model_predictor and hasattr(model_predictor, 'model'):
-                # Get the expected input shape from the model
-                input_shape = model_predictor.model.input_shape
-                print(f"Model expects input shape: {input_shape}")
-                
-                # Extract expected dimensions (ignoring batch size)
-                expected_seq_len = input_shape[1] if len(input_shape) > 1 else None
-                expected_features = input_shape[2] if len(input_shape) > 2 else None
-                
-                if expected_seq_len is not None:
-                    print(f"Model expects sequence length: {expected_seq_len}")
+                    if sensor_data.shape[1] != len(model_channels):
+                        print(f"Warning: Model expects {len(model_channels)} channels, but input has {sensor_data.shape[1]}")
                     
-                    if sensor_data.shape[1] > expected_seq_len:
-                        # Trim the sequence
-                        sensor_data = sensor_data[:, :expected_seq_len]
-                    elif sensor_data.shape[1] < expected_seq_len:
-                        # Pad the sequence
-                        padding = np.zeros((sensor_data.shape[0], expected_seq_len - sensor_data.shape[1]))
-                        sensor_data = np.hstack((sensor_data, padding))
-                
-                if expected_features is not None:
-                    print(f"Model expects feature count: {expected_features}")
-                    
-                    if sensor_data.shape[0] > expected_features:
-                        # Select only the needed channels/features
-                        print(f"Reducing channels from {sensor_data.shape[0]} to {expected_features}")
-                        sensor_data = sensor_data[:expected_features, :]
-                    elif sensor_data.shape[0] < expected_features:
-                        # Pad with zeros to match expected feature count
-                        print(f"Padding channels from {sensor_data.shape[0]} to {expected_features}")
-                        padding = np.zeros((expected_features - sensor_data.shape[0], sensor_data.shape[1]))
+                    # Match the sequence length
+                    if sequence_length and sensor_data.shape[0] > sequence_length:
+                        print(f"Trimming data to match sequence length: {sequence_length}")
+                        sensor_data = sensor_data[:sequence_length]
+                    elif sequence_length and sensor_data.shape[0] < sequence_length:
+                        print(f"Padding data to match sequence length: {sequence_length}")
+                        padding = np.zeros((sequence_length - sensor_data.shape[0], sensor_data.shape[1]))
                         sensor_data = np.vstack((sensor_data, padding))
             
-            # Reshape to (batch_size, sequence_length, features)
-            # Transpose to have samples as rows and channels as columns
-            sensor_data = sensor_data.T  # Now shape is (samples, channels)
+            # Print shape information for debugging
+            print(f"Preprocessed data shape: {sensor_data.shape}")
             
-            # Add batch dimension if needed
-            if len(sensor_data.shape) == 2:
-                # Already (samples, channels), add batch dimension
-                processed_data = np.expand_dims(sensor_data, axis=0)
-            else:
-                # Unknown shape, try to adapt
-                processed_data = sensor_data.reshape(1, -1, sensor_data.shape[-1])
-            
-            print(f"Final processed data shape: {processed_data.shape}")
-            return processed_data
+            # Return the preprocessed data
+            return sensor_data
             
         except Exception as e:
             import traceback
@@ -282,27 +219,33 @@ class LiveEEGPredictor:
             print(f"Error preprocessing data: {e}")
             return None
     
-    def predict(self, predictor, data, apply_filtering=True):
+    def predict(self, predictor, data, apply_filtering=True, use_mne=False):
         """
         Make a prediction using the provided EEG data.
         
         Parameters:
-        predictor: Loaded RNNPredictor model
+        predictor: Loaded model predictor
         data (list): List of EEG data samples
         apply_filtering (bool): Whether to apply bandpass filtering
+        use_mne (bool): Whether to use MNE for advanced preprocessing
         
         Returns:
         dict: Prediction results or error message
         """
         try:
-            if not data:
+            if not data.any():
                 return {'error': 'No EEG data available for prediction'}
             
             # Get timestamps for this data collection
             timestamps = [i/128 for i in range(len(data))]  # Assuming 128 Hz sampling rate
             
             # Preprocess the data, passing the predictor for shape information
-            processed_data = self.preprocess_data(data, timestamps, apply_filtering, predictor)
+            processed_data = self.preprocess_data(
+                data, timestamps, 
+                apply_filtering=apply_filtering, 
+                model_predictor=predictor, 
+                use_mne=use_mne
+            )
             
             if processed_data is None:
                 return {'error': 'Failed to preprocess EEG data'}

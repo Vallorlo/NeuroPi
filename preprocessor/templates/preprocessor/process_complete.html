@@ -1,0 +1,229 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Processing Complete
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="card shadow-lg border-success">
+        <div class="card-header bg-success text-white">
+            <h3 class="mb-0"><i class="bi bi-check-circle-fill me-2"></i> Processing Complete</h3>
+        </div>
+        <div class="card-body">
+            <div class="alert alert-success">
+                <h4 class="alert-heading">Success!</h4>
+                <p>{{ message }}</p>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">Processing Summary</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <tbody>
+                                        <tr>
+                                            <th>Participants Processed</th>
+                                            <td>{{ stats.total_participants }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Words Processed</th>
+                                            <td>{{ stats.total_unique_words }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Stages Processed</th>
+                                            <td>{{ stats.stages_processed }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Attempts Processed</th>
+                                            <td>{{ stats.attempts_processed }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Visualizations Created</th>
+                                            <td>{{ stats.visualizations_created }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Audio Files Processed</th>
+                                            <td>{{ stats.audio_processed }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Timestamp Files Processed</th>
+                                            <td>{{ stats.timestamp_processed }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Dataset Rows</th>
+                                            <td>{{ stats.dataset_rows }}</td>
+                                        </tr>
+                                        {% if stats.train_rows %}
+                                        <tr>
+                                            <th>Training Rows</th>
+                                            <td>{{ stats.train_rows }}</td>
+                                        </tr>
+                                        <tr>
+                                            <th>Testing Rows</th>
+                                            <td>{{ stats.test_rows }}</td>
+                                        </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Processed Words</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                {% for word in stats.words_list %}
+                                <div class="col-md-4 mb-2">
+                                    <div class="badge bg-primary p-2 w-100">{{ word }}</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mb-3">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Processed Participants</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                {% for participant in stats.participant_list %}
+                                <div class="col-md-4 mb-2">
+                                    <div class="badge bg-secondary p-2 w-100">{{ participant }}</div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- New section highlighting the word_label functionality -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-tag-fill me-2"></i>Word Labeling</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle me-2"></i>
+                        <strong>Word Label Format:</strong> The processed data now includes a <code>word_label</code> column that contains:
+                        <ul>
+                            <li>The <strong>actual word</strong> (e.g., "hello") during speech events</li>
+                            <li>The label <strong>"sil"</strong> (silence) during non-speech periods</li>
+                        </ul>
+                        <p>This format makes the data more suitable for machine learning tasks by providing explicit word labels for every time point.</p>
+                    </div>
+                    
+                    <!-- Sample data visualization -->
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>F3</th>
+                                    <th>T7</th>
+                                    <th>word_label</th>
+                                    <th>word_event</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Sample rows with word events -->
+                                <tr>
+                                    <td>0.125</td>
+                                    <td>482.3</td>
+                                    <td>315.7</td>
+                                    <td class="text-muted">sil</td>
+                                    <td><span class="badge bg-secondary">False</span></td>
+                                </tr>
+                                <tr class="table-info">
+                                    <td>0.250</td>
+                                    <td>527.8</td>
+                                    <td>342.1</td>
+                                    <td class="fw-bold">{{ stats.words_list.0|default:"hello" }}</td>
+                                    <td><span class="badge bg-success">True</span></td>
+                                </tr>
+                                <tr class="table-info">
+                                    <td>0.375</td>
+                                    <td>563.2</td>
+                                    <td>359.4</td>
+                                    <td class="fw-bold">{{ stats.words_list.0|default:"hello" }}</td>
+                                    <td><span class="badge bg-success">True</span></td>
+                                </tr>
+                                <tr>
+                                    <td>0.500</td>
+                                    <td>491.5</td>
+                                    <td>324.9</td>
+                                    <td class="text-muted">sil</td>
+                                    <td><span class="badge bg-secondary">False</span></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="text-center"><small class="text-muted">Sample data illustration</small></div>
+                    </div>
+                    
+                    <div class="alert alert-warning mt-3">
+                        <i class="bi bi-lightbulb me-2"></i>
+                        <strong>Next Step:</strong> You can use the Data Cleaner to apply filtering, remove artifacts, and optimize this data for neural network training.
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Available Datasets -->
+            {% if dataset_links %}
+            <div class="card mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-spreadsheet me-2"></i>Generated Datasets</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        {% for dataset in dataset_links %}
+                        <a href="/processor/download/{{ dataset.filename }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ dataset.name }}</strong>
+                                <small class="text-muted ms-2">{{ dataset.size }}</small>
+                            </div>
+                            <span class="badge bg-primary rounded-pill">
+                                <i class="bi bi-download"></i> Download
+                            </span>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+            
+            <!-- Output Log -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-terminal me-2"></i>Processing Log</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="bg-light p-3 rounded" style="max-height: 300px; overflow-y: auto;">{{ output }}</pre>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-between mt-4">
+                <a href="/" class="btn btn-secondary">
+                    <i class="bi bi-house-door"></i> Home
+                </a>
+                <a href="/processor" class="btn btn-primary">
+                    <i class="bi bi-gear"></i> Process More Data
+                </a>
+                <a href="/cleaner" class="btn btn-success">
+                    <i class="bi bi-filter-circle"></i> Clean This Data
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

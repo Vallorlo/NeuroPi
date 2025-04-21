@@ -52,8 +52,7 @@
                             <i class="bi bi-cpu"></i> Processing
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="processingDropdown">
-                            <li><a class="dropdown-item" href="/processor">Data Processor</a></li>
-                            <li><a class="dropdown-item" href="/cleaner">Data Cleaner</a></li>
+                            <li><a class="dropdown-item" href="/preprocessor">Preprocess Data</a></li>
                         </ul>
                     </li>
                     <li class="nav-item dropdown">
@@ -61,10 +60,9 @@
                             <i class="bi bi-lightning-charge"></i> Neural Networks
                         </a>
                         <ul class="dropdown-menu" aria-labelledby="neuralDropdown">
-                            <li><a class="dropdown-item" href="{% url 'pi_main:model_dashboard' %}">Dashboard</a></li>
-                            <li><a class="dropdown-item" href="{% url 'pi_main:train_model' %}">Train New Model</a></li>
-                            <li><a class="dropdown-item" href="{% url 'pi_main:model_list' %}">View Models</a></li>
-                            <li><a class="dropdown-item" href="{% url 'pi_main:live_prediction' %}">Live Prediction</a></li>
+                            <li><a class="dropdown-item" href="{% url 'pi_main:model_dashboard' %}">RNN Dashboard</a></li>
+                            <li><a class="dropdown-item" href="{% url 'pi_main:train_model' %}">Train RNN Model</a></li>
+                            <li><a class="dropdown-item" href="{% url 'pi_main:model_list' %}">View RNN Models</a></li>
                         </ul>
                     </li>
                 </ul>

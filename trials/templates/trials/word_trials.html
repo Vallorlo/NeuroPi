@@ -29,10 +29,29 @@
                                     <span class="badge bg-success rounded-pill">{{ word }}</span>
                                 </li>
                                 <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Microphone:</strong></span>
+                                    <span class="badge bg-secondary rounded-pill">{{ microphone_name|default:"Default" }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
                                     <span><strong>Trial Date:</strong></span>
                                     <span>{{ trial_date }}</span>
                                 </li>
                             </ul>
+                            
+                            <!-- Participant action buttons -->
+                            <div class="mt-3 d-flex gap-2">
+                                <a href="{% url 'start_trial' %}" class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-person-plus"></i> New Participant
+                                </a>
+                                
+                                <form method="post" action="{% url 'word_trials' %}" class="d-inline">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="existing_participant" value="{{ participant_name }}">
+                                    <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#selectWordModal">
+                                        <i class="bi bi-chat-square-text"></i> Change Word
+                                    </button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -99,6 +118,44 @@
     </div>
 </div>
 
+<!-- Modal for selecting a different word -->
+<div class="modal fade" id="selectWordModal" tabindex="-1" aria-labelledby="selectWordModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="selectWordModalLabel">Select Another Word</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form method="post" action="{% url 'word_trials' %}" id="changeWordForm">
+                    {% csrf_token %}
+                    <input type="hidden" name="existing_participant" value="{{ participant_name }}">
+                    <input type="hidden" name="microphone_index" value="{{ microphone_index }}">
+                    
+                    <div class="row word-selection">
+                        {% for available_word in unique_words %}
+                            <div class="col-md-4 mb-3">
+                                <div class="card word-card">
+                                    <div class="card-body text-center">
+                                        <h3>{{ available_word }}</h3>
+                                        <input type="radio" name="word" id="modal_word_{{ available_word }}" value="{{ available_word }}" 
+                                               class="form-check-input word-radio" required {% if available_word == word %}checked{% endif %}>
+                                        <label for="modal_word_{{ available_word }}" class="btn btn-outline-primary w-100 mt-2">Select</label>
+                                    </div>
+                                </div>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submitChangeWordBtn">Switch to Selected Word</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <style>
     .stage-card {
         transition: all 0.3s ease;
@@ -123,5 +180,76 @@
     .stage-description {
         min-height: 60px;
     }
+    
+    .word-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+        border: 2px solid #e9ecef;
+    }
+    
+    .word-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .word-radio {
+        position: absolute;
+        opacity: 0;
+    }
+    
+    .word-radio:checked + label {
+        background-color: #0d6efd;
+        color: white;
+    }
 </style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Make the entire word card clickable
+        const wordCards = document.querySelectorAll('.word-card');
+        wordCards.forEach(card => {
+            card.addEventListener('click', function() {
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+                
+                // Update all labels to show selection state
+                document.querySelectorAll('.word-radio').forEach(input => {
+                    const label = input.nextElementSibling;
+                    if (input.checked) {
+                        label.classList.remove('btn-outline-primary');
+                        label.classList.add('btn-primary');
+                    } else {
+                        label.classList.remove('btn-primary');
+                        label.classList.add('btn-outline-primary');
+                    }
+                });
+            });
+        });
+        
+        // Submit the change word form
+        const submitChangeWordBtn = document.getElementById('submitChangeWordBtn');
+        if (submitChangeWordBtn) {
+            submitChangeWordBtn.addEventListener('click', function() {
+                const form = document.getElementById('changeWordForm');
+                const selectedWord = form.querySelector('input[name="word"]:checked');
+                
+                if (selectedWord) {
+                    form.submit();
+                } else {
+                    alert('Please select a word');
+                }
+            });
+        }
+        
+        // Initialize selected word in modal
+        const modalWordRadios = document.querySelectorAll('#changeWordForm input[name="word"]');
+        modalWordRadios.forEach(radio => {
+            if (radio.checked) {
+                const label = radio.nextElementSibling;
+                label.classList.remove('btn-outline-primary');
+                label.classList.add('btn-primary');
+            }
+        });
+    });
+</script>
 {% endblock content %}

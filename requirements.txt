@@ -18,3 +18,7 @@ tqdm
 librosa
 noisereduce
 soundfile
+torch
+torchvision
+torchaudio
+seaborn

@@ -21,10 +21,11 @@ from . import views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', views.homepage ), 
-    path('about/', views.about ), 
+    path('', views.homepage, name='home'),
+    path('about/', views.about, name='about'),
     path('trials/', include('trials.urls')),
     path('plot/', include('plot.urls')),
-    path('preprocessor/', include('preprocessor.urls')), 
-    path('pi_main/', include('pi_main.urls', namespace='pi_main')),  
+    path('preprocessor/', include('preprocessor.urls')),
+    path('pi_main/', include('pi_main.urls', namespace='pi_main')),
+    path('accounts/', include('accounts.urls')),
 ]

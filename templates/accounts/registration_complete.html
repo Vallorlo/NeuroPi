@@ -1,0 +1,45 @@
+{% extends "layout.html" %}
+
+{% block title %}Registration Complete{% endblock %}
+
+{% block content %}
+<div class="container mt-5 mb-5">
+    <div class="row">
+        <div class="col-lg-6 offset-lg-3">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h1 class="mb-0">Registration Complete</h1>
+                </div>
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="bi bi-check-circle-fill text-success" style="font-size: 5rem;"></i>
+                    </div>
+                    
+                    <h2>Welcome to NeuroPi, {{ username }}!</h2>
+                    <p class="lead">Your account has been created successfully.</p>
+                    
+                    <div class="alert alert-info mt-4">
+                        <h4>Your Role: {{ role_display }}</h4>
+                        <p>
+                            {% if role == 'user' %}
+                            You now have access to Home, About, and Trials pages.
+                            {% elif role == 'trainer' %}
+                            You now have full access to all features including Plot, Processing, and Neural Networks.
+                            {% endif %}
+                        </p>
+                    </div>
+                    
+                    <div class="d-grid gap-2 col-md-8 mx-auto mt-4">
+                        <a href="{% url 'login' %}" class="btn btn-primary btn-lg">
+                            <i class="bi bi-box-arrow-in-right"></i> Login Now
+                        </a>
+                        <a href="{% url 'home' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-house-door"></i> Return to Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

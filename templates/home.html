@@ -6,12 +6,51 @@
 
 {% block content %}
 <div class="home">
+    <!-- Floating elements for visual interest -->
+    <div class="floating-elements">
+        <div class="floating-element" data-speed="1"></div>
+        <div class="floating-element" data-speed="2"></div>
+        <div class="floating-element" data-speed="3"></div>
+        <div class="floating-element" data-speed="4"></div>
+        <div class="floating-element" data-speed="5"></div>
+    </div>
+
     <!-- after -->
     <div class="container-fluid py-5">
         <div class="row">
             <div class="col-lg-8 offset-lg-2 text-center">
                 <h1 class="display-3 text-white mb-4">Welcome to Neuro<span class="text-danger fw-bold">π</span></h1>
                 <p class="lead text-white mb-5">A comprehensive platform for EEG data collection, processing, and neural network analysis</p>
+
+                {% if not user.is_authenticated %}
+                <div class="cta-container mb-5">
+                    <div class="cta-card">
+                        <div class="cta-content">
+                            <div class="cta-icon">
+                                <i class="bi bi-stars"></i>
+                            </div>
+                            <div class="cta-text">
+                                <h3>Unlock the Full Potential of NeuroPi</h3>
+                                <p>Choose your role and gain access to powerful EEG analysis tools</p>
+                                <div class="cta-features">
+                                    <span><i class="bi bi-check-circle-fill"></i> Data Collection</span>
+                                    <span><i class="bi bi-check-circle-fill"></i> Visualization</span>
+                                    <span><i class="bi bi-check-circle-fill"></i> Neural Networks</span>
+                                </div>
+                            </div>
+                            <div class="cta-buttons">
+                                <a href="{% url 'register' %}" class="btn-cta-primary">
+                                    <i class="bi bi-person-plus-fill"></i> Join Now
+                                </a>
+                                <a href="{% url 'login' %}" class="btn-cta-secondary">
+                                    <i class="bi bi-box-arrow-in-right"></i> Login
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <div class="d-grid gap-3 d-sm-flex justify-content-sm-center custom-layout">
                     <a href="{% url 'start_trial' %}" class="btn btn-primary btn-lg px-4">
                         <i class="bi bi-play-circle-fill"></i> Start New Trial
@@ -49,104 +88,133 @@
     </div> -->
     <!-- --------------------- -->
     <div class="container-fluid container-md mt-5 pb-5">
-        <!-- 4 card -->
+        <div class="section-header text-center mb-5">
+            <h2 class="display-5 fw-bold">Powerful EEG Analysis Tools</h2>
+            <p class="lead text-muted">Explore the complete suite of NeuroPi features</p>
+        </div>
+        <!-- Feature Cards -->
         <div class="row g-4">
             <!-- Data Collection card -->
-            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
-                <div class="card h-100 shadow-lg">
-                    <div class="card-body text-center p-4">
-                        <i class="bi bi-braces-asterisk text-primary" style="font-size: 3rem;"></i>
-                        <h2 class="card-title mt-3">Data Collection</h2>
-                        <p class="card-text">Collect synchronized EEG and audio data across multiple trial stages. Organize experiments by participant, word, and stage.</p>
-                        <a href="{% url 'start_trial' %}" class="btn btn-outline-primary mt-2">Start Collection</a>
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="feature-card" data-color="blue">
+                    <div class="feature-icon">
+                        <i class="bi bi-braces-asterisk"></i>
                     </div>
+                    <h3>Data Collection</h3>
+                    <p>Collect synchronized EEG and audio data across multiple trial stages. Organize experiments by participant, word, and stage.</p>
+                    <a href="{% url 'start_trial' %}" class="feature-btn">
+                        Start Collection <i class="bi bi-arrow-right"></i>
+                    </a>
                 </div>
             </div>
             <!-- Preprocessing card -->
-            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
-                <div class="card h-100 shadow-lg">
-                    <div class="card-body text-center p-4">
-                        <i class="bi bi-cpu text-danger" style="font-size: 3rem;"></i>
-                        <h2 class="card-title mt-3">Preprocessing</h2>
-                        <p class="card-text">Process raw EEG data by defining classes and combine all trials into a single combined dataset.</p>
-                        <div class="mt-2">
-                            <a href="/preprocessor" class="btn btn-outline-danger me-2">Process</a>
-                        </div>
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="feature-card" data-color="purple">
+                    <div class="feature-icon">
+                        <i class="bi bi-cpu"></i>
                     </div>
+                    <h3>Preprocessing</h3>
+                    <p>Process raw EEG data by defining classes and combine all trials into a single combined dataset.</p>
+                    <a href="/preprocessor" class="feature-btn">
+                        Process Data <i class="bi bi-arrow-right"></i>
+                    </a>
                 </div>
             </div>
             <!-- Visualization card -->
-            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
-                <div class="card h-100 shadow-lg">
-                    <div class="card-body text-center p-4">
-                        <i class="bi bi-graph-up text-success" style="font-size: 3rem;"></i>
-                        <h2 class="card-title mt-3 text-nowrap">Visualization</h2>
-                        <p class="card-text">Visualize and analyze EEG data with interactive plots, comparing different stages and channels.</p>
-                        <a href="{% url 'eeg_view' %}" class="btn btn-outline-success mt-2">View Plots</a>
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="feature-card" data-color="green">
+                    <div class="feature-icon">
+                        <i class="bi bi-graph-up"></i>
                     </div>
+                    <h3>Visualization</h3>
+                    <p>Visualize and analyze EEG data with interactive plots, comparing different stages and channels.</p>
+                    <a href="{% url 'eeg_view' %}" class="feature-btn">
+                        View Plots <i class="bi bi-arrow-right"></i>
+                    </a>
                 </div>
             </div>
             <!-- Neural Networks card-->
-            <div class="col-12 col-sm-6 col-md-4 col-lg-3">
-                <div class="card h-100 shadow-lg">
-                    <div class="card-body text-center p-4">
-                        <i class="bi bi-lightning-charge text-warning" style="font-size: 3rem;"></i>
-                        <h2 class="card-title mt-3">Neural Networks</h2>
-                        <p class="card-text">Train and deploy RNN models to recognize speech patterns from EEG data and make real-time predictions.</p>
-                        <div class="mt-2">
-                            <a href="{% url 'pi_main:model_dashboard' %}" class="btn btn-outline-warning me-2">Models</a>
-                        </div>
+            <div class="col-12 col-sm-6 col-md-3">
+                <div class="feature-card" data-color="orange">
+                    <div class="feature-icon">
+                        <i class="bi bi-lightning-charge"></i>
                     </div>
+                    <h3>Neural Networks</h3>
+                    <p>Train and deploy RNN models to recognize speech patterns from EEG data and make real-time predictions.</p>
+                    <a href="{% url 'pi_main:model_dashboard' %}" class="feature-btn">
+                        Explore Models <i class="bi bi-arrow-right"></i>
+                    </a>
                 </div>
             </div>
         </div>
     </div>
 </div>
-<div class="container-fluid container-md pb-5">
-    <div class="row mt-5 research-workflow">
-        <div class="col-12">
-            <div class="card shadow-lg">
-                <div class="card-body p-4">
-                    <h2 class="text-center mb-4">Research Workflow</h2>
-                    <div class="timeline">
-                        <div class="timeline-item">
-                            <div class="timeline-marker bg-primary">1</div>
-                            <div class="timeline-content">
+<div class="workflow-section">
+    <div class="container-fluid container-md pb-5">
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="workflow-container">
+                    <div class="section-header text-center mb-5">
+                        <h2 class="display-5 fw-bold">Research Workflow</h2>
+                        <p class="lead text-muted">A comprehensive approach to EEG research</p>
+                    </div>
+
+                    <div class="workflow-timeline">
+                        <div class="workflow-item" data-step="1">
+                            <div class="workflow-icon">
+                                <i class="bi bi-clipboard-check"></i>
+                            </div>
+                            <div class="workflow-content">
                                 <h4>Trial Setup</h4>
                                 <p>Create a new trial by selecting a participant and word</p>
                             </div>
                         </div>
-                        <div class="timeline-item">
-                            <div class="timeline-marker bg-primary">2</div>
-                            <div class="timeline-content">
+
+                        <div class="workflow-item" data-step="2">
+                            <div class="workflow-icon">
+                                <i class="bi bi-collection-play"></i>
+                            </div>
+                            <div class="workflow-content">
                                 <h4>Data Collection</h4>
                                 <p>Collect EEG and audio data across 5 different stages</p>
                             </div>
                         </div>
-                        <div class="timeline-item">
-                            <div class="timeline-marker bg-primary">3</div>
-                            <div class="timeline-content">
+
+                        <div class="workflow-item" data-step="3">
+                            <div class="workflow-icon">
+                                <i class="bi bi-cpu"></i>
+                            </div>
+                            <div class="workflow-content">
                                 <h4>Data Processing</h4>
                                 <p>Process raw data to identify speech/motor events and create datasets</p>
                             </div>
                         </div>
-                        <div class="timeline-item">
-                            <div class="timeline-marker bg-primary">4</div>
-                            <div class="timeline-content">
+
+                        <div class="workflow-item" data-step="4">
+                            <div class="workflow-icon">
+                                <i class="bi bi-filter-circle"></i>
+                            </div>
+                            <div class="workflow-content">
                                 <h4>Signal Cleaning</h4>
                                 <p>Apply filters and remove artifacts to improve signal quality</p>
                             </div>
                         </div>
-                        <div class="timeline-item">
-                            <div class="timeline-marker bg-primary">5</div>
-                            <div class="timeline-content">
+
+                        <div class="workflow-item" data-step="5">
+                            <div class="workflow-icon">
+                                <i class="bi bi-lightning-charge"></i>
+                            </div>
+                            <div class="workflow-content">
                                 <h4>Neural Network Training</h4>
                                 <p>Train RNN models on the processed EEG data</p>
                             </div>
                         </div>
-                        <div class="timeline-item">
-                            <div class="timeline-marker bg-primary">6</div>
-                            <div class="timeline-content">
+
+                        <div class="workflow-item" data-step="6">
+                            <div class="workflow-icon">
+                                <i class="bi bi-broadcast"></i>
+                            </div>
+                            <div class="workflow-content">
                                 <h4>Live Prediction</h4>
                                 <p>Use trained models for real-time EEG speech recognition</p>
                             </div>
@@ -159,7 +227,565 @@
 </div>
 
 <style>
+/* Common Styles */
+.section-header {
+    margin-bottom: 3rem;
+}
 
+.section-header h2 {
+    color: #333;
+    position: relative;
+    display: inline-block;
+    margin-bottom: 1rem;
+}
+
+.section-header h2:after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 4px;
+    background: linear-gradient(90deg, #0d6efd, #6610f2);
+    border-radius: 2px;
+}
+
+/* CTA Styles */
+.cta-container {
+    width: 100%;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.cta-card {
+    background: linear-gradient(135deg, rgba(13, 110, 253, 0.9), rgba(102, 16, 242, 0.9));
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 15px 30px rgba(0, 0, 0, 0.3);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    position: relative;
+}
+
+.cta-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.cta-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 150px;
+    height: 150px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    transform: translate(50%, -50%);
+}
+
+.cta-content {
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    color: white;
+}
+
+.cta-icon {
+    font-size: 3rem;
+    margin-bottom: 1rem;
+    color: #ffdd57;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(1); }
+}
+
+.cta-text h3 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.cta-text p {
+    font-size: 1.1rem;
+    margin-bottom: 1.5rem;
+    opacity: 0.9;
+}
+
+.cta-features {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.cta-features span {
+    background-color: rgba(255, 255, 255, 0.15);
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.cta-features i {
+    color: #4ade80;
+}
+
+.cta-buttons {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.btn-cta-primary {
+    background-color: #ffffff;
+    color: #6610f2;
+    padding: 0.75rem 2rem;
+    border-radius: 50px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.btn-cta-primary:hover {
+    background-color: #f8f9fa;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+.btn-cta-secondary {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    padding: 0.75rem 2rem;
+    border-radius: 50px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+
+.btn-cta-secondary:hover {
+    background-color: rgba(255, 255, 255, 0.25);
+    color: white;
+}
+
+/* Feature Card Styles */
+.feature-card {
+    background: white;
+    border-radius: 16px;
+    padding: 2rem;
+    height: 100%;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    z-index: 1;
+}
+
+.feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 5px;
+    z-index: 1;
+}
+
+.feature-card[data-color="blue"]::before {
+    background: linear-gradient(90deg, #0d6efd, #0dcaf0);
+}
+
+.feature-card[data-color="purple"]::before {
+    background: linear-gradient(90deg, #6f42c1, #d63384);
+}
+
+.feature-card[data-color="green"]::before {
+    background: linear-gradient(90deg, #198754, #20c997);
+}
+
+.feature-card[data-color="orange"]::before {
+    background: linear-gradient(90deg, #fd7e14, #ffc107);
+}
+
+.feature-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+}
+
+.feature-icon {
+    width: 70px;
+    height: 70px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+    font-size: 2rem;
+    position: relative;
+}
+
+.feature-card[data-color="blue"] .feature-icon {
+    color: #0d6efd;
+    background: rgba(13, 110, 253, 0.1);
+}
+
+.feature-card[data-color="purple"] .feature-icon {
+    color: #6f42c1;
+    background: rgba(111, 66, 193, 0.1);
+}
+
+.feature-card[data-color="green"] .feature-icon {
+    color: #198754;
+    background: rgba(25, 135, 84, 0.1);
+}
+
+.feature-card[data-color="orange"] .feature-icon {
+    color: #fd7e14;
+    background: rgba(253, 126, 20, 0.1);
+}
+
+.feature-card h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+.feature-card p {
+    color: #6c757d;
+    margin-bottom: 1.5rem;
+    flex-grow: 1;
+}
+
+.feature-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    padding: 0.5rem 0;
+    position: relative;
+}
+
+.feature-card[data-color="blue"] .feature-btn {
+    color: #0d6efd;
+}
+
+.feature-card[data-color="purple"] .feature-btn {
+    color: #6f42c1;
+}
+
+.feature-card[data-color="green"] .feature-btn {
+    color: #198754;
+}
+
+.feature-card[data-color="orange"] .feature-btn {
+    color: #fd7e14;
+}
+
+.feature-btn::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    transition: width 0.3s ease;
+}
+
+.feature-card[data-color="blue"] .feature-btn::after {
+    background: #0d6efd;
+}
+
+.feature-card[data-color="purple"] .feature-btn::after {
+    background: #6f42c1;
+}
+
+.feature-card[data-color="green"] .feature-btn::after {
+    background: #198754;
+}
+
+.feature-card[data-color="orange"] .feature-btn::after {
+    background: #fd7e14;
+}
+
+.feature-btn:hover::after {
+    width: 100%;
+}
+
+.feature-btn i {
+    transition: transform 0.3s ease;
+}
+
+.feature-btn:hover i {
+    transform: translateX(5px);
+}
+
+/* Workflow Section Styles */
+.workflow-section {
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    padding: 3rem 0;
+    border-radius: 16px;
+    margin-top: 3rem;
+}
+
+.workflow-container {
+    position: relative;
+    padding: 2rem;
+}
+
+.workflow-timeline {
+    position: relative;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.workflow-timeline::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 40px;
+    width: 4px;
+    background: linear-gradient(to bottom, #0d6efd, #6610f2);
+    border-radius: 2px;
+}
+
+.workflow-item {
+    position: relative;
+    padding-left: 80px;
+    margin-bottom: 3rem;
+}
+
+.workflow-item:last-child {
+    margin-bottom: 0;
+}
+
+.workflow-icon {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 80px;
+    height: 80px;
+    background: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+    z-index: 2;
+}
+
+.workflow-item[data-step="1"] .workflow-icon {
+    color: #0d6efd;
+}
+
+.workflow-item[data-step="2"] .workflow-icon {
+    color: #6610f2;
+}
+
+.workflow-item[data-step="3"] .workflow-icon {
+    color: #d63384;
+}
+
+.workflow-item[data-step="4"] .workflow-icon {
+    color: #fd7e14;
+}
+
+.workflow-item[data-step="5"] .workflow-icon {
+    color: #198754;
+}
+
+.workflow-item[data-step="6"] .workflow-icon {
+    color: #0dcaf0;
+}
+
+.workflow-content {
+    background: white;
+    padding: 1.5rem;
+    border-radius: 16px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.05);
+}
+
+.workflow-content h4 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.workflow-content p {
+    color: #6c757d;
+    margin-bottom: 0;
+}
+
+.workflow-item::after {
+    content: attr(data-step);
+    position: absolute;
+    top: 30px;
+    left: 40px;
+    transform: translateX(-50%);
+    font-weight: bold;
+    color: white;
+    z-index: 3;
+}
+
+/* Responsive Styles */
+@media (max-width: 768px) {
+    .workflow-timeline::before {
+        left: 30px;
+    }
+
+    .workflow-item {
+        padding-left: 70px;
+    }
+
+    .workflow-icon {
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+    }
+
+    .workflow-item::after {
+        top: 20px;
+        left: 30px;
+    }
+}
+
+@media (max-width: 576px) {
+    .cta-content {
+        padding: 1.5rem;
+    }
+
+    .cta-buttons {
+        flex-direction: column;
+    }
+
+    .cta-features {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .feature-card {
+        padding: 1.5rem;
+    }
+
+    .workflow-item {
+        padding-left: 60px;
+    }
+
+    .workflow-icon {
+        width: 50px;
+        height: 50px;
+        font-size: 1.25rem;
+    }
+
+    .workflow-item::after {
+        top: 15px;
+        left: 25px;
+    }
+}
+
+/* Floating Elements */
+.floating-elements {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.floating-element {
+    position: absolute;
+    width: 150px;
+    height: 150px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 50%;
+    animation: float 15s infinite linear;
+}
+
+.floating-element[data-speed="1"] {
+    top: 10%;
+    left: 10%;
+    width: 80px;
+    height: 80px;
+    animation-duration: 20s;
+}
+
+.floating-element[data-speed="2"] {
+    top: 70%;
+    left: 20%;
+    width: 120px;
+    height: 120px;
+    animation-duration: 25s;
+    animation-delay: 2s;
+}
+
+.floating-element[data-speed="3"] {
+    top: 40%;
+    left: 70%;
+    width: 100px;
+    height: 100px;
+    animation-duration: 30s;
+    animation-delay: 5s;
+}
+
+.floating-element[data-speed="4"] {
+    top: 80%;
+    left: 80%;
+    width: 60px;
+    height: 60px;
+    animation-duration: 22s;
+    animation-delay: 7s;
+}
+
+.floating-element[data-speed="5"] {
+    top: 20%;
+    left: 50%;
+    width: 90px;
+    height: 90px;
+    animation-duration: 18s;
+    animation-delay: 10s;
+}
+
+@keyframes float {
+    0% {
+        transform: translateY(0) rotate(0deg);
+    }
+    50% {
+        transform: translateY(-100px) rotate(180deg);
+    }
+    100% {
+        transform: translateY(0) rotate(360deg);
+    }
+}
+
+/* Existing Styles */
 @media (min-width: 575px) and (max-width: 767.98px) {
     .custom-layout {
         flex-wrap: wrap;
@@ -171,51 +797,6 @@
     .custom-layout .btn:nth-child(3) {
         flex: 0 0 51%; /* Third button takes full width */
     }
-}
-
-.research-workflow p{
-    font-size: 1.125rem;
-}
-
-.timeline {
-    position: relative;
-    margin: 2rem 0;
-    padding-left: 3rem;
-}
-
-.timeline:before {
-    content: '';
-    position: absolute;
-    left: 1.25rem;
-    top: 0;
-    bottom: 0;
-    width: 2px;
-    background: #e9ecef;
-}
-
-.timeline-item {
-    position: relative;
-    margin-bottom: 2rem;
-}
-
-.timeline-marker {
-    position: absolute;
-    left: -3rem;
-    width: 2.5rem;
-    height: 2.5rem;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    z-index: 1;
-}
-
-.timeline-content {
-    padding: 1rem;
-    background: #f8f9fa;
-    border-radius: 0.5rem;
 }
 </style>
 {% endblock content %}

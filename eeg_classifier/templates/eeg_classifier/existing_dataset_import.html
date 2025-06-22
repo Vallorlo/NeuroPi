@@ -1,0 +1,81 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block title %}Import Existing Dataset{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1><i class="bi bi-folder2-open"></i> Import Existing Visual Trial Dataset</h1>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Select Dataset from trials_data Folder</h5>
+                </div>
+                <div class="card-body">
+                    {% if form.dataset_folder.field.choices %}
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            {{ form.dataset_folder.label_tag }}
+                            {{ form.dataset_folder }}
+                            {% if form.dataset_folder.help_text %}
+                                <div class="form-text">{{ form.dataset_folder.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.xxxxx_handling.label_tag }}
+                            {{ form.xxxxx_handling }}
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-download"></i> Import Dataset
+                        </button>
+                        <a href="{% url 'eeg_classifier:dataset_list' %}" class="btn btn-secondary">Cancel</a>
+                    </form>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <h5><i class="bi bi-exclamation-triangle"></i> No Visual Trial Datasets Found</h5>
+                        <p>No visual trial datasets were found in the <code>trials_data</code> folder.</p>
+                        <p>Make sure you have folders that:</p>
+                        <ul>
+                            <li>Start with <code>visual_trial_</code></li>
+                            <li>Contain a <code>session_summary.txt</code> file</li>
+                            <li>Contain a CSV file starting with <code>visual_trial_data_</code></li>
+                        </ul>
+                        <a href="{% url 'eeg_classifier:visual_trial_upload' %}" class="btn btn-primary">
+                            Upload New Dataset Instead
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-info-circle"></i> Import Process</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small">
+                        This will import datasets from your project's <code>trials_data</code> folder without needing to upload files again.
+                    </p>
+                    
+                    <h6>What happens:</h6>
+                    <ol class="small">
+                        <li>Scan trials_data folder</li>
+                        <li>Copy selected dataset to media folder</li>
+                        <li>Apply XXXXX class handling</li>
+                        <li>Process and validate data</li>
+                        <li>Ready for training!</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

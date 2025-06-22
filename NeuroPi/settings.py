@@ -41,7 +41,6 @@ INSTALLED_APPS = [
     'trials',
     'plot.apps.PlotConfig',
     'preprocessor',
-    'pi_main',
     'accounts',
     'eeg_classifier',
 ]

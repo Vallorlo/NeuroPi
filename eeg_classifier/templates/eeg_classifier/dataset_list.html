@@ -1,0 +1,66 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block title %}EEG Datasets{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-database"></i> EEG Datasets</h1>
+        <a href="{% url 'eeg_classifier:dataset_upload' %}" class="btn btn-primary">
+            <i class="bi bi-upload"></i> Upload New Dataset
+        </a>
+    </div>
+
+    {% if datasets %}
+        <div class="row">
+            {% for dataset in datasets %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">{{ dataset.name }}</h5>
+                        {% if dataset.processed %}
+                            <span class="badge bg-success">Processed</span>
+                        {% else %}
+                            <span class="badge bg-warning">Processing...</span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text">{{ dataset.description|truncatechars:100 }}</p>
+                        <ul class="list-unstyled">
+                            <li><strong>Participant:</strong> {{ dataset.participant_name|default:"Unknown" }}</li>
+                            <li><strong>Samples:</strong> {{ dataset.total_samples }}</li>
+                            <li><strong>Duration:</strong> {{ dataset.total_duration|floatformat:1 }}s</li>
+                            <li><strong>Channels:</strong> {{ dataset.n_channels }}</li>
+                        </ul>
+                        
+                        {% if dataset.word_counts %}
+                        <h6>Word Distribution:</h6>
+                        <div class="small">
+                            {% for word, count in dataset.word_counts.items %}
+                                <span class="badge bg-secondary me-1">{{ word }}: {{ count }}</span>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer">
+                        <a href="{% url 'eeg_classifier:dataset_detail' dataset.id %}" class="btn btn-sm btn-outline-primary">View Details</a>
+                        <form method="post" action="{% url 'eeg_classifier:delete_dataset' dataset.id %}" class="d-inline" 
+                              onsubmit="return confirm('Are you sure you want to delete this dataset?');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-danger">Delete</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info text-center">
+            <h4>No datasets uploaded yet</h4>
+            <p>Upload your first EEG dataset to start training models.</p>
+            <a href="{% url 'eeg_classifier:dataset_upload' %}" class="btn btn-primary">Upload Dataset</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

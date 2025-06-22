@@ -1,6 +1,3 @@
-# eeg_classifier/urls.py
-# URL configuration for EEG classification application
-
 from django.urls import path
 from . import views
 
@@ -13,6 +10,8 @@ urlpatterns = [
     # Dataset management
     path('datasets/', views.dataset_list, name='dataset_list'),
     path('datasets/upload/', views.dataset_upload, name='dataset_upload'),
+    path('datasets/visual-trial-upload/', views.visual_trial_upload, name='visual_trial_upload'),
+    path('datasets/import-existing/', views.existing_dataset_import, name='existing_dataset_import'),
     path('datasets/<int:dataset_id>/', views.dataset_detail, name='dataset_detail'),
     path('datasets/<int:dataset_id>/delete/', views.delete_dataset, name='delete_dataset'),
     
@@ -20,6 +19,7 @@ urlpatterns = [
     path('models/', views.model_list, name='model_list'),
     path('models/<int:model_id>/', views.model_detail, name='model_detail'),
     path('models/<int:model_id>/set_active/', views.set_active_model, name='set_active_model'),
+    path('models/<int:model_id>/retrain/', views.model_retrain, name='model_retrain'),
     path('models/<int:model_id>/delete/', views.delete_model, name='delete_model'),
     
     # Training

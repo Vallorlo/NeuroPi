@@ -1,0 +1,247 @@
+{% extends "layout.html" %}
+{% load static %}
+{% load eeg_filters %}
+
+{% block title %}Dataset: {{ dataset.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-database"></i> {{ dataset.name }}</h1>
+        <div>
+            {% if dataset.processed %}
+                <span class="badge bg-success fs-6">Processed</span>
+            {% else %}
+                <span class="badge bg-warning fs-6">Processing...</span>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <!-- Dataset Information -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Dataset Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li><strong>Name:</strong> {{ dataset.name }}</li>
+                                <li><strong>Participant:</strong> {{ dataset.participant_name|default:"Unknown" }}</li>
+                                <li><strong>Uploaded:</strong> {{ dataset.uploaded_at|date:"Y-m-d H:i" }}</li>
+                                <li><strong>Total Samples:</strong> {{ dataset.total_samples|floatformat:0 }}</li>
+                            </ul>
+                        </div>
+                        <div class="col-md-6">
+                            <ul class="list-unstyled">
+                                <li><strong>Duration:</strong> {{ dataset.total_duration|floatformat:1 }} seconds</li>
+                                <li><strong>Sampling Rate:</strong> {{ dataset.sampling_rate }} Hz</li>
+                                <li><strong>Channels:</strong> {{ dataset.n_channels }}</li>
+                                <li><strong>File Size:</strong> 
+                                    {% if dataset.file_path %}
+                                        {{ dataset.file_path.size|filesizeformat }}
+                                    {% else %}
+                                        N/A
+                                    {% endif %}
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    {% if dataset.description %}
+                    <div class="mt-3">
+                        <strong>Description:</strong>
+                        <p>{{ dataset.description }}</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Word Distribution -->
+            {% if dataset.word_counts %}
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Word Class Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        {% for word, count in dataset.word_counts.items %}
+                        <div class="col-md-6 col-lg-4 mb-3">
+                            <div class="card bg-light">
+                                <div class="card-body text-center">
+                                    <h6 class="card-title">{{ word }}</h6>
+                                    <h4 class="text-primary">{{ count|floatformat:0 }}</h4>
+                                    <small class="text-muted">
+                                        {{ count|div:dataset.total_samples|mul:100|floatformat:1 }}%
+                                    </small>
+                                    {% if word == 'XXXXX' and count > 10000 %}
+                                        <div class="mt-2">
+                                            <span class="badge bg-warning">Imbalanced</span>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    
+                    <!-- Class Balance Warning -->
+                    {% if 'XXXXX' in dataset.word_counts %}
+                        {% with xxxxx_count=dataset.word_counts.XXXXX %}
+                        {% if xxxxx_count > 20000 %}
+                        <div class="alert alert-warning">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Class Imbalance Detected:</strong> 
+                            XXXXX class has {{ xxxxx_count|floatformat:0 }} samples, which is much more than other classes. 
+                            Consider using balanced training options when creating models.
+                        </div>
+                        {% endif %}
+                        {% endwith %}
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Sample Data Preview -->
+            {% if sample_data and not sample_data.error %}
+            <div class="card">
+                <div class="card-header">
+                    <h5>Data Preview</h5>
+                </div>
+                <div class="card-body">
+                    {% if sample_data.shape %}
+                    <p><strong>Data Shape:</strong> {{ sample_data.shape.0 }} rows × {{ sample_data.shape.1 }} columns</p>
+                    {% endif %}
+                    
+                    {% if sample_data.columns %}
+                    <h6>Columns:</h6>
+                    <div class="row">
+                        {% for column in sample_data.columns %}
+                        <div class="col-md-2 col-sm-3 col-4 mb-1">
+                            <span class="badge bg-secondary">{{ column }}</span>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                    
+                    {% if sample_data.sample_rows %}
+                    <h6 class="mt-3">Sample Data (First 5 rows):</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead>
+                                <tr>
+                                    {% for column in sample_data.columns %}
+                                    <th>{{ column }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in sample_data.sample_rows %}
+                                <tr>
+                                    {% for column in sample_data.columns %}
+                                    <td>
+                                        {% if column in row %}
+                                            {% if row|get_item:column|floatformat:3 %}
+                                                {{ row|get_item:column|floatformat:3 }}
+                                            {% else %}
+                                                {{ row|get_item:column }}
+                                            {% endif %}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% elif sample_data.error %}
+            <div class="card">
+                <div class="card-header">
+                    <h5>Data Preview</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-danger">
+                        <strong>Error loading data preview:</strong> {{ sample_data.error }}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="col-md-4">
+            <!-- Actions -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5>Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'eeg_classifier:training_create' %}?dataset={{ dataset.id }}" 
+                           class="btn btn-primary">
+                            <i class="bi bi-gear"></i> Train Model with This Dataset
+                        </a>
+                        
+                        {% if dataset.processed %}
+                        <a href="{% url 'eeg_classifier:prediction_create' %}?dataset={{ dataset.id }}" 
+                           class="btn btn-success">
+                            <i class="bi bi-lightning"></i> Make Predictions
+                        </a>
+                        {% endif %}
+                        
+                        <a href="{{ dataset.file_path.url }}" 
+                           class="btn btn-outline-info" download>
+                            <i class="bi bi-download"></i> Download CSV
+                        </a>
+                        
+                        <form method="post" action="{% url 'eeg_classifier:delete_dataset' dataset.id %}" 
+                              onsubmit="return confirm('Are you sure you want to delete this dataset? This action cannot be undone.');">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-outline-danger">
+                                <i class="bi bi-trash"></i> Delete Dataset
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Usage in Models -->
+            <div class="card">
+                <div class="card-header">
+                    <h5>Used in Models</h5>
+                </div>
+                <div class="card-body">
+                    {% if dataset.classificationmodel_set.all %}
+                    <ul class="list-unstyled">
+                        {% for model in dataset.classificationmodel_set.all %}
+                        <li class="mb-2">
+                            <a href="{% url 'eeg_classifier:model_detail' model.id %}" 
+                               class="text-decoration-none">
+                                <strong>{{ model.name }}</strong>
+                            </a>
+                            <br>
+                            <small class="text-muted">
+                                {{ model.model_type|upper }} - {{ model.accuracy|floatformat:1 }}% accuracy
+                            </small>
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    {% else %}
+                    <p class="text-muted">This dataset hasn't been used to train any models yet.</p>
+                    <a href="{% url 'eeg_classifier:training_create' %}?dataset={{ dataset.id }}" 
+                       class="btn btn-sm btn-primary">
+                        Train First Model
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

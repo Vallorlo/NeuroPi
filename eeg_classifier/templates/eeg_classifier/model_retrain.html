@@ -1,0 +1,107 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block title %}Retrain Model: {{ base_model.name }}{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1><i class="bi bi-arrow-repeat"></i> Retrain Model: {{ base_model.name }}</h1>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Retraining Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            {{ form.name.label_tag }}
+                            {{ form.name }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.additional_datasets.label_tag }}
+                            {{ form.additional_datasets }}
+                            {% if form.additional_datasets.help_text %}
+                                <div class="form-text">{{ form.additional_datasets.help_text }}</div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    {{ form.epochs.label_tag }}
+                                    {{ form.epochs }}
+                                    {% if form.epochs.help_text %}
+                                        <div class="form-text">{{ form.epochs.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    {{ form.learning_rate.label_tag }}
+                                    {{ form.learning_rate }}
+                                    {% if form.learning_rate.help_text %}
+                                        <div class="form-text">{{ form.learning_rate.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-arrow-repeat"></i> Start Retraining
+                        </button>
+                        <a href="{% url 'eeg_classifier:model_detail' base_model.id %}" class="btn btn-secondary">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <h5>Base Model Info</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="list-unstyled">
+                        <li><strong>Name:</strong> {{ base_model.name }}</li>
+                        <li><strong>Type:</strong> {{ base_model.get_model_type_display }}</li>
+                        <li><strong>Accuracy:</strong> {{ base_model.accuracy|floatformat:1 }}%</li>
+                        <li><strong>Classes:</strong> {{ base_model.n_classes }}</li>
+                        <li><strong>Window Size:</strong> {{ base_model.window_size }}</li>
+                    </ul>
+                    
+                    <h6 class="mt-3">Original Training Data:</h6>
+                    <ul class="small">
+                        {% for dataset in base_model.datasets_used.all %}
+                        <li>{{ dataset.name }} ({{ dataset.total_samples }} samples)</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-info-circle"></i> Retraining Tips</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="small">
+                        <li><strong>Lower epochs:</strong> 50 epochs usually sufficient</li>
+                        <li><strong>Lower learning rate:</strong> Fine-tuning requires gentler updates</li>
+                        <li><strong>Select relevant data:</strong> New datasets should be similar to original</li>
+                        <li><strong>Monitor carefully:</strong> Watch for overfitting</li>
+                    </ul>
+                    
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-lightbulb"></i>
+                        <strong>Note:</strong> Retraining will create a new model while preserving the original.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,6 +1,3 @@
-# eeg_classifier/admin.py
-# Django admin configuration for EEG classification application
-
 from django.contrib import admin
 from django.utils.html import format_html
 from .models import (
@@ -64,10 +61,7 @@ class ClassificationModelAdmin(admin.ModelAdmin):
             'fields': ('window_size', 'n_classes', 'n_channels')
         }),
         ('Performance Metrics', {
-            'fields': (
-                'accuracy', 'val_accuracy', 'f1_score', 
-                'epochs_trained', 'training_time'
-            ),
+            'fields': ('accuracy', 'val_accuracy', 'f1_score', 'epochs_trained', 'training_time'),
             'classes': ('collapse',)
         }),
         ('Training Data', {
@@ -77,41 +71,32 @@ class ClassificationModelAdmin(admin.ModelAdmin):
     )
     
     def accuracy_display(self, obj):
-        if obj.accuracy > 0:
-            color = 'green' if obj.accuracy >= 70 else 'orange' if obj.accuracy >= 60 else 'red'
-            return format_html(
-                '<span style="color: {};">{:.2f}%</span>',
-                color, obj.accuracy
-            )
-        return '-'
+        """Display accuracy with color coding"""
+        if obj.accuracy >= 80:
+            color = 'green'
+        elif obj.accuracy >= 60:
+            color = 'orange'
+        else:
+            color = 'red'
+        return format_html(
+            '<span style="color: {};">{:.1f}%</span>',
+            color,
+            obj.accuracy
+        )
     accuracy_display.short_description = 'Accuracy'
-    
-    actions = ['set_active', 'set_inactive']
-    
-    def set_active(self, request, queryset):
-        # First deactivate all models
-        ClassificationModel.objects.update(is_active=False)
-        # Then activate selected models
-        updated = queryset.update(is_active=True)
-        self.message_user(request, f'{updated} model(s) set as active.')
-    set_active.short_description = 'Set selected models as active'
-    
-    def set_inactive(self, request, queryset):
-        updated = queryset.update(is_active=False)
-        self.message_user(request, f'{updated} model(s) set as inactive.')
-    set_inactive.short_description = 'Set selected models as inactive'
+    accuracy_display.admin_order_field = 'accuracy'
 
 @admin.register(TrainingSession)
 class TrainingSessionAdmin(admin.ModelAdmin):
     list_display = [
-        'name', 'model_type', 'status', 'progress_display', 
-        'current_epoch', 'started_at', 'completed_at'
+        'name', 'status', 'progress', 'model_type', 'current_epoch', 
+        'epochs', 'started_at'
     ]
     list_filter = ['status', 'model_type', 'started_at']
     search_fields = ['name']
     readonly_fields = [
-        'status', 'progress', 'current_epoch', 'training_log', 
-        'error_message', 'started_at', 'completed_at'
+        'status', 'progress', 'current_epoch', 'final_model', 
+        'training_log', 'error_message', 'started_at', 'completed_at'
     ]
     filter_horizontal = ['datasets']
     
@@ -120,125 +105,53 @@ class TrainingSessionAdmin(admin.ModelAdmin):
             'fields': ('name', 'datasets', 'model_type')
         }),
         ('Training Parameters', {
-            'fields': (
-                'window_size', 'overlap', 'epochs', 
-                'batch_size', 'learning_rate'
-            )
+            'fields': ('window_size', 'overlap', 'epochs', 'batch_size', 'learning_rate')
         }),
         ('Session Status', {
-            'fields': (
-                'status', 'progress', 'current_epoch', 
-                'started_at', 'completed_at', 'final_model'
-            ),
+            'fields': ('status', 'progress', 'current_epoch', 'final_model'),
             'classes': ('collapse',)
         }),
         ('Logs and Errors', {
-            'fields': ('training_log', 'error_message'),
+            'fields': ('training_log', 'error_message', 'started_at', 'completed_at'),
             'classes': ('collapse',)
         })
     )
-    
-    def progress_display(self, obj):
-        if obj.progress > 0:
-            return format_html(
-                '<div style="width: 100px; background-color: #f0f0f0; border-radius: 3px;">'
-                '<div style="width: {}px; height: 20px; background-color: #007cba; border-radius: 3px;"></div>'
-                '</div> {}%',
-                obj.progress, obj.progress
-            )
-        return '0%'
-    progress_display.short_description = 'Progress'
 
 @admin.register(PredictionSession)
 class PredictionSessionAdmin(admin.ModelAdmin):
-    list_display = [
-        'name', 'model', 'dataset', 'accuracy_display', 
-        'total_predictions', 'created_at'
-    ]
-    list_filter = ['model', 'created_at']
-    search_fields = ['name']
+    list_display = ['name', 'model', 'dataset', 'window_duration', 'created_at']
+    list_filter = ['created_at', 'model__model_type']
+    search_fields = ['name', 'model__name', 'dataset__name']
     readonly_fields = ['predictions', 'accuracy_metrics', 'created_at']
-    
-    fieldsets = (
-        ('Session Information', {
-            'fields': ('name', 'model', 'dataset')
-        }),
-        ('Prediction Parameters', {
-            'fields': ('window_duration', 'confidence_threshold')
-        }),
-        ('Results', {
-            'fields': ('predictions', 'accuracy_metrics'),
-            'classes': ('collapse',)
-        })
-    )
-    
-    def accuracy_display(self, obj):
-        if obj.accuracy_metrics and 'overall_accuracy' in obj.accuracy_metrics:
-            acc = obj.accuracy_metrics['overall_accuracy'] * 100
-            color = 'green' if acc >= 70 else 'orange' if acc >= 60 else 'red'
-            return format_html(
-                '<span style="color: {};">{:.2f}%</span>',
-                color, acc
-            )
-        return '-'
-    accuracy_display.short_description = 'Accuracy'
-    
-    def total_predictions(self, obj):
-        return len(obj.predictions) if obj.predictions else 0
-    total_predictions.short_description = 'Total Predictions'
 
 @admin.register(WordClass)
 class WordClassAdmin(admin.ModelAdmin):
     list_display = [
-        'word', 'brain_region', 'optimal_duration', 
-        'difficulty_level', 'is_active'
+        'word', 'brain_region', 'optimal_duration', 'difficulty_level', 
+        'is_active', 'created_at'
     ]
-    list_filter = ['brain_region', 'difficulty_level', 'is_active']
+    list_filter = ['is_active', 'difficulty_level', 'created_at']
     search_fields = ['word', 'description', 'brain_region']
     
     fieldsets = (
         ('Word Information', {
-            'fields': ('word', 'description', 'instructions')
+            'fields': ('word', 'description', 'is_active')
         }),
-        ('Neurological Details', {
-            'fields': ('brain_region', 'key_channels')
+        ('Neuroscience Details', {
+            'fields': ('brain_region', 'key_channels', 'instructions')
         }),
         ('Classification Parameters', {
-            'fields': ('optimal_duration', 'difficulty_level', 'is_active')
+            'fields': ('optimal_duration', 'difficulty_level')
         })
     )
 
 @admin.register(ModelPerformance)
 class ModelPerformanceAdmin(admin.ModelAdmin):
     list_display = ['model', 'created_at']
-    list_filter = ['created_at']
+    list_filter = ['created_at', 'model__model_type']
+    search_fields = ['model__name']
     readonly_fields = [
         'confusion_matrix', 'per_class_precision', 'per_class_recall', 
-        'per_class_f1', 'training_loss', 'training_accuracy', 
+        'per_class_f1', 'training_loss', 'training_accuracy',
         'validation_loss', 'validation_accuracy', 'created_at'
     ]
-    
-    fieldsets = (
-        ('Model', {
-            'fields': ('model',)
-        }),
-        ('Classification Metrics', {
-            'fields': (
-                'confusion_matrix', 'per_class_precision', 
-                'per_class_recall', 'per_class_f1'
-            ),
-            'classes': ('collapse',)
-        }),
-        ('Training Curves', {
-            'fields': (
-                'training_loss', 'training_accuracy', 
-                'validation_loss', 'validation_accuracy'
-            ),
-            'classes': ('collapse',)
-        })
-    )
-
-# Custom admin site configuration
-admin.site.site_header = "EEG Classifier Admin"
-admin.site.site_title = "EEG Classifier"
-admin.site.index_title = "EEG Classification Management"

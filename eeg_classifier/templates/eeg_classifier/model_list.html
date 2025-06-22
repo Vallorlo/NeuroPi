@@ -1,0 +1,64 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block title %}EEG Models{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1><i class="bi bi-cpu"></i> Trained Models</h1>
+        <a href="{% url 'eeg_classifier:training_create' %}" class="btn btn-primary">
+            <i class="bi bi-gear"></i> Train New Model
+        </a>
+    </div>
+
+    {% if models %}
+        <div class="row">
+            {% for model in models %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">{{ model.name }}</h5>
+                        {% if model.is_active %}
+                            <span class="badge bg-success">Active</span>
+                        {% endif %}
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-unstyled">
+                            <li><strong>Type:</strong> {{ model.get_model_type_display }}</li>
+                            <li><strong>Accuracy:</strong> {{ model.accuracy|floatformat:1 }}%</li>
+                            <li><strong>Classes:</strong> {{ model.n_classes }}</li>
+                            <li><strong>Window Size:</strong> {{ model.window_size }}</li>
+                            <li><strong>Training Time:</strong> {{ model.training_time|floatformat:1 }} min</li>
+                        </ul>
+                        
+                        <h6>Training Data:</h6>
+                        <div class="small">
+                            {% for dataset in model.datasets_used.all %}
+                                <span class="badge bg-secondary me-1">{{ dataset.name }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="card-footer">
+                        <a href="{% url 'eeg_classifier:model_detail' model.id %}" class="btn btn-sm btn-outline-primary">View Details</a>
+                        <a href="{% url 'eeg_classifier:model_retrain' model.id %}" class="btn btn-sm btn-outline-warning">Retrain</a>
+                        {% if not model.is_active %}
+                        <form method="post" action="{% url 'eeg_classifier:set_active_model' model.id %}" class="d-inline">
+                            {% csrf_token %}
+                            <button type="submit" class="btn btn-sm btn-outline-success">Set Active</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    {% else %}
+        <div class="alert alert-info text-center">
+            <h4>No models trained yet</h4>
+            <p>Train your first EEG classification model to get started.</p>
+            <a href="{% url 'eeg_classifier:training_create' %}" class="btn btn-primary">Train First Model</a>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -26,7 +26,6 @@ urlpatterns = [
     path('trials/', include('trials.urls')),
     path('plot/', include('plot.urls')),
     path('preprocessor/', include('preprocessor.urls')),
-    path('pi_main/', include('pi_main.urls', namespace='pi_main')),
     path('accounts/', include('accounts.urls')),
     path('eeg_classifier/', include('eeg_classifier.urls'))
 ]

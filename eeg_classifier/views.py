@@ -1,5 +1,5 @@
 # eeg_classifier/views.py
-# Django views for EEG classification application
+# Complete Django views for EEG classification application
 
 from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
@@ -20,8 +20,16 @@ from .models import (
     Dataset, ClassificationModel, TrainingSession, 
     PredictionSession, WordClass, ModelPerformance
 )
-from .forms import DatasetUploadForm, TrainingConfigForm, PredictionForm
+from .forms import (
+    DatasetUploadForm, TrainingConfigForm, PredictionForm,
+    VisualTrialUploadForm, ExistingDatasetForm, RetrainingForm
+)
 from .ml_models.pytorch_classifier import EEGClassifierTrainer
+from .utils import (
+    process_dataset_async, run_prediction, parse_session_summary,
+    process_visual_trial_dataset, import_from_trials_data,
+    start_training_async, start_retraining_async
+)
 
 def dashboard(request):
     """Main dashboard view"""
@@ -42,7 +50,7 @@ def dataset_list(request):
     return render(request, 'eeg_classifier/dataset_list.html', {'datasets': datasets})
 
 def dataset_upload(request):
-    """Upload and process new dataset"""
+    """Upload and process new dataset (legacy CSV upload)"""
     if request.method == 'POST':
         form = DatasetUploadForm(request.POST, request.FILES)
         if form.is_valid():
@@ -55,70 +63,87 @@ def dataset_upload(request):
                 return redirect('eeg_classifier:dataset_detail', dataset_id=dataset.id)
             except Exception as e:
                 messages.error(request, f'Error processing dataset: {str(e)}')
-                dataset.delete()  # Clean up failed upload
-                
     else:
         form = DatasetUploadForm()
     
     return render(request, 'eeg_classifier/dataset_upload.html', {'form': form})
 
-def process_dataset_async(dataset):
-    """Process dataset asynchronously"""
-    def process():
-        try:
-            # Read and analyze the CSV file
-            df = pd.read_csv(dataset.file_path.path)
-            
-            # Basic statistics
-            dataset.total_samples = len(df)
-            dataset.total_duration = df['Timestamp'].max() if 'Timestamp' in df.columns else 0
-            
-            # Count EEG channels (exclude COUNTER, Timestamp, word)
-            eeg_columns = [col for col in df.columns 
-                          if col not in ['COUNTER', 'Timestamp', 'word']]
-            dataset.n_channels = len(eeg_columns)
-            
-            # Estimate sampling rate
-            if 'Timestamp' in df.columns and len(df) > 1:
-                time_diff = df['Timestamp'].diff().dropna()
-                avg_interval = time_diff.mean()
-                dataset.sampling_rate = int(1.0 / avg_interval) if avg_interval > 0 else 128
-            
-            # Word distribution
-            if 'word' in df.columns:
-                word_counts = df['word'].value_counts().to_dict()
-                dataset.word_counts = word_counts
-            
-            dataset.processed = True
-            dataset.save()
-            
-        except Exception as e:
-            print(f"Error processing dataset {dataset.id}: {str(e)}")
-            dataset.processed = False
-            dataset.save()
+def visual_trial_upload(request):
+    """Upload visual trial session data (new format)"""
+    if request.method == 'POST':
+        form = VisualTrialUploadForm(request.POST, request.FILES)
+        if form.is_valid():
+            try:
+                # Parse session summary
+                summary_content = form.cleaned_data['session_summary'].read().decode('utf-8')
+                session_info = parse_session_summary(summary_content)
+                
+                # Create dataset
+                dataset = form.save(commit=False)
+                dataset.name = dataset.name or f"Visual_Trial_{session_info['participant']}_{session_info['session_id']}"
+                dataset.participant_name = dataset.participant_name or session_info['participant']
+                
+                # Save CSV file
+                csv_file = form.cleaned_data['csv_data']
+                dataset.file_path.save(csv_file.name, csv_file)
+                dataset.save()
+                
+                # Process dataset with XXXXX handling
+                process_visual_trial_dataset(
+                    dataset, 
+                    session_info, 
+                    form.cleaned_data['xxxxx_handling']
+                )
+                
+                messages.success(request, f'Visual trial dataset "{dataset.name}" uploaded and processed successfully.')
+                return redirect('eeg_classifier:dataset_detail', dataset_id=dataset.id)
+                
+            except Exception as e:
+                messages.error(request, f'Error processing visual trial data: {str(e)}')
+    else:
+        form = VisualTrialUploadForm()
     
-    # Run in background thread
-    thread = threading.Thread(target=process)
-    thread.daemon = True
-    thread.start()
+    return render(request, 'eeg_classifier/visual_trial_upload.html', {'form': form})
+
+def existing_dataset_import(request):
+    """Import existing datasets from trials_data folder"""
+    if request.method == 'POST':
+        form = ExistingDatasetForm(request.POST)
+        if form.is_valid():
+            try:
+                folder_name = form.cleaned_data['dataset_folder']
+                xxxxx_handling = form.cleaned_data['xxxxx_handling']
+                
+                # Import dataset from trials_data folder
+                dataset = import_from_trials_data(folder_name, xxxxx_handling)
+                
+                messages.success(request, f'Dataset "{dataset.name}" imported successfully.')
+                return redirect('eeg_classifier:dataset_detail', dataset_id=dataset.id)
+                
+            except Exception as e:
+                messages.error(request, f'Error importing dataset: {str(e)}')
+    else:
+        form = ExistingDatasetForm()
+    
+    return render(request, 'eeg_classifier/existing_dataset_import.html', {'form': form})
 
 def dataset_detail(request, dataset_id):
     """Show dataset details"""
     dataset = get_object_or_404(Dataset, id=dataset_id)
     
-    # Load sample data if processed
+    # Get sample data if processed
     sample_data = None
     if dataset.processed and dataset.file_path:
         try:
             df = pd.read_csv(dataset.file_path.path)
             sample_data = {
-                'columns': df.columns.tolist(),
-                'sample_rows': df.head(10).to_dict('records'),
+                'columns': list(df.columns),
+                'sample_rows': df.head(5).to_dict('records'),
                 'shape': df.shape,
-                'word_distribution': dataset.word_counts
+                'word_distribution': df['word'].value_counts().to_dict() if 'word' in df.columns else {}
             }
         except Exception as e:
-            print(f"Error loading dataset preview: {e}")
+            sample_data = {'error': str(e)}
     
     context = {
         'dataset': dataset,
@@ -131,6 +156,22 @@ def model_list(request):
     models = ClassificationModel.objects.all()
     return render(request, 'eeg_classifier/model_list.html', {'models': models})
 
+def model_detail(request, model_id):
+    """Show model details"""
+    model = get_object_or_404(ClassificationModel, id=model_id)
+    
+    # Get performance data
+    try:
+        performance = ModelPerformance.objects.get(model=model)
+    except ModelPerformance.DoesNotExist:
+        performance = None
+    
+    context = {
+        'model': model,
+        'performance': performance
+    }
+    return render(request, 'eeg_classifier/model_detail.html', context)
+
 def training_create(request):
     """Create new training session"""
     if request.method == 'POST':
@@ -141,138 +182,22 @@ def training_create(request):
             # Start training in background
             start_training_async(training_session)
             
-            messages.success(request, f'Training session "{training_session.name}" started.')
+            messages.success(request, f'Training session "{training_session.name}" started successfully.')
             return redirect('eeg_classifier:training_detail', session_id=training_session.id)
     else:
-        form = TrainingConfigForm()
+        # Pre-select dataset if provided in URL
+        initial_data = {}
+        dataset_id = request.GET.get('dataset')
+        if dataset_id:
+            try:
+                dataset = Dataset.objects.get(id=dataset_id)
+                initial_data['datasets'] = [dataset]
+            except Dataset.DoesNotExist:
+                pass
+        
+        form = TrainingConfigForm(initial=initial_data)
     
     return render(request, 'eeg_classifier/training_create.html', {'form': form})
-
-def start_training_async(training_session):
-    """Start training in background thread"""
-    def train():
-        try:
-            training_session.status = 'preprocessing'
-            training_session.save()
-            
-            # Initialize trainer
-            trainer = EEGClassifierTrainer(n_channels=14, n_classes=5)
-            
-            # Combine all datasets
-            all_X = []
-            all_y = []
-            
-            training_session.status = 'preprocessing'
-            training_session.progress = 10
-            training_session.save()
-            
-            for dataset in training_session.datasets.all():
-                try:
-                    X, y, metadata = trainer.preprocess_data(
-                        dataset.file_path.path,
-                        window_size=training_session.window_size,
-                        overlap=training_session.overlap
-                    )
-                    all_X.append(X)
-                    all_y.append(y)
-                except Exception as e:
-                    error_msg = f"Error preprocessing dataset {dataset.name}: {str(e)}"
-                    training_session.training_log += f"\n{error_msg}"
-                    print(error_msg)
-            
-            if not all_X:
-                raise Exception("No valid datasets to train on")
-            
-            # Combine data
-            X_combined = np.concatenate(all_X, axis=0)
-            y_combined = np.concatenate(all_y, axis=0)
-            
-            training_session.status = 'training'
-            training_session.progress = 20
-            training_session.save()
-            
-            # Create and train model
-            model = trainer.create_model(
-                window_size=training_session.window_size,
-                dropout=0.5
-            )
-            
-            # Training with progress updates
-            class ProgressCallback:
-                def __init__(self, training_session):
-                    self.training_session = training_session
-                    self.start_time = time.time()
-                
-                def on_epoch_end(self, epoch, epochs):
-                    progress = 20 + int(70 * epoch / epochs)  # 20-90%
-                    self.training_session.progress = progress
-                    self.training_session.current_epoch = epoch
-                    self.training_session.save()
-            
-            callback = ProgressCallback(training_session)
-            
-            results = trainer.train(
-                X_combined, y_combined,
-                epochs=training_session.epochs,
-                batch_size=training_session.batch_size,
-                learning_rate=training_session.learning_rate
-            )
-            
-            training_session.progress = 90
-            training_session.save()
-            
-            # Save trained model
-            model_name = f"{training_session.name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-            model_path = os.path.join(settings.MEDIA_ROOT, 'models', f'{model_name}.pth')
-            os.makedirs(os.path.dirname(model_path), exist_ok=True)
-            
-            trainer.save_model(model_path)
-            
-            # Create ClassificationModel record
-            classification_model = ClassificationModel.objects.create(
-                name=model_name,
-                description=f"Trained on {len(training_session.datasets.all())} datasets",
-                model_type=training_session.model_type,
-                model_file=f'models/{model_name}.pth',
-                window_size=training_session.window_size,
-                n_classes=5,
-                n_channels=14,
-                accuracy=results['best_val_accuracy'],
-                val_accuracy=results['best_val_accuracy'],
-                epochs_trained=training_session.current_epoch,
-                training_time=(time.time() - callback.start_time) / 60.0
-            )
-            
-            # Add datasets used
-            classification_model.datasets_used.set(training_session.datasets.all())
-            
-            # Save training performance
-            ModelPerformance.objects.create(
-                model=classification_model,
-                training_loss=results['train_history']['train_loss'],
-                training_accuracy=results['train_history']['train_accuracy'],
-                validation_loss=results['train_history']['val_loss'],
-                validation_accuracy=results['train_history']['val_accuracy']
-            )
-            
-            # Complete training session
-            training_session.status = 'completed'
-            training_session.progress = 100
-            training_session.final_model = classification_model
-            training_session.completed_at = timezone.now()
-            training_session.save()
-            
-        except Exception as e:
-            training_session.status = 'failed'
-            training_session.error_message = str(e)
-            training_session.training_log += f"\nError: {str(e)}"
-            training_session.save()
-            print(f"Training failed: {str(e)}")
-    
-    # Start training thread
-    thread = threading.Thread(target=train)
-    thread.daemon = True
-    thread.start()
 
 def training_detail(request, session_id):
     """Show training session details"""
@@ -298,6 +223,43 @@ def training_detail(request, session_id):
     }
     return render(request, 'eeg_classifier/training_detail.html', context)
 
+def model_retrain(request, model_id):
+    """Retrain existing model with new data"""
+    base_model = get_object_or_404(ClassificationModel, id=model_id)
+    
+    if request.method == 'POST':
+        form = RetrainingForm(request.POST)
+        if form.is_valid():
+            try:
+                # Create retraining session
+                training_session = form.save(commit=False)
+                training_session.model_type = base_model.model_type
+                training_session.window_size = base_model.window_size
+                training_session.batch_size = 32
+                training_session.overlap = 0.5
+                training_session.save()
+                
+                # Add original datasets plus new ones
+                all_datasets = list(base_model.datasets_used.all()) + list(form.cleaned_data['additional_datasets'])
+                training_session.datasets.set(all_datasets)
+                
+                # Start retraining
+                start_retraining_async(training_session, base_model)
+                
+                messages.success(request, f'Retraining started for model "{base_model.name}".')
+                return redirect('eeg_classifier:training_detail', session_id=training_session.id)
+                
+            except Exception as e:
+                messages.error(request, f'Error starting retraining: {str(e)}')
+    else:
+        form = RetrainingForm(initial={'base_model': base_model})
+    
+    context = {
+        'form': form,
+        'base_model': base_model
+    }
+    return render(request, 'eeg_classifier/model_retrain.html', context)
+
 def prediction_create(request):
     """Create new prediction session"""
     if request.method == 'POST':
@@ -311,132 +273,29 @@ def prediction_create(request):
                 messages.success(request, 'Prediction completed successfully.')
                 return redirect('eeg_classifier:prediction_detail', session_id=prediction_session.id)
             except Exception as e:
-                messages.error(request, f'Prediction failed: {str(e)}')
-                prediction_session.delete()
-                
+                messages.error(request, f'Error running prediction: {str(e)}')
     else:
-        form = PredictionForm()
+        # Pre-select dataset if provided in URL
+        initial_data = {}
+        dataset_id = request.GET.get('dataset')
+        if dataset_id:
+            try:
+                dataset = Dataset.objects.get(id=dataset_id)
+                initial_data['dataset'] = dataset
+            except Dataset.DoesNotExist:
+                pass
+        
+        form = PredictionForm(initial=initial_data)
     
     return render(request, 'eeg_classifier/prediction_create.html', {'form': form})
-
-def run_prediction(prediction_session):
-    """Run prediction on dataset"""
-    # Load model
-    trainer = EEGClassifierTrainer(n_channels=14, n_classes=5)
-    model_path = prediction_session.model.model_file.path
-    trainer.load_model(model_path)
-    
-    # Load and preprocess dataset
-    dataset = prediction_session.dataset
-    df = pd.read_csv(dataset.file_path.path)
-    
-    # Remove rest periods
-    df_clean = df[df['word'] != 'XXXXX'].copy()
-    
-    # Get EEG channels
-    eeg_columns = [col for col in df_clean.columns 
-                  if col not in ['COUNTER', 'Timestamp', 'word']]
-    
-    # Calculate window size from duration
-    window_size = int(prediction_session.window_duration * dataset.sampling_rate)
-    
-    predictions = []
-    
-    # Process each word presentation
-    for word in df_clean['word'].unique():
-        word_data = df_clean[df_clean['word'] == word].copy()
-        word_data = word_data.sort_values('Timestamp')
-        
-        if len(word_data) >= window_size:
-            # Take a window from the middle of the word presentation
-            start_idx = (len(word_data) - window_size) // 2
-            end_idx = start_idx + window_size
-            
-            eeg_window = word_data[eeg_columns].iloc[start_idx:end_idx].values
-            
-            # Make prediction
-            result = trainer.predict(eeg_window)
-            
-            prediction = {
-                'true_word': word,
-                'predicted_word': result['predictions'][0],
-                'confidence': float(result['confidence'][0]),
-                'probabilities': {
-                    cls: float(prob) for cls, prob in 
-                    zip(trainer.label_encoder.classes_, result['probabilities'][0])
-                },
-                'timestamp': word_data['Timestamp'].iloc[0],
-                'window_start': start_idx,
-                'window_end': end_idx
-            }
-            
-            predictions.append(prediction)
-    
-    # Calculate accuracy metrics
-    true_words = [p['true_word'] for p in predictions]
-    pred_words = [p['predicted_word'] for p in predictions]
-    
-    accuracy = sum(1 for t, p in zip(true_words, pred_words) if t == p) / len(predictions)
-    
-    # Per-word accuracy
-    word_accuracy = {}
-    for word in set(true_words):
-        word_preds = [(t, p) for t, p in zip(true_words, pred_words) if t == word]
-        word_accuracy[word] = sum(1 for t, p in word_preds if t == p) / len(word_preds)
-    
-    accuracy_metrics = {
-        'overall_accuracy': accuracy,
-        'per_word_accuracy': word_accuracy,
-        'total_predictions': len(predictions),
-        'high_confidence_predictions': len([p for p in predictions if p['confidence'] > prediction_session.confidence_threshold])
-    }
-    
-    # Save results
-    prediction_session.predictions = predictions
-    prediction_session.accuracy_metrics = accuracy_metrics
-    prediction_session.save()
 
 def prediction_detail(request, session_id):
     """Show prediction session details"""
     session = get_object_or_404(PredictionSession, id=session_id)
-    
-    context = {
-        'session': session,
-        'predictions': session.predictions,
-        'accuracy_metrics': session.accuracy_metrics
-    }
-    return render(request, 'eeg_classifier/prediction_detail.html', context)
-
-def model_detail(request, model_id):
-    """Show model details"""
-    model = get_object_or_404(ClassificationModel, id=model_id)
-    
-    # Get performance data
-    performance_data = None
-    try:
-        performance = ModelPerformance.objects.get(model=model)
-        performance_data = {
-            'training_loss': performance.training_loss,
-            'training_accuracy': performance.training_accuracy,
-            'validation_loss': performance.validation_loss,
-            'validation_accuracy': performance.validation_accuracy,
-            'confusion_matrix': performance.confusion_matrix,
-            'per_class_precision': performance.per_class_precision,
-            'per_class_recall': performance.per_class_recall,
-            'per_class_f1': performance.per_class_f1
-        }
-    except ModelPerformance.DoesNotExist:
-        pass
-    
-    context = {
-        'model': model,
-        'performance_data': performance_data,
-        'recent_predictions': PredictionSession.objects.filter(model=model)[:5]
-    }
-    return render(request, 'eeg_classifier/model_detail.html', context)
+    return render(request, 'eeg_classifier/prediction_detail.html', {'session': session})
 
 def set_active_model(request, model_id):
-    """Set a model as active for predictions"""
+    """Set a model as active"""
     if request.method == 'POST':
         # Deactivate all models
         ClassificationModel.objects.update(is_active=False)
@@ -447,7 +306,7 @@ def set_active_model(request, model_id):
         model.save()
         
         messages.success(request, f'Model "{model.name}" is now active.')
-        
+    
     return redirect('eeg_classifier:model_detail', model_id=model_id)
 
 def api_training_progress(request, session_id):

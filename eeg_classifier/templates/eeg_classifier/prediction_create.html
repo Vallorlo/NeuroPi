@@ -1,0 +1,82 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block title %}Create Prediction Session{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1><i class="bi bi-lightning"></i> Create Prediction Session</h1>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Prediction Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            {{ form.name.label_tag }}
+                            {{ form.name }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.model.label_tag }}
+                            {{ form.model }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.dataset.label_tag }}
+                            {{ form.dataset }}
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    {{ form.window_duration.label_tag }}
+                                    {{ form.window_duration }}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    {{ form.confidence_threshold.label_tag }}
+                                    {{ form.confidence_threshold }}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-lightning"></i> Run Prediction
+                        </button>
+                        <a href="{% url 'eeg_classifier:dashboard' %}" class="btn btn-secondary">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-info-circle"></i> Prediction Info</h5>
+                </div>
+                <div class="card-body">
+                    <p class="small">
+                        Run predictions on EEG data using a trained model to identify motor imagery words.
+                    </p>
+                    
+                    <h6>Process:</h6>
+                    <ol class="small">
+                        <li>Load trained model</li>
+                        <li>Create sliding windows from data</li>
+                        <li>Predict word for each window</li>
+                        <li>Generate confidence scores</li>
+                        <li>Display results</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

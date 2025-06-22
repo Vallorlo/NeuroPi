@@ -1,5 +1,5 @@
 # eeg_classifier/models.py
-# Django models for EEG classification application
+# Complete Django models for EEG classification application
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -45,8 +45,8 @@ class ClassificationModel(models.Model):
     
     # Model files
     model_file = models.FileField(upload_to='models/')
-    scaler_file = models.FileField(upload_to='models/')
-    label_encoder_file = models.FileField(upload_to='models/')
+    scaler_file = models.FileField(upload_to='models/', blank=True, null=True)
+    label_encoder_file = models.FileField(upload_to='models/', blank=True, null=True)
     
     # Training configuration
     window_size = models.IntegerField(default=512, help_text="Window size in samples")
@@ -71,6 +71,12 @@ class ClassificationModel(models.Model):
     
     def __str__(self):
         return f"{self.name} ({self.model_type}) - {self.accuracy:.2f}%"
+    
+    def save(self, *args, **kwargs):
+        # Ensure only one model is active at a time
+        if self.is_active:
+            ClassificationModel.objects.filter(is_active=True).update(is_active=False)
+        super().save(*args, **kwargs)
 
 class TrainingSession(models.Model):
     """Model to track training sessions"""
@@ -143,7 +149,7 @@ class WordClass(models.Model):
     instructions = models.TextField()
     
     # Classification parameters
-    optimal_duration = models.FloatField(default=4.0, help_text="Optimal imagery duration in seconds")
+    optimal_duration = models.FloatField(default=7.0, help_text="Optimal imagery duration in seconds")
     difficulty_level = models.IntegerField(default=1, help_text="1=Easy, 5=Difficult")
     
     is_active = models.BooleanField(default=True)

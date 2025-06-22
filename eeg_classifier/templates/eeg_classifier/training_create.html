@@ -1,0 +1,117 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block title %}Train New Model{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h1><i class="bi bi-gear"></i> Train New EEG Classification Model</h1>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5>Training Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            {{ form.name.label_tag }}
+                            {{ form.name }}
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.datasets.label_tag }}
+                            {{ form.datasets }}
+                            <div class="form-text">Hold Ctrl/Cmd to select multiple datasets</div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.model_type.label_tag }}
+                            {{ form.model_type }}
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    {{ form.window_size.label_tag }}
+                                    {{ form.window_size }}
+                                    {% if form.window_size.help_text %}
+                                        <div class="form-text">{{ form.window_size.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    {{ form.overlap.label_tag }}
+                                    {{ form.overlap }}
+                                    {% if form.overlap.help_text %}
+                                        <div class="form-text">{{ form.overlap.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="row">
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    {{ form.epochs.label_tag }}
+                                    {{ form.epochs }}
+                                    {% if form.epochs.help_text %}
+                                        <div class="form-text">{{ form.epochs.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    {{ form.batch_size.label_tag }}
+                                    {{ form.batch_size }}
+                                    {% if form.batch_size.help_text %}
+                                        <div class="form-text">{{ form.batch_size.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="mb-3">
+                                    {{ form.learning_rate.label_tag }}
+                                    {{ form.learning_rate }}
+                                    {% if form.learning_rate.help_text %}
+                                        <div class="form-text">{{ form.learning_rate.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <button type="submit" class="btn btn-primary">Start Training</button>
+                        <a href="{% url 'eeg_classifier:dashboard' %}" class="btn btn-secondary">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="bi bi-info-circle"></i> Training Tips</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Recommended Settings:</h6>
+                    <ul class="small">
+                        <li><strong>Window Size:</strong> 512 samples (4 seconds)</li>
+                        <li><strong>Overlap:</strong> 50% for more training data</li>
+                        <li><strong>Epochs:</strong> 100-200 for good convergence</li>
+                        <li><strong>Batch Size:</strong> 32 works well</li>
+                        <li><strong>Learning Rate:</strong> 0.001 is a safe start</li>
+                    </ul>
+                    
+                    <div class="alert alert-info mt-3">
+                        <i class="bi bi-clock"></i> Training may take 30-60 minutes depending on data size and epochs.
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

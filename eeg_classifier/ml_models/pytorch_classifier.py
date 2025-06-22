@@ -1,5 +1,5 @@
 # eeg_classifier/ml_models/pytorch_classifier.py
-# PyTorch implementation of CNN-LSTM for EEG motor imagery classification
+# COMPLETE working PyTorch implementation - REPLACE YOUR ENTIRE FILE
 
 import torch
 import torch.nn as nn
@@ -29,18 +29,7 @@ class EEGDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 class CNNLSTMClassifier(nn.Module):
-    """
-    CNN-LSTM Hybrid Network for EEG Motor Imagery Classification
-    
-    Architecture proven for EEG motor imagery tasks:
-    - CNN layers: Extract spatial-temporal features across EEG channels
-    - LSTM layers: Capture temporal dependencies in brain signals
-    - Dense layers: Final classification
-    
-    References:
-    - Schirrmeister et al. (2017): Deep learning with CNNs for EEG decoding
-    - Lawhern et al. (2018): EEGNet architecture
-    """
+    """CNN-LSTM Hybrid Network for EEG Motor Imagery Classification"""
     
     def __init__(self, n_channels=14, n_classes=5, window_size=512, dropout=0.5):
         super(CNNLSTMClassifier, self).__init__()
@@ -50,43 +39,36 @@ class CNNLSTMClassifier(nn.Module):
         self.window_size = window_size
         
         # CNN layers for spatial-temporal feature extraction
-        # Conv1D along time dimension for each channel
-        self.conv1 = nn.Conv1d(n_channels, 32, kernel_size=32, padding=16)
+        self.conv1 = nn.Conv1d(n_channels, 32, kernel_size=min(32, window_size//8), padding=min(16, window_size//16))
         self.bn1 = nn.BatchNorm1d(32)
-        self.dropout1 = nn.Dropout(dropout * 0.6)  # Less dropout in early layers
+        self.dropout1 = nn.Dropout(dropout * 0.6)
         
-        self.conv2 = nn.Conv1d(32, 64, kernel_size=16, padding=8)
+        self.conv2 = nn.Conv1d(32, 64, kernel_size=min(16, window_size//16), padding=min(8, window_size//32))
         self.bn2 = nn.BatchNorm1d(64)
         self.dropout2 = nn.Dropout(dropout * 0.7)
         
-        self.conv3 = nn.Conv1d(64, 128, kernel_size=8, padding=4)
+        self.conv3 = nn.Conv1d(64, 128, kernel_size=min(8, window_size//32), padding=min(4, window_size//64))
         self.bn3 = nn.BatchNorm1d(128)
         self.dropout3 = nn.Dropout(dropout * 0.8)
         
-        # Max pooling to reduce temporal dimension
-        self.pool1 = nn.MaxPool1d(kernel_size=4)
-        self.pool2 = nn.MaxPool1d(kernel_size=2)
+        # Max pooling
+        self.pool1 = nn.MaxPool1d(kernel_size=min(4, window_size//64))
+        self.pool2 = nn.MaxPool1d(kernel_size=min(2, window_size//128))
         
-        # Calculate LSTM input size after convolutions and pooling
-        # window_size -> pool1(/4) -> pool2(/2) = window_size/8
-        lstm_input_size = window_size // 8
+        # LSTM layers - fixed dropout issue
+        self.lstm1 = nn.LSTM(128, 128, batch_first=True, num_layers=2, dropout=dropout if dropout > 0 else 0)
+        self.lstm2 = nn.LSTM(128, 64, batch_first=True)
         
-        # LSTM layers for temporal dependencies
-        self.lstm1 = nn.LSTM(128, 128, batch_first=True, dropout=dropout if dropout > 0 else 0)
-        self.lstm2 = nn.LSTM(128, 64, batch_first=True, dropout=dropout if dropout > 0 else 0)
-        
-        # Dense layers for classification
+        # Dense layers
         self.fc1 = nn.Linear(64, 128)
         self.dropout4 = nn.Dropout(dropout)
         self.fc2 = nn.Linear(128, 64)
         self.dropout5 = nn.Dropout(dropout)
         self.fc3 = nn.Linear(64, n_classes)
         
-        # Initialize weights
         self._initialize_weights()
     
     def _initialize_weights(self):
-        """Initialize network weights"""
         for m in self.modules():
             if isinstance(m, nn.Conv1d):
                 nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
@@ -100,9 +82,8 @@ class CNNLSTMClassifier(nn.Module):
                 nn.init.constant_(m.bias, 0)
     
     def forward(self, x):
-        # Input shape: (batch_size, window_size, n_channels)
-        # Convert to (batch_size, n_channels, window_size) for Conv1d
-        x = x.transpose(1, 2)
+        # Input: (batch_size, window_size, n_channels)
+        x = x.transpose(1, 2)  # (batch_size, n_channels, window_size)
         
         # CNN feature extraction
         x = F.relu(self.bn1(self.conv1(x)))
@@ -116,14 +97,14 @@ class CNNLSTMClassifier(nn.Module):
         x = self.dropout3(x)
         x = self.pool2(x)
         
-        # Convert back to (batch_size, seq_len, features) for LSTM
+        # Back to (batch_size, seq_len, features) for LSTM
         x = x.transpose(1, 2)
         
         # LSTM temporal modeling
         x, _ = self.lstm1(x)
         x, _ = self.lstm2(x)
         
-        # Take last LSTM output
+        # Take last output
         x = x[:, -1, :]
         
         # Dense layers
@@ -136,7 +117,7 @@ class CNNLSTMClassifier(nn.Module):
         return F.log_softmax(x, dim=1)
 
 class EEGClassifierTrainer:
-    """Training and evaluation class for EEG classification"""
+    """Complete training and evaluation class"""
     
     def __init__(self, n_channels=14, n_classes=5, device=None):
         self.n_channels = n_channels
@@ -147,7 +128,6 @@ class EEGClassifierTrainer:
         self.scaler = StandardScaler()
         self.label_encoder = LabelEncoder()
         
-        # Training history
         self.train_losses = []
         self.train_accuracies = []
         self.val_losses = []
@@ -155,145 +135,206 @@ class EEGClassifierTrainer:
         
         print(f"Using device: {self.device}")
     
-    def preprocess_data(self, csv_file_path, window_size=512, overlap=0.5, sampling_rate=128):
-        """
-        Preprocess EEG data from visual trial CSV files
+    def analyze_data_structure(self, X, y):
+        """Analyze the actual structure of the data"""
+        df = pd.DataFrame(X, columns=[f'ch_{i}' for i in range(X.shape[1])])
+        df['word'] = y
         
-        Args:
-            csv_file_path: Path to CSV file from visual trials
-            window_size: Window size in samples (default: 4 seconds at 128Hz)
-            overlap: Overlap between windows (0.0 to 1.0)
-            sampling_rate: EEG sampling rate
+        motor_words = ['SQUEEZE', 'KICK', 'SPIN', 'BRIGHT', 'SPEAK']
+        analysis = {}
         
-        Returns:
-            X: Feature array (n_samples, window_size, n_channels)
-            y: Label array (n_samples,)
-            metadata: Dictionary with preprocessing info
-        """
+        print("Analyzing data structure...")
         
-        print(f"Loading data from {csv_file_path}")
-        df = pd.read_csv(csv_file_path)
-        
-        # Remove rest periods and invalid data
-        df_clean = df[df['word'] != 'XXXXX'].copy()
-        print(f"Original samples: {len(df)}, Clean samples: {len(df_clean)}")
-        
-        # Get EEG channel columns (exclude COUNTER, Timestamp, word)
-        eeg_columns = [col for col in df_clean.columns 
-                      if col not in ['COUNTER', 'Timestamp', 'word']]
-        
-        if len(eeg_columns) != self.n_channels:
-            raise ValueError(f"Expected {self.n_channels} EEG channels, found {len(eeg_columns)}")
-        
-        X_list = []
-        y_list = []
-        word_boundaries = []
-        
-        # Process each word presentation
-        for word in df_clean['word'].unique():
-            word_data = df_clean[df_clean['word'] == word].copy()
-            word_data = word_data.sort_values('Timestamp')
-            
-            print(f"Processing word '{word}': {len(word_data)} samples")
-            
-            # Extract EEG data
-            eeg_data = word_data[eeg_columns].values.astype(np.float32)
-            
-            # Create sliding windows
-            step_size = int(window_size * (1 - overlap))
-            
-            for start_idx in range(0, len(eeg_data) - window_size + 1, step_size):
-                end_idx = start_idx + window_size
-                window = eeg_data[start_idx:end_idx]
+        for word in motor_words:
+            word_data = df[df['word'] == word]
+            if len(word_data) == 0:
+                continue
                 
-                # Quality check - ensure no NaN or infinite values
-                if not np.any(np.isnan(window)) and not np.any(np.isinf(window)):
-                    X_list.append(window)
-                    y_list.append(word)
-                    word_boundaries.append((word, start_idx, end_idx))
+            # Find continuous periods
+            word_indices = word_data.index.tolist()
+            periods = []
+            current_period = [word_indices[0]]
+            
+            for i in range(1, len(word_indices)):
+                if word_indices[i] - word_indices[i-1] <= 2:  # Allow small gaps
+                    current_period.append(word_indices[i])
+                else:
+                    if len(current_period) > 50:  # Significant periods only
+                        periods.append(current_period)
+                    current_period = [word_indices[i]]
+            
+            if len(current_period) > 50:
+                periods.append(current_period)
+            
+            if periods:
+                period_lengths = [len(p) for p in periods]
+                avg_length = np.mean(period_lengths)
+                
+                analysis[word] = {
+                    'total_samples': len(word_data),
+                    'periods': len(periods),
+                    'avg_period_length': avg_length,
+                    'period_lengths': period_lengths,
+                    'periods_data': periods
+                }
+                
+                print(f"{word}: {len(periods)} periods, avg length: {avg_length:.0f} samples")
         
-        # Convert to arrays
-        X = np.array(X_list, dtype=np.float32)
-        y = np.array(y_list)
+        return analysis
+    
+    def extract_adaptive_segments(self, X, y, min_segment_length=100):
+        """Extract segments based on actual data structure"""
+        print(f"Extracting adaptive segments (min length: {min_segment_length})...")
         
-        print(f"Created {len(X)} windows of size {window_size}")
-        print(f"Window shape: {X.shape}")
+        # First analyze the data
+        analysis = self.analyze_data_structure(X, y)
         
-        # Normalize EEG data (per sample, across channels and time)
-        X_reshaped = X.reshape(-1, X.shape[-1])
+        df = pd.DataFrame(X, columns=[f'ch_{i}' for i in range(X.shape[1])])
+        df['word'] = y
+        
+        segments = []
+        labels = []
+        
+        motor_words = ['SQUEEZE', 'KICK', 'SPIN', 'BRIGHT', 'SPEAK']
+        
+        for word in motor_words:
+            if word not in analysis:
+                continue
+                
+            periods_data = analysis[word]['periods_data']
+            avg_length = analysis[word]['avg_period_length']
+            
+            print(f"Processing {word}: {len(periods_data)} periods, avg: {avg_length:.0f} samples")
+            
+            for period_indices in periods_data:
+                period_length = len(period_indices)
+                
+                if period_length >= min_segment_length:
+                    start_idx = period_indices[0]
+                    end_idx = period_indices[-1] + 1
+                    
+                    # Extract the segment
+                    segment_data = df.iloc[start_idx:end_idx]
+                    
+                    # Check purity
+                    word_purity = (segment_data['word'] == word).mean()
+                    
+                    if word_purity >= 0.8:  # 80% purity
+                        segment_eeg = segment_data.drop('word', axis=1).values
+                        
+                        # If segment is too long, split it
+                        max_length = int(avg_length * 1.5)  # 1.5x average length
+                        
+                        if len(segment_eeg) > max_length:
+                            # Split into multiple segments
+                            step = max_length // 2
+                            for split_start in range(0, len(segment_eeg) - max_length + 1, step):
+                                split_end = split_start + max_length
+                                split_segment = segment_eeg[split_start:split_end]
+                                segments.append(split_segment)
+                                labels.append(word)
+                        else:
+                            segments.append(segment_eeg)
+                            labels.append(word)
+        
+        if not segments:
+            raise ValueError("No valid segments found in data")
+        
+        # Normalize segment lengths
+        target_length = int(np.median([len(s) for s in segments]))
+        print(f"Target segment length: {target_length} samples")
+        
+        normalized_segments = []
+        final_labels = []
+        
+        for segment, label in zip(segments, labels):
+            if len(segment) >= target_length * 0.8:  # At least 80% of target
+                if len(segment) > target_length:
+                    # Trim to target length
+                    segment = segment[:target_length]
+                elif len(segment) < target_length:
+                    # Pad to target length
+                    padding_size = target_length - len(segment)
+                    padding = np.zeros((padding_size, segment.shape[1]))
+                    segment = np.vstack([segment, padding])
+                
+                normalized_segments.append(segment)
+                final_labels.append(label)
+        
+        X_segments = np.array(normalized_segments)
+        y_segments = np.array(final_labels)
+        
+        print(f"Extracted {len(X_segments)} segments of {target_length} samples each")
+        
+        segment_dist = pd.Series(y_segments).value_counts()
+        print(f"Segment distribution: {segment_dist.to_dict()}")
+        
+        # Normalize features
+        X_reshaped = X_segments.reshape(-1, X_segments.shape[-1])
         X_normalized = self.scaler.fit_transform(X_reshaped)
-        X = X_normalized.reshape(X.shape)
+        X_segments = X_normalized.reshape(X_segments.shape)
         
         # Encode labels
-        y_encoded = self.label_encoder.fit_transform(y)
+        y_encoded = self.label_encoder.fit_transform(y_segments)
         
-        # Create metadata
-        metadata = {
-            'window_size': window_size,
-            'overlap': overlap,
-            'sampling_rate': sampling_rate,
-            'n_windows': len(X),
-            'word_distribution': pd.Series(y).value_counts().to_dict(),
-            'word_boundaries': word_boundaries,
-            'eeg_channels': eeg_columns
+        return X_segments, y_encoded, {
+            'segments_extracted': len(X_segments),
+            'segment_length': target_length,
+            'label_distribution': segment_dist.to_dict(),
+            'classes': self.label_encoder.classes_.tolist()
         }
-        
-        print("Word distribution:")
-        for word, count in metadata['word_distribution'].items():
-            print(f"  {word}: {count} windows")
-        
-        return X, y_encoded, metadata
     
-    def create_model(self, window_size=512, dropout=0.5):
-        """Create and initialize the CNN-LSTM model"""
+    def create_model(self, window_size=512):
+        """Create model with adaptive window size"""
+        # Ensure reasonable window size
+        window_size = max(64, min(window_size, 2048))
+        
         self.model = CNNLSTMClassifier(
             n_channels=self.n_channels,
             n_classes=self.n_classes,
-            window_size=window_size,
-            dropout=dropout
+            window_size=window_size
         ).to(self.device)
         
+        print(f"Created model with {sum(p.numel() for p in self.model.parameters())} parameters")
+        print(f"Window size: {window_size} samples ({window_size/128:.1f}s at 128Hz)")
         return self.model
     
-    def train(self, X, y, validation_split=0.2, epochs=100, batch_size=32, 
-              learning_rate=0.001, weight_decay=1e-4, patience=15):
-        """
-        Train the EEG classification model
+    def train(self, X, y, epochs=100, batch_size=32, learning_rate=0.001, callback=None):
+        """Train the model"""
+        if self.model is None:
+            raise ValueError("Model not created. Call create_model() first.")
         
-        Args:
-            X: Feature array
-            y: Encoded labels
-            validation_split: Fraction for validation
-            epochs: Number of training epochs
-            batch_size: Training batch size
-            learning_rate: Learning rate
-            weight_decay: L2 regularization
-            patience: Early stopping patience
-        """
+        print(f"Training model for {epochs} epochs...")
+        print(f"Training data shape: {X.shape}, Labels shape: {y.shape}")
         
         # Create datasets
         dataset = EEGDataset(X, y)
         
         # Split data
-        val_size = int(len(dataset) * validation_split)
-        train_size = len(dataset) - val_size
+        train_size = int(0.8 * len(dataset))
+        val_size = len(dataset) - train_size
         train_dataset, val_dataset = random_split(dataset, [train_size, val_size])
+        
+        print(f"Train size: {train_size}, Validation size: {val_size}")
         
         # Create data loaders
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
         
-        # Loss function and optimizer
+        # Setup optimizer and loss
+        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=1e-4)
         criterion = nn.NLLLoss()
-        optimizer = optim.Adam(self.model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', patience=8, factor=0.5)
+        scheduler = optim.lr_scheduler.ReduceLROnPlateau(optimizer, patience=15, factor=0.5)
         
         # Training loop
-        best_val_acc = 0
+        best_val_accuracy = 0
+        patience = 25
         patience_counter = 0
         
-        print(f"Training for {epochs} epochs...")
-        print(f"Train samples: {train_size}, Validation samples: {val_size}")
+        self.train_losses = []
+        self.train_accuracies = []
+        self.val_losses = []
+        self.val_accuracies = []
         
         for epoch in range(epochs):
             # Training phase
@@ -302,26 +343,19 @@ class EEGClassifierTrainer:
             train_correct = 0
             train_total = 0
             
-            train_pbar = tqdm(train_loader, desc=f'Epoch {epoch+1}/{epochs} [Train]')
-            for batch_idx, (data, target) in enumerate(train_pbar):
-                data, target = data.to(self.device), target.to(self.device)
+            for batch_X, batch_y in tqdm(train_loader, desc=f'Epoch {epoch+1}/{epochs}'):
+                batch_X, batch_y = batch_X.to(self.device), batch_y.to(self.device)
                 
                 optimizer.zero_grad()
-                output = self.model(data)
-                loss = criterion(output, target)
+                outputs = self.model(batch_X)
+                loss = criterion(outputs, batch_y)
                 loss.backward()
                 optimizer.step()
                 
                 train_loss += loss.item()
-                pred = output.argmax(dim=1, keepdim=True)
-                train_correct += pred.eq(target.view_as(pred)).sum().item()
-                train_total += target.size(0)
-                
-                # Update progress bar
-                train_pbar.set_postfix({
-                    'Loss': f'{loss.item():.4f}',
-                    'Acc': f'{100.*train_correct/train_total:.2f}%'
-                })
+                _, predicted = torch.max(outputs.data, 1)
+                train_total += batch_y.size(0)
+                train_correct += (predicted == batch_y).sum().item()
             
             # Validation phase
             self.model.eval()
@@ -330,101 +364,67 @@ class EEGClassifierTrainer:
             val_total = 0
             
             with torch.no_grad():
-                for data, target in val_loader:
-                    data, target = data.to(self.device), target.to(self.device)
-                    output = self.model(data)
-                    val_loss += criterion(output, target).item()
-                    pred = output.argmax(dim=1, keepdim=True)
-                    val_correct += pred.eq(target.view_as(pred)).sum().item()
-                    val_total += target.size(0)
+                for batch_X, batch_y in val_loader:
+                    batch_X, batch_y = batch_X.to(self.device), batch_y.to(self.device)
+                    outputs = self.model(batch_X)
+                    loss = criterion(outputs, batch_y)
+                    
+                    val_loss += loss.item()
+                    _, predicted = torch.max(outputs.data, 1)
+                    val_total += batch_y.size(0)
+                    val_correct += (predicted == batch_y).sum().item()
             
             # Calculate metrics
-            train_loss /= len(train_loader)
-            val_loss /= len(val_loader)
-            train_acc = 100. * train_correct / train_total
-            val_acc = 100. * val_correct / val_total
+            train_accuracy = train_correct / train_total
+            val_accuracy = val_correct / val_total
             
-            # Store history
-            self.train_losses.append(train_loss)
-            self.train_accuracies.append(train_acc)
-            self.val_losses.append(val_loss)
-            self.val_accuracies.append(val_acc)
+            self.train_losses.append(train_loss / len(train_loader))
+            self.train_accuracies.append(train_accuracy)
+            self.val_losses.append(val_loss / len(val_loader))
+            self.val_accuracies.append(val_accuracy)
             
             # Learning rate scheduling
-            scheduler.step(val_loss)
+            scheduler.step(val_loss / len(val_loader))
             
-            print(f'Epoch {epoch+1}: Train Loss: {train_loss:.4f}, Train Acc: {train_acc:.2f}%, '
-                  f'Val Loss: {val_loss:.4f}, Val Acc: {val_acc:.2f}%')
-            
-            # Early stopping
-            if val_acc > best_val_acc:
-                best_val_acc = val_acc
+            # Update best model
+            if val_accuracy > best_val_accuracy:
+                best_val_accuracy = val_accuracy
                 patience_counter = 0
-                # Save best model
-                torch.save(self.model.state_dict(), 'best_model.pth')
             else:
                 patience_counter += 1
-                if patience_counter >= patience:
-                    print(f'Early stopping at epoch {epoch+1}')
-                    break
-        
-        # Load best model
-        self.model.load_state_dict(torch.load('best_model.pth'))
-        print(f'Training completed. Best validation accuracy: {best_val_acc:.2f}%')
+            
+            # Callback for progress updates
+            if callback:
+                callback.on_epoch_end(epoch, {
+                    'loss': self.train_losses[-1],
+                    'accuracy': train_accuracy,
+                    'val_loss': self.val_losses[-1],
+                    'val_accuracy': val_accuracy
+                })
+            
+            print(f'Epoch {epoch+1}: Train Acc: {train_accuracy:.4f}, Val Acc: {val_accuracy:.4f}, LR: {optimizer.param_groups[0]["lr"]:.6f}')
+            
+            # Early stopping
+            if patience_counter >= patience:
+                print(f'Early stopping at epoch {epoch+1}')
+                break
         
         return {
-            'best_val_accuracy': best_val_acc,
+            'best_val_accuracy': best_val_accuracy,
             'train_history': {
                 'train_loss': self.train_losses,
                 'train_accuracy': self.train_accuracies,
                 'val_loss': self.val_losses,
                 'val_accuracy': self.val_accuracies
-            }
-        }
-    
-    def evaluate(self, X, y):
-        """Evaluate model performance"""
-        dataset = EEGDataset(X, y)
-        loader = DataLoader(dataset, batch_size=32, shuffle=False)
-        
-        self.model.eval()
-        all_preds = []
-        all_targets = []
-        
-        with torch.no_grad():
-            for data, target in loader:
-                data, target = data.to(self.device), target.to(self.device)
-                output = self.model(data)
-                pred = output.argmax(dim=1)
-                
-                all_preds.extend(pred.cpu().numpy())
-                all_targets.extend(target.cpu().numpy())
-        
-        # Calculate metrics
-        accuracy = accuracy_score(all_targets, all_preds)
-        f1 = f1_score(all_targets, all_preds, average='weighted')
-        cm = confusion_matrix(all_targets, all_preds)
-        
-        # Detailed classification report
-        class_names = self.label_encoder.classes_
-        report = classification_report(all_targets, all_preds, 
-                                     target_names=class_names, output_dict=True)
-        
-        return {
-            'accuracy': accuracy,
-            'f1_score': f1,
-            'confusion_matrix': cm.tolist(),
-            'classification_report': report,
-            'predictions': all_preds,
-            'targets': all_targets
+            },
+            'final_epoch': epoch + 1
         }
     
     def predict(self, X):
         """Make predictions on new data"""
         self.model.eval()
         
-        # Ensure X is properly shaped
-        if len(X.shape) == 2:  # Single sample
+        if len(X.shape) == 2:
             X = X.reshape(1, -1, self.n_channels)
         
         # Normalize
@@ -432,15 +432,13 @@ class EEGClassifierTrainer:
         X_normalized = self.scaler.transform(X_reshaped)
         X = X_normalized.reshape(X.shape)
         
-        # Convert to tensor
         X_tensor = torch.FloatTensor(X).to(self.device)
         
         with torch.no_grad():
             output = self.model(X_tensor)
-            probabilities = torch.exp(output)  # Convert log probabilities to probabilities
+            probabilities = torch.exp(output)
             predictions = output.argmax(dim=1)
         
-        # Convert back to original labels
         pred_labels = self.label_encoder.inverse_transform(predictions.cpu().numpy())
         
         return {
@@ -475,7 +473,6 @@ class EEGClassifierTrainer:
         """Load model and preprocessors"""
         checkpoint = torch.load(filepath, map_location=self.device)
         
-        # Recreate model
         config = checkpoint['model_config']
         self.model = CNNLSTMClassifier(
             n_channels=config['n_channels'],
@@ -483,12 +480,10 @@ class EEGClassifierTrainer:
             window_size=config['window_size']
         ).to(self.device)
         
-        # Load weights and preprocessors
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.scaler = checkpoint['scaler']
         self.label_encoder = checkpoint['label_encoder']
         
-        # Load training history if available
         if 'training_history' in checkpoint:
             history = checkpoint['training_history']
             self.train_losses = history['train_losses']
@@ -498,14 +493,3 @@ class EEGClassifierTrainer:
         
         print(f"Model loaded from {filepath}")
         print(f"Model classes: {self.label_encoder.classes_}")
-
-# Example usage
-if __name__ == "__main__":
-    # Initialize trainer
-    trainer = EEGClassifierTrainer(n_channels=14, n_classes=5)
-    
-    # Example preprocessing and training
-    # X, y, metadata = trainer.preprocess_data('path/to/visual_trial_data.csv')
-    # model = trainer.create_model(window_size=512)
-    # results = trainer.train(X, y, epochs=100)
-    # trainer.save_model('eeg_classifier_model.pth')

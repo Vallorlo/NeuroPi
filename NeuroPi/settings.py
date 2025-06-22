@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'preprocessor',
     'pi_main',
     'accounts',
+    'eeg_classifier',
 ]
 
 MIDDLEWARE = [

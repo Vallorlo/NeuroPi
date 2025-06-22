@@ -34,6 +34,11 @@ class Command(BaseCommand):
                 'name': 'Colors',
                 'description': 'Basic color words',
                 'words': ['red', 'blue', 'green', 'yellow', 'purple']
+            },
+            {
+                'name': 'Motor Imagiry',
+                'description': 'Val Collection trial',
+                'words': ['SQUEEZE', 'KICK', 'SPIN', 'BRIGHT', 'SPEAK']
             }
         ]
         

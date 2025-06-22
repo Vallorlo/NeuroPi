@@ -1,0 +1,24 @@
+Visual Trial Session Summary
+============================
+
+Participant: Ibrahim Mostafa
+Word Set: Motor Imagiry
+Session ID: 17
+Started: 2025-06-22 20:10:49.437041+00:00
+Completed: None
+Word Display Duration: 7000ms
+Rest Duration: 2000ms
+Repetitions per Word: 20
+
+Data Collection Results:
+Total EEG Samples: 117239
+Duration: 918.65 seconds
+Sampling Rate: 127.62 Hz
+
+Words in dataset:
+  XXXXX: 90268 samples
+  SPIN: 5402 samples
+  KICK: 5394 samples
+  SQUEEZE: 5393 samples
+  SPEAK: 5391 samples
+  BRIGHT: 5391 samples

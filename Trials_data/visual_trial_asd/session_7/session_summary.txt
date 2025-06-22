@@ -1,0 +1,24 @@
+Visual Trial Session Summary
+============================
+
+Participant: asd
+Word Set: Basic Actions
+Session ID: 7
+Started: 2025-06-08 22:35:53.489342+00:00
+Completed: None
+Word Display Duration: 3000ms
+Rest Duration: 2000ms
+Repetitions per Word: 10
+
+Data Collection Results:
+Total EEG Samples: 7896
+Duration: 62.22 seconds
+Sampling Rate: 126.91 Hz
+
+Words in dataset:
+  XXXXX: 4652 samples
+  run: 813 samples
+  jump: 804 samples
+  walk: 543 samples
+  stand: 543 samples
+  sit: 541 samples

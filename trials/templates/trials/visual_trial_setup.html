@@ -1,0 +1,287 @@
+<!--
+trials/templates/trials/visual_trial_setup.html
+Visual Word Focus Trial Configuration Template
+-->
+{% extends "layout.html" %}
+
+{% block title %}
+    Visual Trial Setup
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow">
+        <div class="card-header bg-success text-white">
+            <h1 class="mb-0">Visual Word Focus Trial Setup</h1>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Trial Information</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Participant:</strong></span>
+                                    <span class="badge bg-primary rounded-pill">{{ participant_name }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Word Set:</strong></span>
+                                    <span class="badge bg-success rounded-pill">{{ word_set.name }}</span>
+                                </li>
+                                <li class="list-group-item">
+                                    <strong>Words in Set:</strong><br>
+                                    <div class="mt-2">
+                                        {% for word in word_set.words.all %}
+                                            <span class="badge bg-secondary me-1 mb-1">{{ word.word }}</span>
+                                        {% endfor %}
+                                    </div>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div class="card">
+                        <div class="card-header bg-warning">
+                            <h5 class="mb-0">How It Works</h5>
+                        </div>
+                        <div class="card-body">
+                            <ol class="list-group list-group-numbered">
+                                <li class="list-group-item">All words appear on screen <strong>blurred</strong></li>
+                                <li class="list-group-item">One word becomes <strong>unblurred and bold</strong> at a time</li>
+                                <li class="list-group-item">Focus on and <strong>think about</strong> the highlighted word</li>
+                                <li class="list-group-item">Words are presented in <strong>randomized order</strong></li>
+                                <li class="list-group-item">Each word appears the <strong>same number of times</strong></li>
+                                <li class="list-group-item">Rest periods occur between word presentations</li>
+                            </ol>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">Trial Configuration</h5>
+                        </div>
+                        <div class="card-body">
+                            <form method="post" action="{% url 'start_visual_trial' %}" id="visualConfigForm">
+                                {% csrf_token %}
+                                <input type="hidden" name="word_set_id" value="{{ word_set.id }}">
+                                
+                                <div class="form-group mb-3">
+                                    <label for="word_display_duration" class="form-label">
+                                        <i class="bi bi-stopwatch"></i> Word Display Duration
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="word_display_duration" 
+                                               name="word_display_duration" value="3000" min="1000" max="10000" step="100" required>
+                                        <span class="input-group-text">ms</span>
+                                    </div>
+                                    <div class="form-text">How long each word is displayed (1-10 seconds)</div>
+                                </div>
+                                
+                                <div class="form-group mb-3">
+                                    <label for="rest_duration" class="form-label">
+                                        <i class="bi bi-pause-circle"></i> Rest Period Duration
+                                    </label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="rest_duration" 
+                                               name="rest_duration" value="2000" min="0" max="5000" step="100" required>
+                                        <span class="input-group-text">ms</span>
+                                    </div>
+                                    <div class="form-text">Rest time between word presentations (0-5 seconds, 0 = no rest period)</div>
+                                </div>
+                                
+                                <div class="form-group mb-4">
+                                    <label for="repetitions_per_word" class="form-label">
+                                        <i class="bi bi-arrow-repeat"></i> Repetitions per Word
+                                    </label>
+                                    <input type="number" class="form-control" id="repetitions_per_word" 
+                                           name="repetitions_per_word" value="10" min="1" max="50" required>
+                                    <div class="form-text">How many times each word is presented</div>
+                                </div>
+                                
+                                <div class="alert alert-info">
+                                    <i class="bi bi-info-circle"></i>
+                                    <strong>Total Duration:</strong> <span id="total_duration">Calculating...</span>
+                                </div>
+                                
+                                <div class="d-grid gap-2">
+                                    <button type="button" class="btn btn-outline-success" id="eegCheckBtn">
+                                        <i class="bi bi-activity"></i> Check EEG Connection (Optional)
+                                    </button>
+                                    <button type="submit" class="btn btn-lg btn-success" id="startBtn">
+                                        <i class="bi bi-play-circle-fill me-2"></i>Start Visual Trial
+                                    </button>
+                                    <small class="text-muted mt-2">
+                                        <i class="bi bi-info-circle me-1"></i>
+                                        EEG connection will be automatically initialized when needed
+                                    </small>
+                                </div>
+                            </form>
+                            
+                            <div class="mt-3">
+                                <a href="{% url 'start_trial' %}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left"></i> Back to Trial Selection
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- EEG Status Modal -->
+<div class="modal fade" id="eegStatusModal" tabindex="-1" aria-labelledby="eegStatusModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="eegStatusModalLabel">EEG Connection Status</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" id="eegStatusBody">
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Checking...</span>
+                    </div>
+                    <p class="mt-2">Checking EEG connection...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const wordDisplayInput = document.getElementById('word_display_duration');
+        const restDurationInput = document.getElementById('rest_duration');
+        const repetitionsInput = document.getElementById('repetitions_per_word');
+        const totalDurationSpan = document.getElementById('total_duration');
+        const eegCheckBtn = document.getElementById('eegCheckBtn');
+        const startBtn = document.getElementById('startBtn');
+        
+        const wordCount = {{ word_set.words.count }};
+        
+        function updateTotalDuration() {
+            const wordDuration = parseInt(wordDisplayInput.value);
+            const restDuration = parseInt(restDurationInput.value);
+            const repetitions = parseInt(repetitionsInput.value);
+            
+            const totalWords = wordCount * repetitions;
+            const totalWordTime = totalWords * wordDuration;
+            const totalRestTime = restDuration > 0 ? totalWords * restDuration : 0;
+            const totalTime = totalWordTime + totalRestTime;
+            
+            const minutes = Math.floor(totalTime / 60000);
+            const seconds = Math.floor((totalTime % 60000) / 1000);
+            
+            let durationText = `~${minutes}m ${seconds}s (${totalWords} word presentations`;
+            if (restDuration === 0) {
+                durationText += ', no rest periods';
+            }
+            durationText += ')';
+            
+            totalDurationSpan.textContent = durationText;
+        }
+        
+        // Update duration when inputs change
+        [wordDisplayInput, restDurationInput, repetitionsInput].forEach(input => {
+            input.addEventListener('input', updateTotalDuration);
+        });
+        
+        // Initial calculation
+        updateTotalDuration();
+        
+        // EEG connection check
+        eegCheckBtn.addEventListener('click', function() {
+            const modal = new bootstrap.Modal(document.getElementById('eegStatusModal'));
+            const modalBody = document.getElementById('eegStatusBody');
+            
+            modalBody.innerHTML = `
+                <div class="text-center">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Checking...</span>
+                    </div>
+                    <p class="mt-2">Checking EEG connection...</p>
+                </div>
+            `;
+            
+            modal.show();
+            
+            fetch('{% url "check_eeg_connection" %}')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        modalBody.innerHTML = `
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle-fill"></i>
+                                <strong>EEG Connection Good!</strong>
+                                <p class="mb-0 mt-2">Quality check completed successfully. You can proceed with the trial.</p>
+                            </div>
+                        `;
+                        startBtn.disabled = false;
+                    } else {
+                        modalBody.innerHTML = `
+                            <div class="alert alert-danger">
+                                <i class="bi bi-x-circle-fill"></i>
+                                <strong>EEG Connection Issue</strong>
+                                <p class="mb-0 mt-2">Error: ${data.error}</p>
+                                <small class="text-muted">Please check your EEG headset connection and try again.</small>
+                            </div>
+                        `;
+                    }
+                })
+                .catch(error => {
+                    modalBody.innerHTML = `
+                        <div class="alert alert-danger">
+                            <i class="bi bi-x-circle-fill"></i>
+                            <strong>Connection Error</strong>
+                            <p class="mb-0 mt-2">Could not check EEG connection.</p>
+                            <small class="text-muted">Please ensure your EEG device is connected and try again.</small>
+                        </div>
+                    `;
+                });
+        });
+        
+        // Form validation
+        const form = document.getElementById('visualConfigForm');
+        form.addEventListener('submit', function(e) {
+            const wordDuration = parseInt(wordDisplayInput.value);
+            const restDuration = parseInt(restDurationInput.value);
+            const repetitions = parseInt(repetitionsInput.value);
+            
+            if (wordDuration < 1000 || wordDuration > 10000) {
+                e.preventDefault();
+                alert('Word display duration must be between 1-10 seconds.');
+                return;
+            }
+            
+            if (restDuration < 0 || restDuration > 5000) {
+                e.preventDefault();
+                alert('Rest duration must be between 0-5 seconds.');
+                return;
+            }
+            
+            if (repetitions < 1 || repetitions > 50) {
+                e.preventDefault();
+                alert('Repetitions per word must be between 1-50.');
+                return;
+            }
+            
+            // Disable button to prevent double submission
+            startBtn.disabled = true;
+            startBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Starting...';
+        });
+        
+        // Enable start button by default (EEG check is optional)
+        startBtn.disabled = false;
+    });
+</script>
+{% endblock content %}

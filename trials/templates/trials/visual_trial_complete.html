@@ -1,0 +1,245 @@
+{% extends "layout.html" %}
+{% load custom_filters %}
+
+{% block title %}
+    Trial Complete - {{ session.participant_name }}
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow-lg">
+        <div class="card-header bg-success text-white text-center">
+            <h1 class="mb-0">
+                <i class="bi bi-check-circle-fill me-2"></i>
+                Visual Trial Complete!
+            </h1>
+        </div>
+        <div class="card-body text-center">
+            <div class="row">
+                <div class="col-md-8 mx-auto">
+                    <div class="success-animation mb-4">
+                        <div class="checkmark">
+                            <div class="checkmark-circle"></div>
+                            <div class="checkmark-stem"></div>
+                            <div class="checkmark-kick"></div>
+                        </div>
+                    </div>
+                    
+                    <h2 class="text-success mb-4">Excellent Work!</h2>
+                    <p class="lead mb-4">
+                        The visual word focus trial has been completed successfully. 
+                        Your EEG data has been collected and saved.
+                    </p>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-6 mx-auto">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Trial Summary</h5>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Participant:</strong></span>
+                                    <span class="badge bg-primary rounded-pill">{{ session.participant_name }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Word Set:</strong></span>
+                                    <span class="badge bg-success rounded-pill">{{ session.word_set.name }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Words in Set:</strong></span>
+                                    <span class="badge bg-secondary rounded-pill">{{ session.word_set.words.count }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Repetitions per Word:</strong></span>
+                                    <span class="badge bg-info rounded-pill">{{ session.repetitions_per_word }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Total Presentations:</strong></span>
+                                    <span class="badge bg-warning rounded-pill">{{ session.word_set.words.count|mul:session.repetitions_per_word }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Started:</strong></span>
+                                    <span class="text-muted">{{ session.started_at|date:"M d, Y H:i" }}</span>
+                                </li>
+                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                    <span><strong>Completed:</strong></span>
+                                    <span class="text-muted">{{ session.completed_at|date:"M d, Y H:i" }}</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-warning">
+                            <h5 class="mb-0">Data Collection Details</h5>
+                        </div>
+                        <div class="card-body">
+                            <p class="mb-3">
+                                The collected EEG data includes the following columns as required:
+                            </p>
+                            <div class="row">
+                                <div class="col-md-8 mx-auto">
+                                    <div class="alert alert-light">
+                                        <code>
+                                            COUNTER, F3, FC5, AF3, F7, T7, P7, O1, O2, P8, T8, F8, AF4, FC6, F4, Timestamp, word
+                                        </code>
+                                    </div>
+                                </div>
+                            </div>
+                            <p class="text-muted">
+                                <small>
+                                    <i class="bi bi-info-circle"></i>
+                                    The 'word' field contains the focused word during presentation periods 
+                                    and 'XXXXX' during rest periods.
+                                </small>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                        <a href="{% url 'start_trial' %}" class="btn btn-lg btn-primary me-md-2">
+                            <i class="bi bi-plus-circle-fill me-2"></i>Start New Trial
+                        </a>
+                        <a href="{% url 'completed_trials' %}" class="btn btn-lg btn-outline-success me-md-2">
+                            <i class="bi bi-list-check me-2"></i>View All Trials
+                        </a>
+                        <a href="{% url 'visual_trial_setup' %}" class="btn btn-lg btn-outline-info">
+                            <i class="bi bi-arrow-repeat me-2"></i>Run Same Setup
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .success-animation {
+        margin: 2rem 0;
+    }
+
+    .checkmark {
+        width: 100px;
+        height: 100px;
+        margin: 0 auto;
+        position: relative;
+    }
+
+    .checkmark-circle {
+        width: 100px;
+        height: 100px;
+        border: 4px solid #28a745;
+        border-radius: 50%;
+        position: absolute;
+        animation: scale-in 0.6s ease-in-out;
+    }
+
+    .checkmark-stem {
+        width: 3px;
+        height: 20px;
+        background: #28a745;
+        position: absolute;
+        left: 43px;
+        top: 40px;
+        transform: rotate(45deg);
+        animation: draw-stem 0.3s ease-in-out 0.6s forwards;
+        transform-origin: bottom;
+        transform: rotate(45deg) scaleY(0);
+    }
+
+    .checkmark-kick {
+        width: 3px;
+        height: 12px;
+        background: #28a745;
+        position: absolute;
+        left: 35px;
+        top: 48px;
+        transform: rotate(-45deg);
+        animation: draw-kick 0.2s ease-in-out 0.8s forwards;
+        transform-origin: bottom;
+        transform: rotate(-45deg) scaleY(0);
+    }
+
+    @keyframes scale-in {
+        0% {
+            transform: scale(0);
+            opacity: 0;
+        }
+        100% {
+            transform: scale(1);
+            opacity: 1;
+        }
+    }
+
+    @keyframes draw-stem {
+        to {
+            transform: rotate(45deg) scaleY(1);
+        }
+    }
+
+    @keyframes draw-kick {
+        to {
+            transform: rotate(-45deg) scaleY(1);
+        }
+    }
+
+    .card {
+        animation: fade-in-up 0.6s ease-out;
+    }
+
+    @keyframes fade-in-up {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .badge {
+        font-size: 0.9em;
+    }
+
+    .alert code {
+        font-size: 0.9em;
+        word-break: break-all;
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Add a subtle celebration effect
+        setTimeout(() => {
+            confetti({
+                particleCount: 100,
+                spread: 70,
+                origin: { y: 0.6 }
+            });
+        }, 1000);
+        
+        // Auto-redirect after 30 seconds if no action taken
+        setTimeout(() => {
+            if (confirm('Would you like to return to the trial selection page?')) {
+                window.location.href = '{% url "start_trial" %}';
+            }
+        }, 30000);
+    });
+</script>
+
+<!-- Confetti library for celebration effect -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/canvas-confetti/1.5.1/confetti.browser.min.js"></script>
+{% endblock content %}

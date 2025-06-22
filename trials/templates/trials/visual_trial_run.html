@@ -1,0 +1,600 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Visual Trial - {{ session.participant_name }}
+{% endblock title %}
+
+{% block content %}
+<div class="container-fluid vh-100 d-flex flex-column">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ session.participant_name }}</strong> - {{ session.word_set.name }}
+                        </div>
+                        <div>
+                            <span id="progress-text">Ready to start...</span>
+                        </div>
+                        <div>
+                            <button id="stop-trial-btn" class="btn btn-sm btn-danger" style="display: none;">
+                                <i class="bi bi-stop-fill"></i> Stop Trial
+                            </button>
+                        </div>
+                    </div>
+                    <div class="progress mt-2" style="height: 8px;">
+                        <div id="progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row flex-grow-1">
+        <div class="col-12 d-flex align-items-center justify-content-center">
+            <div class="text-center">
+                <div id="start-screen" class="start-screen">
+                    <h1 class="display-3 text-primary mb-4">Ready to Begin</h1>
+                    <p class="lead mb-4">Focus on the word that becomes clear and bold</p>
+                    <p class="text-muted mb-4">
+                        Think about the highlighted word during its presentation.<br>
+                        Relax during rest periods when all words are blurred.
+                    </p>
+                    <div class="mb-4">
+                        <button id="debug-eeg-btn" class="btn btn-outline-info me-3">
+                            <i class="bi bi-bug me-2"></i>Debug EEG
+                        </button>
+                        <button id="check-eeg-btn" class="btn btn-outline-primary me-3">
+                            <i class="bi bi-activity me-2"></i>Check EEG Connection
+                        </button>
+                        <button id="start-eeg-btn" class="btn btn-success me-3">
+                            <i class="bi bi-record-circle me-2"></i>Start EEG Recording
+                        </button>
+                    </div>
+                    <button id="start-btn" class="btn btn-lg btn-success" disabled>
+                        <i class="bi bi-play-circle-fill me-2"></i>Start Trial
+                    </button>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            EEG recording will automatically initialize if needed
+                        </small>
+                    </div>
+                    <div id="eeg-status" class="mt-3"></div>
+                </div>
+
+                <div id="word-display" class="word-display" style="display: none;">
+                    <div class="word-grid">
+                        {% for word in words_in_set %}
+                            <div class="word-item blurred" data-word="{{ word }}">
+                                <span class="word-text">{{ word }}</span>
+                            </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div id="status-display" class="status-display mt-4" style="display: none;">
+                    <div id="current-status" class="h4 text-muted">Preparing...</div>
+                    <div id="countdown" class="display-4 text-primary" style="display: none;"></div>
+                </div>
+
+                <div id="completion-screen" class="completion-screen" style="display: none;">
+                    <h1 class="display-3 text-success mb-4">
+                        <i class="bi bi-check-circle-fill"></i> Trial Complete!
+                    </h1>
+                    <p class="lead">Excellent work! Data collection is complete.</p>
+                    <div class="mt-4">
+                        <a href="{% url 'start_trial' %}" class="btn btn-lg btn-primary me-3">
+                            <i class="bi bi-arrow-left"></i> Back to Trials
+                        </a>
+                        <a href="{% url 'completed_trials' %}" class="btn btn-lg btn-outline-success">
+                            <i class="bi bi-list-check"></i> View Completed Trials
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="data-collection-status" style="display: none;">
+        <div class="position-fixed bottom-0 start-0 p-3">
+            <div class="alert alert-info alert-sm mb-0">
+                <i class="bi bi-activity"></i> EEG Recording Active
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .word-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 45px;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .word-item {
+        padding: 20px;
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        background: #f8f9fa;
+        transition: all 0.3s ease;
+        min-height: 100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .word-text {
+        font-size: 2rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .word-item.blurred .word-text {
+        filter: blur(2px);
+        color: #8c8c8c;
+        opacity: 0.7;
+    }
+
+    .word-item.focused {
+        border-color: #0d6efd;
+        background: linear-gradient(135deg, #0d6efd, #6610f2);
+        transform: scale(1.05);
+        box-shadow: 0 10px 25px rgba(13, 110, 253, 0.3);
+    }
+
+    .word-item.focused .word-text {
+        filter: none;
+        color: white;
+        font-weight: bold;
+        font-size: 2.5rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .word-item.rest .word-text {
+        filter: blur(3px);
+        color: #bbb;
+        opacity: 0.4;
+    }
+
+    .start-screen, .completion-screen {
+        animation: fadeIn 0.5s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+
+    .word-item.focused {
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    .status-display {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 10px 15px;
+        border-radius: 15px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        backdrop-filter: blur(10px);
+        min-width: 150px;
+        z-index: 1000;
+    }
+
+    #current-status {
+        font-size: 0.9rem;
+        margin-bottom: 5px;
+    }
+
+    #countdown {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        font-size: 1.8rem;
+    }
+</style>
+
+<script>
+    class VisualTrial {
+        constructor() {
+            this.session = {
+                wordDisplayDuration: {{ session.word_display_duration }},
+                restDuration: {{ session.rest_duration }},
+                totalWords: {{ total_words }}
+            };
+            this.currentWordIndex = {{ current_word_index }};
+            this.isRunning = false;
+            this.currentTimeout = null;
+            this.countdownInterval = null;
+            
+            this.initializeElements();
+            this.bindEvents();
+        }
+        
+        async debugEEG() {
+            const statusDiv = document.getElementById('eeg-status');
+            const debugBtn = document.getElementById('debug-eeg-btn');
+            
+            debugBtn.disabled = true;
+            debugBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Debugging...';
+            
+            try {
+                const response = await fetch('{% url "debug_visual_eeg" %}');
+                const data = await response.json();
+                
+                if (data.success) {
+                    let debugHtml = '<div class="alert alert-info"><h6>EEG Debug Information:</h6><ul>';
+                    for (const [key, value] of Object.entries(data.debug_info)) {
+                        debugHtml += `<li><strong>${key}:</strong> ${JSON.stringify(value)}</li>`;
+                    }
+                    debugHtml += '</ul></div>';
+                    statusDiv.innerHTML = debugHtml;
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-danger"><strong>Debug Error:</strong> ${data.error}</div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="alert alert-danger">Failed to get debug information</div>';
+            } finally {
+                debugBtn.disabled = false;
+                debugBtn.innerHTML = '<i class="bi bi-bug me-2"></i>Debug EEG';
+            }
+        }
+
+        initializeElements() {
+            this.startBtn = document.getElementById('start-btn');
+            this.stopBtn = document.getElementById('stop-trial-btn');
+            this.startScreen = document.getElementById('start-screen');
+            this.wordDisplay = document.getElementById('word-display');
+            this.statusDisplay = document.getElementById('status-display');
+            this.completionScreen = document.getElementById('completion-screen');
+            this.progressBar = document.getElementById('progress-bar');
+            this.progressText = document.getElementById('progress-text');
+            this.currentStatus = document.getElementById('current-status');
+            this.countdown = document.getElementById('countdown');
+            this.dataCollectionStatus = document.getElementById('data-collection-status');
+            
+            this.wordItems = document.querySelectorAll('.word-item');
+        }
+        
+        bindEvents() {
+            this.startBtn.addEventListener('click', () => this.startTrial());
+            this.stopBtn.addEventListener('click', () => this.stopTrial());
+            
+            const debugEEGBtn = document.getElementById('debug-eeg-btn');
+            const checkEEGBtn = document.getElementById('check-eeg-btn');
+            const startEEGBtn = document.getElementById('start-eeg-btn');
+            
+            if (debugEEGBtn) {
+                debugEEGBtn.addEventListener('click', () => this.debugEEG());
+            }
+            
+            if (checkEEGBtn) {
+                checkEEGBtn.addEventListener('click', () => this.checkEEGConnection());
+            }
+            
+            if (startEEGBtn) {
+                startEEGBtn.addEventListener('click', () => this.startEEGRecording());
+            }
+        }
+        
+        async startTrial() {
+            this.isRunning = true;
+            this.startScreen.style.display = 'none';
+            this.wordDisplay.style.display = 'block';
+            this.statusDisplay.style.display = 'block';
+            this.dataCollectionStatus.style.display = 'block';
+            this.stopBtn.style.display = 'inline-block';
+            
+            await this.showInitialCountdown();
+            
+            if (!this.isRunning) return;
+            
+            await this.runTrialLoop();
+        }
+        
+        async showInitialCountdown() {
+            return new Promise((resolve) => {
+                this.wordItems.forEach(item => {
+                    item.classList.remove('focused', 'rest');
+                    item.classList.add('blurred');
+                });
+                
+                this.currentStatus.textContent = 'Get Ready';
+                
+                let count = 3;
+                this.countdown.style.display = 'block';
+                this.countdown.textContent = count;
+                
+                const countdownInterval = setInterval(() => {
+                    count--;
+                    if (count > 0) {
+                        this.countdown.textContent = count;
+                    } else {
+                        this.countdown.textContent = 'START!';
+                        setTimeout(async () => {
+                            clearInterval(countdownInterval);
+                            this.countdown.style.display = 'none';
+                            
+                            await this.markTrialStart();
+                            
+                            resolve();
+                        }, 500);
+                    }
+                }, 1000);
+            });
+        }
+        
+        async markTrialStart() {
+            try {
+                const response = await fetch('{% url "mark_visual_trial_start" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    console.log('Trial start marked successfully');
+                } else {
+                    console.error('Failed to mark trial start:', data.error);
+                }
+            } catch (error) {
+                console.error('Error marking trial start:', error);
+            }
+        }
+        
+        async runTrialLoop() {
+            while (this.isRunning) {
+                try {
+                    const response = await fetch('{% url "visual_trial_next_word" %}', {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.completed) {
+                        this.completeTrial();
+                        return;
+                    }
+                    
+                    const progress = (data.word_index / data.total_words) * 100;
+                    this.progressBar.style.width = `${progress}%`;
+                    this.progressText.textContent = `${data.word_index + 1} / ${data.total_words}`;
+                    
+                    if (data.rest_duration > 0) {
+                        await this.showRestPeriod(data.rest_duration);
+                        
+                        if (!this.isRunning) return;
+                    }
+                    
+                    await this.showWord(data.word, data.display_duration);
+                    
+                } catch (error) {
+                    console.error('Error in trial loop:', error);
+                    this.showError('An error occurred during the trial.');
+                    break;
+                }
+            }
+        }
+        
+        async showRestPeriod(duration) {
+            return new Promise((resolve) => {
+                this.wordItems.forEach(item => {
+                    item.classList.remove('focused');
+                    item.classList.add('rest');
+                });
+                
+                this.currentStatus.textContent = 'Rest Period';
+                this.showCountdown(duration, () => {
+                    if (this.isRunning) {
+                        fetch('{% url "visual_trial_log_rest" %}', {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                                'Content-Type': 'application/json'
+                            }
+                        });
+                    }
+                    resolve();
+                });
+            });
+        }
+        
+        async showWord(word, duration) {
+            return new Promise((resolve) => {
+                this.wordItems.forEach(item => {
+                    item.classList.remove('focused', 'rest');
+                    item.classList.add('blurred');
+                });
+                
+                const targetWord = document.querySelector(`[data-word="${word}"]`);
+                if (targetWord) {
+                    targetWord.classList.remove('blurred', 'rest');
+                    targetWord.classList.add('focused');
+                }
+                
+                this.currentStatus.textContent = `Focus: ${word}`;
+                this.showCountdown(duration, resolve);
+            });
+        }
+        
+        showCountdown(duration, callback) {
+            if (duration <= 0) {
+                this.countdown.style.display = 'none';
+                callback();
+                return;
+            }
+            
+            let timeLeft = duration;
+            const startTime = Date.now();
+            
+            this.countdown.style.display = 'block';
+            
+            const updateCountdown = () => {
+                const elapsed = Date.now() - startTime;
+                timeLeft = Math.max(0, duration - elapsed);
+                
+                const seconds = Math.ceil(timeLeft / 1000);
+                this.countdown.textContent = seconds;
+                
+                if (timeLeft <= 0) {
+                    this.countdown.style.display = 'none';
+                    callback();
+                } else if (this.isRunning) {
+                    this.countdownInterval = setTimeout(updateCountdown, 100);
+                }
+            };
+            
+            updateCountdown();
+        }
+        
+        async stopTrial() {
+            this.isRunning = false;
+            
+            if (this.currentTimeout) {
+                clearTimeout(this.currentTimeout);
+            }
+            
+            if (this.countdownInterval) {
+                clearTimeout(this.countdownInterval);
+            }
+            
+            await this.stopEEGRecording();
+            
+            window.location.href = '{% url "start_trial" %}';
+        }
+        
+        async completeTrial() {
+            this.isRunning = false;
+            
+            await this.stopEEGRecording();
+            
+            this.wordDisplay.style.display = 'none';
+            this.statusDisplay.style.display = 'none';
+            this.dataCollectionStatus.style.display = 'none';
+            this.stopBtn.style.display = 'none';
+            this.completionScreen.style.display = 'block';
+            
+            this.progressBar.style.width = '100%';
+            this.progressText.textContent = 'Complete!';
+        }
+        
+        showError(message) {
+            this.currentStatus.textContent = `Error: ${message}`;
+            this.currentStatus.className = 'h4 text-danger';
+            this.countdown.style.display = 'none';
+        }
+        
+        async checkEEGConnection() {
+            const statusDiv = document.getElementById('eeg-status');
+            const checkBtn = document.getElementById('check-eeg-btn');
+            const startEEGBtn = document.getElementById('start-eeg-btn');
+            
+            checkBtn.disabled = true;
+            checkBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Checking...';
+            
+            try {
+                const response = await fetch('{% url "check_eeg_connection" %}');
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>EEG connection good!</div>';
+                    startEEGBtn.disabled = false;
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>EEG Warning: ${data.error}<br><small>You can still try to start recording - it will auto-initialize if needed.</small></div>`;
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Could not check EEG connection<br><small>You can still try to start recording - it will auto-initialize if needed.</small></div>';
+            } finally {
+                checkBtn.disabled = false;
+                checkBtn.innerHTML = '<i class="bi bi-activity me-2"></i>Check EEG Connection';
+            }
+        }
+        
+        async startEEGRecording() {
+            const statusDiv = document.getElementById('eeg-status');
+            const startEEGBtn = document.getElementById('start-eeg-btn');
+            
+            startEEGBtn.disabled = true;
+            startEEGBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Starting...';
+            
+            try {
+                statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>Initializing EEG connection and starting recording...</div>';
+                
+                const response = await fetch('{% url "start_visual_eeg_collection" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-record-circle me-2"></i>EEG recording started successfully!</div>';
+                    this.startBtn.disabled = false;
+                    startEEGBtn.style.display = 'none';
+                    
+                    this.dataCollectionStatus.style.display = 'block';
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Failed to start recording: ${data.error}</div>`;
+                    startEEGBtn.disabled = false;
+                    startEEGBtn.innerHTML = '<i class="bi bi-record-circle me-2"></i>Start EEG Recording';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Error starting EEG recording. Please check your device connection.</div>';
+                startEEGBtn.disabled = false;
+                startEEGBtn.innerHTML = '<i class="bi bi-record-circle me-2"></i>Start EEG Recording';
+            }
+        }
+        
+        async stopEEGRecording() {
+            try {
+                const response = await fetch('{% url "stop_visual_eeg_collection" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('EEG recording stopped:', data);
+            } catch (error) {
+                console.error('Error stopping EEG recording:', error);
+            }
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!document.querySelector('[name=csrfmiddlewaretoken]')) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = '{{ csrf_token }}';
+            document.body.appendChild(csrfInput);
+        }
+        
+        new VisualTrial();
+    });
+</script>
+{% endblock content %}

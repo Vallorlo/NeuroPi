@@ -1,12 +1,26 @@
-from django.shortcuts import render, redirect
+# trials/views.py
+# Updated views for the NeuroPi trials app with visual word focus trial support
+
+from django.shortcuts import render, redirect, get_object_or_404
 from django.http import JsonResponse, HttpResponse
 from django.conf import settings
-from .models import Trial
+from .models import Trial, WordSet, WordSetItem, VisualTrialSession, VisualTrialEvent
 import os
 import time
 import datetime
+import json
+import random
 from django.utils import timezone
 from .data_collection import collect_stage_data, check_eeg_quality, get_available_microphones
+from .visual_data_collection import (
+    start_visual_trial_collection, 
+    stop_visual_trial_collection,
+    set_current_word, 
+    set_rest_period,
+    get_collection_status,
+    is_collecting,
+    mark_trial_start
+)
 
 def get_existing_participants():
     """Get a list of existing participants from the Trials_data directory."""
@@ -27,10 +41,12 @@ def start_trial(request):
     """Display the trial start page with participant selection and word options."""
     unique_words = Trial.objects.values_list('word', flat=True).distinct()
     existing_participants = get_existing_participants()
+    word_sets = WordSet.objects.filter(is_active=True)
     
     context = {
         'unique_words': unique_words,
-        'existing_participants': existing_participants
+        'existing_participants': existing_participants,
+        'word_sets': word_sets,
     }
     
     return render(request, 'trials/start_trial.html', context)
@@ -54,79 +70,34 @@ def get_microphones(request):
 
 def debug_audio_devices(request):
     """Debug utility to list all audio devices detected by PyAudio."""
-    import pyaudio
-    
     try:
+        import pyaudio
         p = pyaudio.PyAudio()
-        device_count = p.get_device_count()
+        devices = []
         
-        html_response = f"""
-        <html>
-        <head>
-            <title>PyAudio Device Debug</title>
-            <style>
-                body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                h1 {{ color: #0066cc; }}
-                .device {{ border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }}
-                .device-name {{ font-weight: bold; }}
-                .device-property {{ margin-left: 20px; }}
-                .input-device {{ background-color: #e6f7ff; }}
-                .default-device {{ border: 2px solid #00cc00; }}
-            </style>
-        </head>
-        <body>
-            <h1>PyAudio Device Debug</h1>
-            <p>Total devices: {device_count}</p>
-        """
-        
-        # Get default input device
-        try:
-            default_input = p.get_default_input_device_info()
-            default_input_index = default_input.get('index')
-            html_response += f"<p>Default input device: {default_input.get('name')} (Index: {default_input_index})</p>"
-        except Exception as e:
-            html_response += f"<p>Error getting default input device: {str(e)}</p>"
-            default_input_index = None
-        
-        # List all devices
-        html_response += "<h2>All Devices:</h2>"
-        
-        for i in range(device_count):
-            try:
-                device_info = p.get_device_info_by_index(i)
-                
-                is_input = device_info.get('maxInputChannels', 0) > 0
-                is_default_input = i == default_input_index
-                
-                css_classes = ["device"]
-                if is_input:
-                    css_classes.append("input-device")
-                if is_default_input:
-                    css_classes.append("default-device")
-                
-                html_response += f"<div class='{' '.join(css_classes)}'>"
-                html_response += f"<div class='device-name'>Device {i}: {device_info.get('name')}</div>"
-                
-                for key, value in device_info.items():
-                    html_response += f"<div class='device-property'><strong>{key}:</strong> {value}</div>"
-                
-                html_response += "</div>"
-            except Exception as e:
-                html_response += f"<div class='device'>Error getting info for device {i}: {str(e)}</div>"
-        
-        html_response += """
-        </body>
-        </html>
-        """
+        for i in range(p.get_device_count()):
+            device_info = p.get_device_info_by_index(i)
+            devices.append({
+                'index': i,
+                'name': device_info.get('name'),
+                'channels': device_info.get('maxInputChannels'),
+                'sample_rate': device_info.get('defaultSampleRate')
+            })
         
         p.terminate()
-        return HttpResponse(html_response)
-    
+        
+        return JsonResponse({
+            "success": True,
+            "devices": devices
+        })
     except Exception as e:
-        return HttpResponse(f"Error initializing PyAudio: {str(e)}")
+        return JsonResponse({
+            "success": False,
+            "error": str(e)
+        })
 
 def word_trials(request):
-    """Display the available stages for a selected word trial."""
+    """Handle the selection of traditional word trials (existing functionality)."""
     if request.method == 'POST':
         word = request.POST.get('word')
         participant_name = request.POST.get('participant_name', '').strip()
@@ -191,6 +162,345 @@ def word_trials(request):
     # If GET request or no valid POST data, redirect to start_trial
     return redirect('start_trial')
 
+def visual_trial_setup(request):
+    """Setup page for visual word focus trials."""
+    if request.method == 'POST':
+        participant_name = request.POST.get('participant_name', '').strip()
+        existing_participant = request.POST.get('existing_participant', '').strip()
+        word_set_id = request.POST.get('word_set_id')
+        
+        # Use existing participant if selected, otherwise use new participant name
+        final_participant = existing_participant if existing_participant else participant_name
+        
+        if not final_participant or not word_set_id:
+            return redirect('start_trial')
+        
+        word_set = get_object_or_404(WordSet, id=word_set_id)
+        
+        # Store participant in session
+        request.session['participant_name'] = final_participant
+        
+        return render(request, 'trials/visual_trial_setup.html', {
+            'participant_name': final_participant,
+            'word_set': word_set,
+        })
+    
+    return redirect('start_trial')
+
+def start_visual_trial(request):
+    """Start a visual word focus trial session."""
+    if request.method == 'POST':
+        participant_name = request.session.get('participant_name')
+        word_set_id = request.POST.get('word_set_id')
+        word_display_duration = int(request.POST.get('word_display_duration', 3000))
+        rest_duration = int(request.POST.get('rest_duration', 2000))
+        repetitions_per_word = int(request.POST.get('repetitions_per_word', 10))
+        
+        if not participant_name or not word_set_id:
+            return redirect('start_trial')
+        
+        word_set = get_object_or_404(WordSet, id=word_set_id)
+        
+        # Create the trial session
+        session = VisualTrialSession.objects.create(
+            participant_name=participant_name,
+            word_set=word_set,
+            word_display_duration=word_display_duration,
+            rest_duration=rest_duration,
+            repetitions_per_word=repetitions_per_word,
+        )
+        
+        # Generate randomized word sequence
+        words = list(word_set.words.values_list('word', flat=True))
+        word_sequence = []
+        
+        # Create sequence with equal repetitions
+        for _ in range(repetitions_per_word):
+            shuffled_words = words.copy()
+            random.shuffle(shuffled_words)
+            word_sequence.extend(shuffled_words)
+        
+        # Store session data
+        request.session['visual_trial_session_id'] = session.id
+        request.session['word_sequence'] = word_sequence
+        request.session['current_word_index'] = 0
+        
+        return redirect('visual_trial_run')
+    
+    return redirect('start_trial')
+
+def visual_trial_run(request):
+    """Run the visual word focus trial."""
+    session_id = request.session.get('visual_trial_session_id')
+    if not session_id:
+        return redirect('start_trial')
+    
+    session = get_object_or_404(VisualTrialSession, id=session_id)
+    word_sequence = request.session.get('word_sequence', [])
+    current_word_index = request.session.get('current_word_index', 0)
+    
+    if current_word_index >= len(word_sequence):
+        # Trial completed
+        session.is_completed = True
+        session.completed_at = timezone.now()
+        session.save()
+        return redirect('visual_trial_complete', session_id=session.id)
+    
+    # Check if EEG collection should be started
+    eeg_started = request.session.get('eeg_collection_started', False)
+    
+    context = {
+        'session': session,
+        'word_sequence': word_sequence,
+        'current_word_index': current_word_index,
+        'total_words': len(word_sequence),
+        'words_in_set': list(session.word_set.words.values_list('word', flat=True)),
+        'eeg_started': eeg_started,
+    }
+    
+    return render(request, 'trials/visual_trial_run.html', context)
+
+def visual_trial_next_word(request):
+    """API endpoint to get the next word in the sequence."""
+    if request.method == 'POST':
+        session_id = request.session.get('visual_trial_session_id')
+        word_sequence = request.session.get('word_sequence', [])
+        current_word_index = request.session.get('current_word_index', 0)
+        
+        if not session_id:
+            return JsonResponse({'error': 'No active session'}, status=400)
+        
+        session = get_object_or_404(VisualTrialSession, id=session_id)
+        
+        if current_word_index >= len(word_sequence):
+            return JsonResponse({'completed': True})
+        
+        current_word = word_sequence[current_word_index]
+        
+        # Update the EEG data collector with current word
+        if is_collecting():
+            set_current_word(current_word)
+        
+        # Create event record
+        VisualTrialEvent.objects.create(
+            session=session,
+            word=current_word,
+            event_type='word_display',
+            duration=session.word_display_duration
+        )
+        
+        # Update index for next word
+        request.session['current_word_index'] = current_word_index + 1
+        
+        return JsonResponse({
+            'word': current_word,
+            'word_index': current_word_index,
+            'total_words': len(word_sequence),
+            'display_duration': session.word_display_duration,
+            'rest_duration': session.rest_duration,
+            'completed': False
+        })
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
+def visual_trial_log_rest(request):
+    """API endpoint to log rest periods."""
+    if request.method == 'POST':
+        session_id = request.session.get('visual_trial_session_id')
+        
+        if not session_id:
+            return JsonResponse({'error': 'No active session'}, status=400)
+        
+        session = get_object_or_404(VisualTrialSession, id=session_id)
+        
+        # Only log and update EEG collector if rest duration > 0
+        if session.rest_duration > 0:
+            # Update the EEG data collector to rest state
+            if is_collecting():
+                set_rest_period()
+            
+            # Create rest event record
+            VisualTrialEvent.objects.create(
+                session=session,
+                word='XXXXX',
+                event_type='rest_period',
+                duration=session.rest_duration
+            )
+        
+        return JsonResponse({'success': True})
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
+def start_visual_eeg_collection(request):
+    """API endpoint to start EEG data collection for visual trial."""
+    if request.method == 'POST':
+        session_id = request.session.get('visual_trial_session_id')
+        
+        if not session_id:
+            return JsonResponse({'error': 'No active session'}, status=400)
+        
+        try:
+            # Add detailed debugging
+            from . import data_collection
+            cyHeadset = data_collection.cyHeadset
+            
+            print(f"DEBUG: Starting visual EEG collection for session {session_id}")
+            print(f"DEBUG: cyHeadset is None: {cyHeadset is None}")
+            
+            if cyHeadset is not None:
+                print(f"DEBUG: cyHeadset.hid is None: {cyHeadset.hid is None if hasattr(cyHeadset, 'hid') else 'No hid attribute'}")
+                print(f"DEBUG: cyHeadset type: {type(cyHeadset)}")
+            
+            collector = start_visual_trial_collection(session_id)
+            request.session['eeg_collection_started'] = True
+            
+            print(f"DEBUG: Visual EEG collection started successfully")
+            
+            return JsonResponse({
+                'success': True,
+                'message': 'EEG data collection started',
+                'output_file': collector.output_file
+            })
+        
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"ERROR: Failed to start visual EEG collection: {str(e)}")
+            print(f"ERROR DETAILS: {error_details}")
+            
+            return JsonResponse({
+                'error': f'Failed to start EEG collection: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
+def stop_visual_eeg_collection(request):
+    """API endpoint to stop EEG data collection for visual trial."""
+    if request.method == 'POST':
+        try:
+            success, result = stop_visual_trial_collection()
+            
+            if success:
+                request.session['eeg_collection_started'] = False
+                return JsonResponse({
+                    'success': True,
+                    'message': 'EEG data collection stopped',
+                    'result': result
+                })
+            else:
+                return JsonResponse({
+                    'error': 'No active collection to stop'
+                }, status=400)
+        
+        except Exception as e:
+            return JsonResponse({
+                'error': f'Failed to stop EEG collection: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
+def visual_eeg_status(request):
+    """API endpoint to get EEG collection status."""
+    status = get_collection_status()
+    
+    if status:
+        return JsonResponse({
+            'success': True,
+            'status': status
+        })
+    else:
+        return JsonResponse({
+            'success': True,
+            'status': {
+                'is_collecting': False,
+                'current_word': None,
+                'samples_collected': 0,
+                'output_file': None
+            }
+        })
+
+def mark_visual_trial_start(request):
+    """API endpoint to mark the official start of the trial (after countdown)."""
+    if request.method == 'POST':
+        try:
+            success = mark_trial_start()
+            
+            if success:
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Trial start marked successfully'
+                })
+            else:
+                return JsonResponse({
+                    'success': False,
+                    'error': 'No active collection or failed to mark start'
+                }, status=400)
+        
+        except Exception as e:
+            return JsonResponse({
+                'error': f'Failed to mark trial start: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
+def debug_visual_eeg(request):
+    """Debug endpoint to test EEG connection for visual trials."""
+    try:
+        from . import data_collection
+        cyHeadset = data_collection.cyHeadset
+        SENSOR_ORDER = data_collection.SENSOR_ORDER
+        
+        debug_info = {
+            'cyHeadset_exists': cyHeadset is not None,
+            'cyHeadset_type': str(type(cyHeadset)) if cyHeadset else None,
+            'has_hid_attribute': hasattr(cyHeadset, 'hid') if cyHeadset else False,
+            'hid_is_none': cyHeadset.hid is None if (cyHeadset and hasattr(cyHeadset, 'hid')) else None,
+            'sensor_order_length': len(SENSOR_ORDER),
+            'sensor_order': SENSOR_ORDER
+        }
+        
+        # Try to get test data
+        if cyHeadset and hasattr(cyHeadset, 'hid') and cyHeadset.hid is not None:
+            try:
+                test_data = cyHeadset.get_data()
+                debug_info['test_data_available'] = test_data is not None
+                debug_info['test_data_length'] = len(test_data.split(',')) if test_data else 0
+            except Exception as e:
+                debug_info['test_data_error'] = str(e)
+        
+        return JsonResponse({
+            'success': True,
+            'debug_info': debug_info
+        })
+        
+    except Exception as e:
+        import traceback
+        return JsonResponse({
+            'success': False,
+            'error': str(e),
+            'traceback': traceback.format_exc()
+        })
+
+def visual_trial_complete(request, session_id):
+    """Display completion page for visual trial."""
+    session = get_object_or_404(VisualTrialSession, id=session_id)
+    
+    # Ensure EEG collection is stopped
+    if is_collecting():
+        try:
+            stop_visual_trial_collection()
+        except Exception as e:
+            print(f"Error stopping EEG collection: {e}")
+    
+    # Clear session data
+    session_keys_to_clear = ['visual_trial_session_id', 'word_sequence', 'current_word_index', 'eeg_collection_started']
+    for key in session_keys_to_clear:
+        request.session.pop(key, None)
+    
+    return render(request, 'trials/visual_trial_complete.html', {
+        'session': session,
+    })
+
 def check_eeg_connection(request):
     """API endpoint to check EEG connection quality before starting capture."""
     try:
@@ -206,7 +516,7 @@ def check_eeg_connection(request):
         })
 
 def capture_stage(request):
-    """Handle the capture of EEG and audio data for a specific stage."""
+    """Handle the capture of EEG and audio data for a specific stage (existing functionality)."""
     word = request.GET.get('word')
     stage = request.GET.get('stage')
     participant_name = request.session.get('participant_name', 'Unknown')
@@ -239,68 +549,55 @@ def capture_stage(request):
                 
                 # Create/open timestamp file - just append the timestamp in the simple format
                 with open(timestamp_file, 'a') as f:
-                    f.write(f"Time: {timestamp}\n")
+                    f.write(f"{timestamp}\n")
                 
-                # Add to session timestamps for display
-                if 'timestamps' not in request.session:
-                    request.session['timestamps'] = []
-                
-                request.session['timestamps'].append({
-                    'time': timestamp
+                return JsonResponse({
+                    "success": True,
+                    "message": "Timestamp recorded"
                 })
-                request.session.modified = True
-                
-                return JsonResponse({'status': 'success', 'timestamp': timestamp})
                 
             except Exception as e:
-                return JsonResponse({'status': 'error', 'message': str(e)})
-            
-        # Check if it's a capture restart request
+                return JsonResponse({
+                    "success": False,
+                    "error": str(e)
+                })
+        
+        # Check if it's a restart request
         elif 'restart_capture' in request.POST:
-            # Clear existing timestamps
+            # Clear any existing timestamps for this attempt
             if os.path.exists(timestamp_file):
                 os.remove(timestamp_file)
-                
-            # Clear session timestamps
-            request.session['timestamps'] = []
-            request.session.modified = True
-            
-            # Redirect back to the same page to restart the capture
+            request.session.pop('timestamps', None)
+            # Redirect to clear the POST
             return redirect(f"{request.path}?word={word}&stage={stage}&attempt={attempt_number}")
-            
+        
         else:
-            # For a new capture start, create/overwrite the timestamp file
-            # Just create an empty file - no headers or additional info
-            with open(timestamp_file, 'w') as f:
-                pass  # Create empty file
-            
-            # Define output files
-            output_file = os.path.join(participant_folder, f'eeg_data_attempt_{attempt_number}.csv')
-            output_audio = os.path.join(participant_folder, f'audio_attempt_{attempt_number}.wav')
-            
+            # Regular data capture
             try:
-                print(f"Starting data collection with microphone_index: {microphone_index}")
-                # Start data collection (EEG and audio)
-                # Set duration to 90 seconds and use timestamp-based ending
-                capture_duration = 90
-                captured_data = collect_stage_data(
-                    capture_duration, 
-                    output_file, 
-                    output_audio,
+                # Filenames for EEG and audio data
+                eeg_filename = os.path.join(participant_folder, f'{stage}_eeg_attempt_{attempt_number}.csv')
+                audio_filename = os.path.join(participant_folder, f'{stage}_audio_attempt_{attempt_number}.wav')
+                
+                # Collect data
+                success = collect_stage_data(
+                    stage_duration=90,  # 90 seconds max
+                    eeg_filename=eeg_filename,
+                    audio_filename=audio_filename,
                     timestamp_file=timestamp_file,
-                    timestamps_threshold=15,
+                    timestamps_threshold=15,  # Stop after 15 timestamps
                     microphone_index=microphone_index
                 )
                 
-                if captured_data:
-                    # Keep timestamps for display before clearing
-                    timestamps = request.session.get('timestamps', []).copy()
-                    
-                    # Clear timestamps from session for next attempt
-                    request.session['timestamps'] = []
-                    request.session.modified = True
+                if success:
+                    captured_data = {
+                        'eeg_file': eeg_filename,
+                        'audio_file': audio_filename,
+                        'timestamp_file': timestamp_file
+                    }
+                    # Clear timestamps from session after successful capture
+                    request.session.pop('timestamps', None)
                 else:
-                    error_message = "No EEG data was collected. Please check your device connection."
+                    error_message = "Data collection failed. Please check your device connection."
                 
             except Exception as e:
                 error_message = f"Error during data collection: {str(e)}"
@@ -379,4 +676,10 @@ def completed_trials(request):
                 if participant_data['words']:  # Only add participants with completed words
                     completed_data.append(participant_data)
     
-    return render(request, 'trials/completed_trials.html', {'completed_data': completed_data})
+    # Get visual trial sessions
+    visual_sessions = VisualTrialSession.objects.filter(is_completed=True).order_by('-completed_at')
+    
+    return render(request, 'trials/completed_trials.html', {
+        'completed_data': completed_data,
+        'visual_sessions': visual_sessions,
+    })

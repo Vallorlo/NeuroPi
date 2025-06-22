@@ -1,3 +1,7 @@
+<!--
+trials/templates/trials/start_trial.html
+Main Trial Selection Page - Choose between Traditional and Visual Trials
+-->
 {% extends "layout.html" %}
 
 {% block title %}
@@ -11,67 +15,186 @@
             <h1 class="mb-0">Start EEG Trial</h1>
         </div>
         <div class="card-body">
-            <form method="post" action="{% url 'word_trials' %}" id="trialForm">
-                {% csrf_token %}
-                
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="participant_select" class="form-label">Select Existing Participant:</label>
-                            <select class="form-select" id="participant_select" name="existing_participant">
-                                <option value="">-- Select Existing Participant --</option>
-                                {% for participant in existing_participants %}
-                                    <option value="{{ participant }}">{{ participant }}</option>
-                                {% endfor %}
-                            </select>
+            <!-- Trial Type Selection -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header bg-info text-white">
+                            <h5 class="mb-0">Select Trial Type</h5>
                         </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label for="participant_name" class="form-label">Or Create New Participant:</label>
-                            <input type="text" class="form-control" name="participant_name" id="participant_name" placeholder="Enter new participant name">
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Microphone Selection -->
-                <div class="form-group mb-4">
-                    <label for="microphoneSelect" class="form-label"><i class="bi bi-mic"></i> Select Microphone:</label>
-                    <div class="input-group">
-                        <select id="microphoneSelect" name="microphone_index" class="form-select">
-                            <option value="">Loading microphones...</option>
-                        </select>
-                        <button type="button" id="refreshMicsBtn" class="btn btn-outline-secondary">
-                            <i class="bi bi-arrow-clockwise"></i> Refresh
-                        </button>
-                    </div>
-                    <div class="form-text">This microphone will be used for all recordings in this session.</div>
-                    <div id="microphoneStatus" class="mt-2"></div>
-                </div>
-                
-                <div class="form-group mb-4">
-                    <label class="form-label">Select Word:</label>
-                    <div class="row word-selection">
-                        {% for word in unique_words %}
-                            <div class="col-md-4 mb-3">
-                                <div class="card word-card">
-                                    <div class="card-body text-center">
-                                        <h3>{{ word }}</h3>
-                                        <input type="radio" name="word" id="word_{{ word }}" value="{{ word }}" class="form-check-input word-radio" required>
-                                        <label for="word_{{ word }}" class="btn btn-outline-primary w-100 mt-2">Select</label>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <div class="card h-100 trial-type-card" data-type="traditional">
+                                        <div class="card-body text-center">
+                                            <i class="bi bi-mic-fill display-4 text-primary mb-3"></i>
+                                            <h4>Traditional Trials</h4>
+                                            <p>Multi-stage trials with vocal, non-vocal, and motor tasks</p>
+                                            <button type="button" class="btn btn-primary" data-bs-toggle="collapse" data-bs-target="#traditionalForm">
+                                                Select Traditional
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-6 mb-3">
+                                    <div class="card h-100 trial-type-card" data-type="visual">
+                                        <div class="card-body text-center">
+                                            <i class="bi bi-eye-fill display-4 text-success mb-3"></i>
+                                            <h4>Visual Word Focus</h4>
+                                            <p>New visual word presentation system with randomized display</p>
+                                            <button type="button" class="btn btn-success" data-bs-toggle="collapse" data-bs-target="#visualForm">
+                                                Select Visual
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        {% endfor %}
+                        </div>
                     </div>
                 </div>
-                
-                <div class="d-grid gap-2">
-                    <button type="submit" class="btn btn-lg btn-success" id="startTrialBtn">
-                        <i class="bi bi-play-circle-fill me-2"></i>Start Trial
-                    </button>
+            </div>
+
+            <!-- Traditional Trial Form -->
+            <div class="collapse" id="traditionalForm">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Traditional Trial Setup</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'word_trials' %}" id="traditionalTrialForm">
+                            {% csrf_token %}
+                            
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="participant_select" class="form-label">Select Existing Participant:</label>
+                                        <select class="form-select" id="participant_select" name="existing_participant">
+                                            <option value="">-- Select Existing Participant --</option>
+                                            {% for participant in existing_participants %}
+                                                <option value="{{ participant }}">{{ participant }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="participant_name" class="form-label">Or Create New Participant:</label>
+                                        <input type="text" class="form-control" name="participant_name" id="participant_name" placeholder="Enter new participant name">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Microphone Selection -->
+                            <div class="form-group mb-4">
+                                <label for="microphoneSelect" class="form-label"><i class="bi bi-mic"></i> Select Microphone:</label>
+                                <div class="input-group">
+                                    <select id="microphoneSelect" name="microphone_index" class="form-select">
+                                        <option value="">Loading microphones...</option>
+                                    </select>
+                                    <button type="button" id="refreshMicsBtn" class="btn btn-outline-secondary">
+                                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                                    </button>
+                                </div>
+                                <div class="form-text">This microphone will be used for all recordings in this session.</div>
+                                <div id="microphoneStatus" class="mt-2"></div>
+                            </div>
+                            
+                            <div class="form-group mb-4">
+                                <label class="form-label">Select Word:</label>
+                                <div class="row word-selection">
+                                    {% for word in unique_words %}
+                                        <div class="col-md-4 mb-3">
+                                            <div class="card word-card">
+                                                <div class="card-body text-center">
+                                                    <h3>{{ word }}</h3>
+                                                    <input type="radio" name="word" id="word_{{ word }}" value="{{ word }}" class="form-check-input word-radio" required>
+                                                    <label for="word_{{ word }}" class="btn btn-outline-primary w-100 mt-2">Select</label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-lg btn-primary" id="startTraditionalTrialBtn">
+                                    <i class="bi bi-play-circle-fill me-2"></i>Start Traditional Trial
+                                </button>
+                            </div>
+                        </form>
+                    </div>
                 </div>
-            </form>
+            </div>
+
+            <!-- Visual Trial Form -->
+            <div class="collapse" id="visualForm">
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Visual Word Focus Trial Setup</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'visual_trial_setup' %}" id="visualTrialForm">
+                            {% csrf_token %}
+                            
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="visual_participant_select" class="form-label">Select Existing Participant:</label>
+                                        <select class="form-select" id="visual_participant_select" name="existing_participant">
+                                            <option value="">-- Select Existing Participant --</option>
+                                            {% for participant in existing_participants %}
+                                                <option value="{{ participant }}">{{ participant }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="visual_participant_name" class="form-label">Or Create New Participant:</label>
+                                        <input type="text" class="form-control" name="participant_name" id="visual_participant_name" placeholder="Enter new participant name">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-4">
+                                <label class="form-label">Select Word Set:</label>
+                                <div class="row">
+                                    {% for word_set in word_sets %}
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card word-set-card">
+                                                <div class="card-body">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="word_set_id" id="wordset_{{ word_set.id }}" value="{{ word_set.id }}" required>
+                                                        <label class="form-check-label" for="wordset_{{ word_set.id }}">
+                                                            <h5>{{ word_set.name }}</h5>
+                                                            <p class="text-muted">{{ word_set.description }}</p>
+                                                            <small class="text-info">Words: {% for word in word_set.words.all %}{{ word.word }}{% if not forloop.last %}, {% endif %}{% endfor %}</small>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% empty %}
+                                        <div class="col-12">
+                                            <div class="alert alert-warning">
+                                                No word sets available. Please create word sets in the admin panel first.
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            {% if word_sets %}
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-lg btn-success" id="startVisualTrialBtn">
+                                    <i class="bi bi-eye-fill me-2"></i>Setup Visual Trial
+                                </button>
+                            </div>
+                            {% endif %}
+                        </form>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -88,13 +211,23 @@
 </div>
 
 <style>
-    .word-card {
+    .trial-type-card {
+        transition: all 0.3s ease;
+        cursor: pointer;
+    }
+    
+    .trial-type-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    
+    .word-card, .word-set-card {
         transition: all 0.3s ease;
         cursor: pointer;
         border: 2px solid #e9ecef;
     }
     
-    .word-card:hover {
+    .word-card:hover, .word-set-card:hover {
         transform: translateY(-5px);
         box-shadow: 0 10px 20px rgba(0,0,0,0.1);
     }
@@ -112,11 +245,16 @@
     .word-selection label {
         cursor: pointer;
     }
+    
+    .form-check-input:checked ~ .form-check-label {
+        color: #0d6efd;
+        font-weight: bold;
+    }
 </style>
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
-        // Load microphones
+        // Load microphones for traditional trials
         loadMicrophones();
         
         // Refresh microphones button
@@ -125,7 +263,7 @@
             refreshMicsBtn.addEventListener('click', loadMicrophones);
         }
         
-        // Make the entire word card clickable
+        // Make the entire word card clickable for traditional trials
         const wordCards = document.querySelectorAll('.word-card');
         wordCards.forEach(card => {
             card.addEventListener('click', function() {
@@ -146,236 +284,105 @@
             });
         });
         
-        // Form validation
-        const form = document.getElementById('trialForm');
-        form.addEventListener('submit', function(e) {
-            const existingParticipant = document.getElementById('participant_select').value;
-            const newParticipant = document.getElementById('participant_name').value.trim();
-            
-            if (!existingParticipant && !newParticipant) {
-                e.preventDefault();
-                alert('Please select an existing participant or enter a new participant name.');
-                return false;
-            }
-            
-            const wordSelected = document.querySelector('input[name="word"]:checked');
-            if (!wordSelected) {
-                e.preventDefault();
-                alert('Please select a word for the trial.');
-                return false;
-            }
-            
-            return true;
+        // Make word set cards clickable
+        const wordSetCards = document.querySelectorAll('.word-set-card');
+        wordSetCards.forEach(card => {
+            card.addEventListener('click', function() {
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+            });
         });
         
-        // Toggle between existing and new participant
-        const existingSelect = document.getElementById('participant_select');
-        const newInput = document.getElementById('participant_name');
+        // Form validation for traditional trials
+        const traditionalForm = document.getElementById('traditionalTrialForm');
+        if (traditionalForm) {
+            traditionalForm.addEventListener('submit', function(e) {
+                const existingParticipant = document.getElementById('participant_select').value;
+                const newParticipant = document.getElementById('participant_name').value.trim();
+                
+                if (!existingParticipant && !newParticipant) {
+                    e.preventDefault();
+                    alert('Please select an existing participant or enter a new participant name.');
+                    return false;
+                }
+                
+                const wordSelected = document.querySelector('input[name="word"]:checked');
+                if (!wordSelected) {
+                    e.preventDefault();
+                    alert('Please select a word for the trial.');
+                    return false;
+                }
+            });
+        }
         
-        existingSelect.addEventListener('change', function() {
-            if (this.value) {
-                newInput.value = '';
-            }
-        });
+        // Form validation for visual trials
+        const visualForm = document.getElementById('visualTrialForm');
+        if (visualForm) {
+            visualForm.addEventListener('submit', function(e) {
+                const existingParticipant = document.getElementById('visual_participant_select').value;
+                const newParticipant = document.getElementById('visual_participant_name').value.trim();
+                
+                if (!existingParticipant && !newParticipant) {
+                    e.preventDefault();
+                    alert('Please select an existing participant or enter a new participant name.');
+                    return false;
+                }
+                
+                const wordSetSelected = document.querySelector('input[name="word_set_id"]:checked');
+                if (!wordSetSelected) {
+                    e.preventDefault();
+                    alert('Please select a word set for the trial.');
+                    return false;
+                }
+            });
+        }
         
-        newInput.addEventListener('input', function() {
-            if (this.value.trim()) {
-                existingSelect.value = '';
-            }
+        // Collapse management
+        const collapses = document.querySelectorAll('.collapse');
+        collapses.forEach(collapse => {
+            collapse.addEventListener('show.bs.collapse', function() {
+                // Hide other collapses when one is shown
+                collapses.forEach(otherCollapse => {
+                    if (otherCollapse !== this && otherCollapse.classList.contains('show')) {
+                        new bootstrap.Collapse(otherCollapse).hide();
+                    }
+                });
+            });
         });
     });
     
-    // Function to load microphones with better organization
+    // Load microphones function
     function loadMicrophones() {
         const microphoneSelect = document.getElementById('microphoneSelect');
-        const microphoneStatus = document.getElementById('microphoneStatus');
-        const refreshMicsBtn = document.getElementById('refreshMicsBtn');
+        const statusDiv = document.getElementById('microphoneStatus');
         
         if (!microphoneSelect) return;
         
-        // Only update the button if it exists
-        if (refreshMicsBtn) {
-            refreshMicsBtn.disabled = true;
-            refreshMicsBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Loading...';
-        }
-        
-        // Update status
-        if (microphoneStatus) {
-            microphoneStatus.innerHTML = '<div class="alert alert-info"><i class="bi bi-info-circle"></i> Loading microphones...</div>';
-        }
-        
-        // Clear dropdown with a "Loading..." option
         microphoneSelect.innerHTML = '<option value="">Loading microphones...</option>';
         
-        console.log('Fetching microphones from server...');
-        
         fetch('{% url "get_microphones" %}')
-            .then(response => {
-                console.log('Response received:', response.status);
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
-                console.log('Microphone data received:', data);
+                microphoneSelect.innerHTML = '';
                 
-                if (data.success) {
-                    // Save current selection if possible
-                    const currentSelection = microphoneSelect.value;
-                    
-                    // Clear existing options
-                    microphoneSelect.innerHTML = '';
-                    
-                    // Add default option
-                    const defaultOption = document.createElement('option');
-                    defaultOption.value = '';
-                    defaultOption.textContent = 'Default Microphone';
-                    microphoneSelect.appendChild(defaultOption);
-                    
-                    if (data.microphones && data.microphones.length > 0) {
-                        console.log(`Adding ${data.microphones.length} microphones to select box`);
-                        
-                        // Separate default, WASAPI, and other devices
-                        const defaultMics = data.microphones.filter(mic => mic.is_default);
-                        const wasapiMics = data.microphones.filter(mic => !mic.is_default && mic.name.toLowerCase().includes('wasapi'));
-                        const otherMics = data.microphones.filter(mic => !mic.is_default && !mic.name.toLowerCase().includes('wasapi'));
-                        
-                        // Add default device(s) first
-                        if (defaultMics.length > 0) {
-                            const defaultGroup = document.createElement('optgroup');
-                            defaultGroup.label = 'Default Device';
-                            
-                            defaultMics.forEach(mic => {
-                                const option = document.createElement('option');
-                                option.value = mic.index;
-                                option.textContent = `${mic.name} (${mic.channels} ch)`;
-                                option.selected = true; // Always select the default
-                                defaultGroup.appendChild(option);
-                            });
-                            
-                            microphoneSelect.appendChild(defaultGroup);
-                        }
-                        
-                        // Add WASAPI devices (usually best quality)
-                        if (wasapiMics.length > 0) {
-                            const wasapiGroup = document.createElement('optgroup');
-                            wasapiGroup.label = 'WASAPI Devices (Recommended)';
-                            
-                            wasapiMics.forEach(mic => {
-                                const option = document.createElement('option');
-                                option.value = mic.index;
-                                option.textContent = `${mic.name} (${mic.channels} ch)`;
-                                wasapiGroup.appendChild(option);
-                            });
-                            
-                            microphoneSelect.appendChild(wasapiGroup);
-                        }
-                        
-                        // Add other devices
-                        if (otherMics.length > 0) {
-                            const otherGroup = document.createElement('optgroup');
-                            otherGroup.label = 'Other Devices';
-                            
-                            otherMics.forEach(mic => {
-                                const option = document.createElement('option');
-                                option.value = mic.index;
-                                option.textContent = `${mic.name} (${mic.channels} ch)`;
-                                otherGroup.appendChild(option);
-                            });
-                            
-                            microphoneSelect.appendChild(otherGroup);
-                        }
-                        
-                        // Update status
-                        if (microphoneStatus) {
-                            microphoneStatus.innerHTML = `<div class="alert alert-success">
-                                <i class="bi bi-mic"></i> Found ${data.microphones.length} unique microphones 
-                                <button class="btn btn-sm btn-outline-success float-end" type="button" 
-                                        onclick="window.open('{% url 'debug_audio_devices' %}', '_blank')">
-                                    <i class="bi bi-wrench"></i> Debug
-                                </button>
-                            </div>`;
-                        }
-                        
-                        // Restore selection if still available
-                        if (currentSelection) {
-                            // Check all options including those in optgroups
-                            const allOptions = [...microphoneSelect.querySelectorAll('option')];
-                            const matchingOption = allOptions.find(opt => opt.value === currentSelection);
-                            if (matchingOption) {
-                                matchingOption.selected = true;
-                            }
-                        }
-                        
-                    } else {
-                        console.warn('No microphones found in response data');
-                        if (microphoneStatus) {
-                            microphoneStatus.innerHTML = `<div class="alert alert-warning">
-                                <i class="bi bi-exclamation-triangle"></i> No microphones found. 
-                                <button class="btn btn-sm btn-outline-warning float-end" type="button" 
-                                        onclick="window.open('{% url 'debug_audio_devices' %}', '_blank')">
-                                    <i class="bi bi-wrench"></i> Debug
-                                </button>
-                            </div>`;
-                        }
-                    }
+                if (data.success && data.microphones.length > 0) {
+                    microphoneSelect.innerHTML = '<option value="">-- Select Microphone --</option>';
+                    data.microphones.forEach(mic => {
+                        const option = document.createElement('option');
+                        option.value = mic.index;
+                        option.textContent = `${mic.name} (${mic.channels} channels)`;
+                        microphoneSelect.appendChild(option);
+                    });
+                    statusDiv.innerHTML = '<div class="alert alert-success alert-sm">Microphones loaded successfully</div>';
                 } else {
-                    console.error('Error getting microphones:', data.error);
-                    // Add an error note to the dropdown
-                    microphoneSelect.innerHTML = '';
-                    
-                    const defaultOption = document.createElement('option');
-                    defaultOption.value = '';
-                    defaultOption.textContent = 'Default Microphone';
-                    microphoneSelect.appendChild(defaultOption);
-                    
-                    const errorOption = document.createElement('option');
-                    errorOption.disabled = true;
-                    errorOption.textContent = `Error: ${data.error || 'Failed to load microphones'}`;
-                    microphoneSelect.appendChild(errorOption);
-                    
-                    // Update status
-                    if (microphoneStatus) {
-                        microphoneStatus.innerHTML = `<div class="alert alert-danger">
-                            <i class="bi bi-exclamation-triangle"></i> Error: ${data.error || 'Failed to load microphones'}
-                            <button class="btn btn-sm btn-outline-danger float-end" type="button" 
-                                    onclick="window.open('{% url 'debug_audio_devices' %}', '_blank')">
-                                <i class="bi bi-wrench"></i> Debug
-                            </button>
-                        </div>`;
-                    }
+                    microphoneSelect.innerHTML = '<option value="">No microphones found</option>';
+                    statusDiv.innerHTML = '<div class="alert alert-warning alert-sm">No microphones detected</div>';
                 }
             })
             .catch(error => {
-                console.error('Error fetching microphones:', error);
-                // Add an error note to the dropdown
-                microphoneSelect.innerHTML = '';
-                
-                const defaultOption = document.createElement('option');
-                defaultOption.value = '';
-                defaultOption.textContent = 'Default Microphone';
-                microphoneSelect.appendChild(defaultOption);
-                
-                const errorOption = document.createElement('option');
-                errorOption.disabled = true;
-                errorOption.textContent = `Error: ${error.message}`;
-                microphoneSelect.appendChild(errorOption);
-                
-                // Update status
-                if (microphoneStatus) {
-                    microphoneStatus.innerHTML = `<div class="alert alert-danger">
-                        <i class="bi bi-exclamation-triangle"></i> Error: ${error.message}
-                        <button class="btn btn-sm btn-outline-danger float-end" type="button" 
-                                onclick="window.open('{% url 'debug_audio_devices' %}', '_blank')">
-                            <i class="bi bi-wrench"></i> Debug
-                        </button>
-                    </div>`;
-                }
-            })
-            .finally(() => {
-                // Only update the button if it exists
-                if (refreshMicsBtn) {
-                    refreshMicsBtn.disabled = false;
-                    refreshMicsBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Refresh';
-                }
+                microphoneSelect.innerHTML = '<option value="">Error loading microphones</option>';
+                statusDiv.innerHTML = '<div class="alert alert-danger alert-sm">Error loading microphones</div>';
+                console.error('Error loading microphones:', error);
             });
     }
 </script>

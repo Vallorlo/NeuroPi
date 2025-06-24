@@ -21,6 +21,8 @@ urlpatterns = [
     path('visual_next_word/', views.visual_trial_next_word, name='visual_trial_next_word'),
     path('visual_log_rest/', views.visual_trial_log_rest, name='visual_trial_log_rest'),
     path('visual_complete/<int:session_id>/', views.visual_trial_complete, name='visual_trial_complete'),
+    path('visual_set_word/', views.visual_trial_set_current_word, name='visual_trial_set_current_word'),
+
     
     # EEG control endpoints for visual trials
     path('visual_eeg_start/', views.start_visual_eeg_collection, name='start_visual_eeg_collection'),

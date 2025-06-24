@@ -1,0 +1,19 @@
+Visual Trial Session Summary
+============================
+
+Participant: tewst
+Word Set: Motor Imagiry
+Session ID: 20
+Started: 2025-06-24 14:37:15.617891+00:00
+Completed: None
+Word Display Duration: 10000ms
+Rest Duration: 2000ms
+Repetitions per Word: 1
+
+Data Collection Results:
+Total EEG Samples: 72
+Duration: 3.44 seconds
+Sampling Rate: 20.91 Hz
+
+Words in dataset:
+  XXXXX: 72 samples

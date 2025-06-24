@@ -260,6 +260,21 @@ def visual_trial_run(request):
     
     return render(request, 'trials/visual_trial_run.html', context)
 
+
+def visual_trial_set_current_word(request):
+    """API endpoint to set the current word when it's actually displayed."""
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        word = data.get('word', 'XXXXX')
+        
+        if is_collecting():
+            set_current_word(word)
+            return JsonResponse({'success': True, 'word': word})
+        
+        return JsonResponse({'success': False, 'error': 'Not collecting'})
+    
+    return JsonResponse({'error': 'Invalid request'}, status=400)
+
 def visual_trial_next_word(request):
     """API endpoint to get the next word in the sequence."""
     if request.method == 'POST':
@@ -277,9 +292,7 @@ def visual_trial_next_word(request):
         
         current_word = word_sequence[current_word_index]
         
-        # Update the EEG data collector with current word
-        if is_collecting():
-            set_current_word(current_word)
+        # DO NOT set the word here - wait for the frontend to signal when it's actually displayed
         
         # Create event record
         VisualTrialEvent.objects.create(
@@ -300,8 +313,6 @@ def visual_trial_next_word(request):
             'rest_duration': session.rest_duration,
             'completed': False
         })
-    
-    return JsonResponse({'error': 'Invalid request'}, status=400)
 
 def visual_trial_log_rest(request):
     """API endpoint to log rest periods."""

@@ -138,26 +138,14 @@ class VisualTrialDataCollector:
         current_time = time.time()
         self.trial_start_time = current_time
         
-        # Calculate how much data to keep (everything from this point forward)
-        cutoff_relative_time = current_time - self.start_time
+        # Clear all pre-trial data
+        pre_trial_count = len(self.eeg_data)
+        self.eeg_data = []  # Clear ALL data collected before official start
+        self.start_time = current_time  # Reset start time for clean timestamps
         
-        # Filter out pre-trial data and reset timestamps
-        if self.eeg_data:
-            pre_trial_count = len(self.eeg_data)
-            # Keep all data but mark pre-trial data with "XXXXX"
-            for i, row in enumerate(self.eeg_data):
-                if len(row) >= 17:  # Ensure row has timestamp and word columns
-                    timestamp = row[-2]  # Timestamp column
-                    if timestamp < cutoff_relative_time:
-                        row[-1] = "XXXXX"  # Mark pre-trial data as rest
-            
-            print(f"Marked trial start - {pre_trial_count} total samples so far")
-        
-        # Reset the reference start time for cleaner timestamps going forward
-        self.start_time = current_time
-        
-        print("Trial officially started - all new data will be properly labeled")
+        print(f"Trial officially started - cleared {pre_trial_count} pre-trial samples")
         return True
+    
     
     def _collect_data(self):
         """Internal method to collect EEG data - same methodology as existing system."""

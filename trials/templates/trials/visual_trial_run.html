@@ -358,67 +358,86 @@
         }
         
         async runTrialLoop() {
-            while (this.isRunning) {
+                    while (this.isRunning) {
+                        try {
+                            const response = await fetch('{% url "visual_trial_next_word" %}', {
+                                method: 'POST',
+                                headers: {
+                                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                                    'Content-Type': 'application/json'
+                                }
+                            });
+                            
+                            const data = await response.json();
+                            
+                            if (data.completed) {
+                                this.completeTrial();
+                                return;
+                            }
+                            
+                            const progress = (data.word_index / data.total_words) * 100;
+                            this.progressBar.style.width = `${progress}%`;
+                            this.progressText.textContent = `${data.word_index + 1} / ${data.total_words}`;
+                            
+                            // Show the word FIRST
+                            await this.showWord(data.word, data.display_duration);
+                            
+                            // Then show rest period AFTER the word (if rest duration > 0)
+                            if (data.rest_duration > 0 && this.isRunning) {
+                                await this.showRestPeriod(data.rest_duration);
+                            }
+                            
+                            if (!this.isRunning) return;
+                            
+                        } catch (error) {
+                            console.error('Error in trial loop:', error);
+                            this.showError('An error occurred during the trial.');
+                            break;
+                        }
+                    }
+            }
+        
+            async showRestPeriod(duration) {
+                // First, tell the backend we're in rest period
                 try {
-                    const response = await fetch('{% url "visual_trial_next_word" %}', {
+                    await fetch('{% url "visual_trial_set_current_word" %}', {
                         method: 'POST',
                         headers: {
                             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
                             'Content-Type': 'application/json'
-                        }
+                        },
+                        body: JSON.stringify({ word: 'XXXXX' })
+                    });
+                } catch (error) {
+                    console.error('Failed to set rest period:', error);
+                }
+                
+                return new Promise((resolve) => {
+                    this.wordItems.forEach(item => {
+                        item.classList.remove('focused');
+                        item.classList.add('rest');
                     });
                     
-                    const data = await response.json();
-                    
-                    if (data.completed) {
-                        this.completeTrial();
-                        return;
-                    }
-                    
-                    const progress = (data.word_index / data.total_words) * 100;
-                    this.progressBar.style.width = `${progress}%`;
-                    this.progressText.textContent = `${data.word_index + 1} / ${data.total_words}`;
-                    
-                    if (data.rest_duration > 0) {
-                        await this.showRestPeriod(data.rest_duration);
-                        
-                        if (!this.isRunning) return;
-                    }
-                    
-                    await this.showWord(data.word, data.display_duration);
-                    
-                } catch (error) {
-                    console.error('Error in trial loop:', error);
-                    this.showError('An error occurred during the trial.');
-                    break;
-                }
+                    this.currentStatus.textContent = 'Rest Period';
+                    this.showCountdown(duration, resolve);
+                });
             }
-        }
         
-        async showRestPeriod(duration) {
-            return new Promise((resolve) => {
-                this.wordItems.forEach(item => {
-                    item.classList.remove('focused');
-                    item.classList.add('rest');
+                async showWord(word, duration) {
+            // First, tell the backend we're displaying this word NOW
+            try {
+                await fetch('{% url "visual_trial_set_current_word" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ word: word })
                 });
-                
-                this.currentStatus.textContent = 'Rest Period';
-                this.showCountdown(duration, () => {
-                    if (this.isRunning) {
-                        fetch('{% url "visual_trial_log_rest" %}', {
-                            method: 'POST',
-                            headers: {
-                                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                                'Content-Type': 'application/json'
-                            }
-                        });
-                    }
-                    resolve();
-                });
-            });
-        }
-        
-        async showWord(word, duration) {
+            } catch (error) {
+                console.error('Failed to set current word:', error);
+            }
+            
             return new Promise((resolve) => {
                 this.wordItems.forEach(item => {
                     item.classList.remove('focused', 'rest');

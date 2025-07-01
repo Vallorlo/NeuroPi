@@ -1,0 +1,133 @@
+{% extends 'motor_imagery/base.html' %}
+
+{% block title %}Training Status - Motor Imagery BCI{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">
+                    <i class="bi bi-hourglass-split"></i> Training Job #{{ job.id }}
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <dl class="row">
+                            <dt class="col-sm-4">Status:</dt>
+                            <dd class="col-sm-8">
+                                <span class="badge bg-{% if job.status == 'completed' %}success{% elif job.status == 'failed' %}danger{% elif job.status == 'running' %}primary{% else %}secondary{% endif %}">
+                                    {{ job.get_status_display }}
+                                </span>
+                            </dd>
+                            
+                            <dt class="col-sm-4">Created:</dt>
+                            <dd class="col-sm-8">{{ job.created_at|date:"M d, Y H:i" }}</dd>
+                            
+                            {% if job.started_at %}
+                            <dt class="col-sm-4">Started:</dt>
+                            <dd class="col-sm-8">{{ job.started_at|date:"M d, Y H:i" }}</dd>
+                            {% endif %}
+                            
+                            {% if job.completed_at %}
+                            <dt class="col-sm-4">Completed:</dt>
+                            <dd class="col-sm-8">{{ job.completed_at|date:"M d, Y H:i" }}</dd>
+                            {% endif %}
+                        </dl>
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h5>Progress</h5>
+                        <div class="progress mb-3" style="height: 30px;">
+                            <div class="progress-bar progress-bar-striped {% if job.status == 'running' %}progress-bar-animated{% endif %}" 
+                                 role="progressbar" 
+                                 style="width: {{ job.progress }}%"
+                                 id="progressBar">
+                                {{ job.progress }}%
+                            </div>
+                        </div>
+                        
+                        {% if job.result_model %}
+                        <div class="alert alert-success">
+                            <h6>Training Complete!</h6>
+                            <p>Model accuracy: <strong>{{ job.result_model.accuracy|floatformat:2 }}%</strong></p>
+                            <a href="{% url 'motor_imagery:model_detail' job.result_model.pk %}" class="btn btn-sm btn-success">
+                                View Model Details
+                            </a>
+                        </div>
+                        {% endif %}
+                        
+                        {% if job.error_message %}
+                        <div class="alert alert-danger">
+                            <h6>Error:</h6>
+                            <p>{{ job.error_message }}</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-12">
+                        <h5>Training Log</h5>
+                        <div class="bg-dark text-light p-3 rounded" style="max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 0.9em;">
+                            <pre id="trainingLog">{{ job.training_log|default:"Waiting for training to start..." }}</pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <a href="{% url 'motor_imagery:dashboard' %}" class="btn btn-secondary">
+                        <i class="bi bi-house"></i> Back to Dashboard
+                    </a>
+                    {% if job.status == 'running' %}
+                    <button class="btn btn-warning" onclick="location.reload()">
+                        <i class="bi bi-arrow-clockwise"></i> Refresh
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if job.status == 'running' %}
+<script>
+    // Auto-refresh for running jobs
+    let updateInterval;
+    
+    function updateStatus() {
+        fetch('{% url "motor_imagery:training_status_api" job.pk %}')
+            .then(response => response.json())
+            .then(data => {
+                // Update progress bar
+                const progressBar = document.getElementById('progressBar');
+                progressBar.style.width = data.progress + '%';
+                progressBar.textContent = data.progress + '%';
+                
+                // Update log
+                document.getElementById('trainingLog').textContent = data.training_log || 'Waiting...';
+                
+                // Check if completed
+                if (data.status !== 'running') {
+                    clearInterval(updateInterval);
+                    location.reload();
+                }
+            })
+            .catch(error => {
+                console.error('Error updating status:', error);
+            });
+    }
+    
+    // Update every 2 seconds
+    updateInterval = setInterval(updateStatus, 2000);
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+        clearInterval(updateInterval);
+    });
+</script>
+{% endif %}
+{% endblock %}

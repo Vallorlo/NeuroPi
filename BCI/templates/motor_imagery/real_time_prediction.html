@@ -1,0 +1,187 @@
+<!-- templates/motor_imagery/real_time_prediction.html -->
+{% extends 'motor_imagery/base.html' %}
+{% load crispy_forms_tags %}
+
+{% block title %}Real-time Prediction - Motor Imagery BCI{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0"><i class="bi bi-broadcast"></i> Real-time Prediction Setup</h3>
+            </div>
+        
+        <!-- Prediction History -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">Recent Predictions</h5>
+            </div>
+            <div class="card-body" style="max-height: 400px; overflow-y: auto;">
+                <div id="predictionHistory" class="list-group">
+                    <!-- Predictions will be added here -->
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const sessionId = {{ session.id }};
+    const wsUrl = 'ws://' + window.location.host + '/ws/prediction/' + sessionId + '/';
+    let ws;
+    let predictionCount = 0;
+    let startTime = new Date();
+    
+    function connectWebSocket() {
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = function(e) {
+            console.log('WebSocket connected');
+            updateStatus('connected');
+            // Start prediction
+            ws.send(JSON.stringify({command: 'start'}));
+        };
+        
+        ws.onmessage = function(e) {
+            const data = JSON.parse(e.data);
+            
+            if (data.type === 'prediction') {
+                updatePrediction(data.data);
+            } else if (data.type === 'error') {
+                showError(data.message);
+            } else if (data.type === 'status') {
+                console.log('Status:', data.message);
+            }
+        };
+        
+        ws.onclose = function(e) {
+            console.log('WebSocket closed');
+            updateStatus('disconnected');
+        };
+        
+        ws.onerror = function(e) {
+            console.error('WebSocket error:', e);
+            updateStatus('disconnected');
+        };
+    }
+    
+    function updatePrediction(data) {
+        predictionCount++;
+        
+        // Update main display
+        const display = document.getElementById('predictionDisplay');
+        const text = document.getElementById('predictionText');
+        
+        display.className = 'prediction-display ' + data.class;
+        text.textContent = data.class;
+        
+        // Update confidence
+        const confidenceFill = document.getElementById('confidenceFill');
+        const confidenceText = document.getElementById('confidenceText');
+        const confidencePercent = (data.confidence * 100).toFixed(1);
+        
+        confidenceFill.style.width = confidencePercent + '%';
+        confidenceText.textContent = confidencePercent + '%';
+        
+        // Update probabilities
+        updateProbabilityBars(data.probabilities);
+        
+        // Update last update time
+        document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+        
+        // Update prediction count
+        document.getElementById('predictionCount').textContent = predictionCount;
+        
+        // Add to history
+        addToHistory(data);
+    }
+    
+    function updateProbabilityBars(probabilities) {
+        for (const [className, probability] of Object.entries(probabilities)) {
+            const percent = (probability * 100).toFixed(1);
+            const cleanName = className.replace('_', '');
+            
+            const probElement = document.getElementById('prob' + cleanName);
+            const barElement = document.getElementById('bar' + cleanName);
+            
+            if (probElement && barElement) {
+                probElement.textContent = percent + '%';
+                barElement.style.width = percent + '%';
+            }
+        }
+    }
+    
+    function addToHistory(data) {
+        const history = document.getElementById('predictionHistory');
+        const item = document.createElement('div');
+        item.className = 'list-group-item';
+        
+        const time = new Date().toLocaleTimeString();
+        const confidence = (data.confidence * 100).toFixed(1);
+        
+        item.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center">
+                <span class="badge bg-primary">${data.class}</span>
+                <small>${time}</small>
+            </div>
+            <small class="text-muted">Confidence: ${confidence}%</small>
+        `;
+        
+        history.insertBefore(item, history.firstChild);
+        
+        // Keep only last 10 items
+        while (history.children.length > 10) {
+            history.removeChild(history.lastChild);
+        }
+    }
+    
+    function updateStatus(status) {
+        const indicator = document.getElementById('statusIndicator');
+        indicator.className = 'status-indicator ' + status;
+    }
+    
+    function updateDuration() {
+        const now = new Date();
+        const duration = Math.floor((now - startTime) / 1000);
+        const minutes = Math.floor(duration / 60);
+        const seconds = duration % 60;
+        
+        document.getElementById('sessionDuration').textContent = 
+            String(minutes).padStart(2, '0') + ':' + String(seconds).padStart(2, '0');
+    }
+    
+    function showError(message) {
+        alert('Error: ' + message);
+    }
+    
+    // Stop button handler
+    document.getElementById('stopButton').addEventListener('click', function() {
+        if (confirm('Are you sure you want to stop the prediction session?')) {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({command: 'stop'}));
+            }
+            window.location.href = '{% url "BCI:stop_prediction" session.id %}';
+        }
+    });
+    
+    // Start WebSocket connection
+    connectWebSocket();
+    
+    // Update duration every second
+    setInterval(updateDuration, 1000);
+    
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', function() {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.close();
+        }
+    });
+</script>
+{% endblock %}
+
+
+
+

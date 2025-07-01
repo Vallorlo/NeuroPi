@@ -1,0 +1,23 @@
+Motor Imagery Session Summary
+===============================
+
+Participant: val
+Session Name: Session3
+Session ID: 7
+Started: 2025-06-28 14:48:36.258784+00:00
+Completed: 2025-06-28 15:09:04.989306+00:00
+Imagery Duration: 8000ms
+Cue Duration: 2000ms
+Rest Duration: 2000ms
+Trials per Class: 25
+
+Data Collection Results:
+Total EEG Samples: 117367
+Duration: 924.86 seconds
+Sampling Rate: 126.90 Hz
+
+Motor imagery classes in dataset:
+  REST: 40782 samples
+  FEET: 25535 samples
+  LEFT_HAND: 25529 samples
+  RIGHT_HAND: 25521 samples

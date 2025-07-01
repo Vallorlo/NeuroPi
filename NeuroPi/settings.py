@@ -42,8 +42,12 @@ INSTALLED_APPS = [
     'plot.apps.PlotConfig',
     'preprocessor',
     'accounts',
-    'eeg_classifier',
-]
+    'motor_imagery',
+    'channels',
+    'crispy_forms',
+    'crispy_bootstrap5',
+    'BCI']
+
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
@@ -58,6 +62,20 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'NeuroPi.urls'
 
+CRISPY_ALLOWED_TEMPLATE_PACKS = "bootstrap5"
+CRISPY_TEMPLATE_PACK = "bootstrap5"
+
+ASGI_APPLICATION = 'neuropi.asgi.application'
+
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            "hosts": [('127.0.0.1', 6379)],
+        },
+    },
+}
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
@@ -69,6 +87,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'django.template.context_processors.media', 
             ],
             'libraries':{
             }
@@ -139,3 +158,69 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/accounts/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/'
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'models'
+
+CELERY_BROKER_URL = 'redis://localhost:6379/0'
+CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+
+# Media files configuration for uploaded EEG sessions and models
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Create directories for uploaded files
+EEG_UPLOAD_PATH = 'eeg_sessions/'
+MODEL_UPLOAD_PATH = 'trained_models/'
+
+# Motor Imagery App Settings
+MOTOR_IMAGERY_SETTINGS = {
+    'DEFAULT_SAMPLING_RATE': 128,
+    'DEFAULT_N_CHANNELS': 14,
+    'DEFAULT_WINDOW_SIZE': 2.0,  # seconds
+    'DEFAULT_OVERLAP': 0.5,
+    'DEFAULT_PREDICTION_INTERVAL': 8.0,  # seconds
+    'MAX_FILE_SIZE': 100 * 1024 * 1024,  # 100MB
+    'ALLOWED_FILE_TYPES': ['.csv'],
+    'USE_GPU': True,
+    'SIMULATION_MODE': False,  # Set to True if no real EEG device
+}
+
+# WebSocket configuration
+WEBSOCKET_ACCEPT_ALL = True
+
+
+# Logging configuration
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '{levelname} {asctime} {module} {message}',
+            'style': '{',
+        },
+    },
+    'handlers': {
+        'file': {
+            'level': 'INFO',
+            'class': 'logging.FileHandler',
+            'filename': 'motor_imagery.log',
+            'formatter': 'verbose',
+        },
+        'console': {
+            'level': 'INFO',
+            'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+    },
+    'loggers': {
+        'motor_imagery': {
+            'handlers': ['file', 'console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}

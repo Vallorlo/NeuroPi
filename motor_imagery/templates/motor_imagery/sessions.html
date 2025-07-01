@@ -1,0 +1,106 @@
+{% extends 'motor_imagery/base.html' %}
+
+{% block title %}Motor Imagery Sessions{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>Motor Imagery Sessions</h1>
+            <a href="{% url 'motor_imagery:setup' %}" class="btn btn-primary">
+                <i class="bi bi-plus-circle-fill me-2"></i>New Session
+            </a>
+        </div>
+
+        {% if sessions %}
+        <div class="row">
+            {% for session in sessions %}
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card imagery-card h-100">
+                    <div class="card-header {% if session.is_completed %}bg-success{% else %}bg-warning{% endif %} text-white">
+                        <h5 class="mb-0">{{ session.session_name }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><strong>Participant:</strong></span>
+                                <span class="badge bg-primary rounded-pill">{{ session.participant_name }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><strong>Trials per Class:</strong></span>
+                                <span class="badge bg-info rounded-pill">{{ session.trials_per_class }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><strong>Total Trials:</strong></span>
+                                <span class="badge bg-warning rounded-pill">{{ session.total_trials }}</span>
+                            </li>
+                            <li class="list-group-item d-flex justify-content-between">
+                                <span><strong>Duration:</strong></span>
+                                <span class="text-muted">~{{ session.estimated_duration_minutes|floatformat:1 }}min</span>
+                            </li>
+                            <li class="list-group-item">
+                                <strong>Started:</strong><br>
+                                <small class="text-muted">{{ session.started_at|date:"M d, Y H:i" }}</small>
+                            </li>
+                            {% if session.completed_at %}
+                            <li class="list-group-item">
+                                <strong>Completed:</strong><br>
+                                <small class="text-muted">{{ session.completed_at|date:"M d, Y H:i" }}</small>
+                            </li>
+                            {% endif %}
+                        </ul>
+                    </div>
+                    <div class="card-footer">
+                        {% if session.is_completed %}
+                            <a href="{% url 'motor_imagery:complete' session.id %}" class="btn btn-success w-100">
+                                <i class="bi bi-eye-fill me-2"></i>View Results
+                            </a>
+                        {% else %}
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'motor_imagery:run' session.id %}" class="btn btn-warning">
+                                    <i class="bi bi-play-fill me-2"></i>Continue Session
+                                </a>
+                                <small class="text-muted text-center">Session in progress</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center">
+            <div class="card imagery-card">
+                <div class="card-body py-5">
+                    <i class="bi bi-inbox display-4 text-muted mb-3"></i>
+                    <h4 class="text-muted">No Motor Imagery Sessions</h4>
+                    <p class="text-muted">No motor imagery sessions found. Start your first session to begin EEG data collection.</p>
+                    <a href="{% url 'motor_imagery:setup' %}" class="btn btn-primary btn-lg">
+                        <i class="bi bi-plus-circle-fill me-2"></i>Start First Session
+                    </a>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="row mt-4">
+            <div class="col-md-6">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h3 class="text-primary">{{ sessions|length }}</h3>
+                        <p class="mb-0">Total Sessions</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card bg-light">
+                    <div class="card-body text-center">
+                        <h3 class="text-success">{% for session in sessions %}{% if session.is_completed %}{{ forloop.counter0|add:1 }}{% endif %}{% endfor %}</h3>
+                        <p class="mb-0">Completed Sessions</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

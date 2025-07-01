@@ -1,0 +1,101 @@
+{% extends 'motor_imagery/base.html' %}
+
+{% block title %}Motor Imagery Home{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="text-center mb-5">
+            <h1 class="display-4 text-primary">
+                <i class="bi bi-brain imagery-icon"></i>
+                <br>Motor Imagery EEG Classification
+            </h1>
+            <p class="lead text-muted">
+                Train brain-computer interface models using motor imagery patterns<br>
+                <small>Left Hand • Right Hand • Feet • Rest</small>
+            </p>
+        </div>
+
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card imagery-card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-plus-circle-fill text-success imagery-icon"></i>
+                        <h4 class="mt-3">Start New Session</h4>
+                        <p class="text-muted">Begin a new motor imagery data collection session</p>
+                        <a href="{% url 'motor_imagery:setup' %}" class="btn btn-success btn-lg">
+                            <i class="bi bi-play-fill me-2"></i>New Session
+                        </a>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-6">
+                <div class="card imagery-card h-100">
+                    <div class="card-body text-center">
+                        <i class="bi bi-list-ul text-info imagery-icon"></i>
+                        <h4 class="mt-3">View Sessions</h4>
+                        <p class="text-muted">Review completed motor imagery sessions</p>
+                        <a href="{% url 'motor_imagery:sessions' %}" class="btn btn-info btn-lg">
+                            <i class="bi bi-folder2-open me-2"></i>All Sessions
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if recent_sessions %}
+        <div class="mt-5">
+            <h3>Recent Sessions</h3>
+            <div class="list-group">
+                {% for session in recent_sessions %}
+                <div class="list-group-item">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="mb-1">{{ session.session_name }}</h6>
+                            <small class="text-muted">{{ session.started_at|date:"M d, Y H:i" }}</small>
+                        </div>
+                        <div>
+                            {% if session.is_completed %}
+                                <span class="badge bg-success">Completed</span>
+                                <a href="{% url 'motor_imagery:complete' session.id %}" class="btn btn-sm btn-outline-primary">View</a>
+                            {% else %}
+                                <span class="badge bg-warning">In Progress</span>
+                                <a href="{% url 'motor_imagery:run' session.id %}" class="btn btn-sm btn-primary">Continue</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="mt-5 p-4 bg-light rounded">
+            <h4>Motor Imagery Classes</h4>
+            <div class="row g-3">
+                <div class="col-md-3 text-center">
+                    <i class="bi bi-hand-index text-primary" style="font-size: 2rem;"></i>
+                    <h6 class="mt-2">Left Hand</h6>
+                    <small class="text-muted">Imagine clenching left fist</small>
+                </div>
+                <div class="col-md-3 text-center">
+                    <i class="bi bi-hand-index text-warning" style="font-size: 2rem;"></i>
+                    <h6 class="mt-2">Right Hand</h6>
+                    <small class="text-muted">Imagine clenching right fist</small>
+                </div>
+                <div class="col-md-3 text-center">
+                    <i class="bi bi-person-walking text-success" style="font-size: 2rem;"></i>
+                    <h6 class="mt-2">Feet</h6>
+                    <small class="text-muted">Imagine flexing both feet</small>
+                </div>
+                <div class="col-md-3 text-center">
+                    <i class="bi bi-circle text-secondary" style="font-size: 2rem;"></i>
+                    <h6 class="mt-2">Rest</h6>
+                    <small class="text-muted">Relax completely</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

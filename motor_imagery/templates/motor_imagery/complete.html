@@ -1,0 +1,203 @@
+{% extends 'motor_imagery/base.html' %}
+
+{% block title %}Session Complete - {{ session.session_name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card imagery-card">
+            <div class="card-header bg-success text-white text-center">
+                <h1 class="mb-0">
+                    <i class="bi bi-check-circle-fill me-2"></i>
+                    Motor Imagery Session Complete!
+                </h1>
+            </div>
+            <div class="card-body text-center">
+                <div class="success-animation mb-4">
+                    <div class="checkmark">
+                        <div class="checkmark-circle"></div>
+                        <div class="checkmark-stem"></div>
+                        <div class="checkmark-kick"></div>
+                    </div>
+                </div>
+                
+                <h2 class="text-success mb-4">Excellent Work!</h2>
+                <p class="lead mb-4">
+                    The motor imagery session has been completed successfully. 
+                    Your EEG data has been collected and saved for model training.
+                </p>
+                
+                <div class="row">
+                    <div class="col-md-8 mx-auto">
+                        <div class="card mb-4">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0">Session Summary</h5>
+                            </div>
+                            <div class="card-body">
+                                <ul class="list-group list-group-flush">
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span><strong>Participant:</strong></span>
+                                        <span class="badge bg-primary rounded-pill">{{ session.participant_name }}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span><strong>Session Name:</strong></span>
+                                        <span class="badge bg-success rounded-pill">{{ session.session_name }}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span><strong>Trials per Class:</strong></span>
+                                        <span class="badge bg-info rounded-pill">{{ session.trials_per_class }}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span><strong>Total Trials:</strong></span>
+                                        <span class="badge bg-warning rounded-pill">{{ session.total_trials }}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span><strong>Started:</strong></span>
+                                        <span class="text-muted">{{ session.started_at|date:"M d, Y H:i" }}</span>
+                                    </li>
+                                    <li class="list-group-item d-flex justify-content-between">
+                                        <span><strong>Completed:</strong></span>
+                                        <span class="text-muted">{{ session.completed_at|date:"M d, Y H:i" }}</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card mb-4">
+                            <div class="card-header bg-warning">
+                                <h5 class="mb-0">Motor Imagery Classes Collected</h5>
+                            </div>
+                            <div class="card-body">
+                                <div class="row g-3">
+                                    <div class="col-md-3">
+                                        <div class="p-3 border rounded">
+                                            <i class="bi bi-hand-index text-primary" style="font-size: 2rem;"></i>
+                                            <h6 class="mt-2">Left Hand</h6>
+                                            <small class="text-muted">{{ session.trials_per_class }} trials</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="p-3 border rounded">
+                                            <i class="bi bi-hand-index text-warning" style="font-size: 2rem;"></i>
+                                            <h6 class="mt-2">Right Hand</h6>
+                                            <small class="text-muted">{{ session.trials_per_class }} trials</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="p-3 border rounded">
+                                            <i class="bi bi-person-walking text-success" style="font-size: 2rem;"></i>
+                                            <h6 class="mt-2">Both Feet</h6>
+                                            <small class="text-muted">{{ session.trials_per_class }} trials</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <div class="p-3 border rounded">
+                                            <i class="bi bi-circle text-secondary" style="font-size: 2rem;"></i>
+                                            <h6 class="mt-2">Rest Periods</h6>
+                                            <small class="text-muted">Between trials</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if data_file_exists %}
+                <div class="alert alert-success">
+                    <i class="bi bi-file-earmark-check-fill me-2"></i>
+                    <strong>EEG Data File Created:</strong> Your motor imagery data has been saved successfully.
+                    <br><small class="text-muted">File: {{ session.eeg_data_file }}</small>
+                </div>
+                {% else %}
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Data File Status:</strong> EEG data file location not found. Please check the session logs.
+                </div>
+                {% endif %}
+                
+                <div class="row mt-4">
+                    <div class="col-12">
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                            <a href="{% url 'motor_imagery:setup' %}" class="btn btn-lg btn-primary me-md-2">
+                                <i class="bi bi-plus-circle-fill me-2"></i>New Session
+                            </a>
+                            <a href="{% url 'motor_imagery:sessions' %}" class="btn btn-lg btn-outline-success me-md-2">
+                                <i class="bi bi-list-check me-2"></i>All Sessions
+                            </a>
+                            <a href="{% url 'motor_imagery:home' %}" class="btn btn-lg btn-outline-info">
+                                <i class="bi bi-house-door me-2"></i>Home
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.success-animation {
+    margin: 2rem 0;
+}
+
+.checkmark {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto;
+    position: relative;
+}
+
+.checkmark-circle {
+    width: 100px;
+    height: 100px;
+    border: 4px solid #28a745;
+    border-radius: 50%;
+    position: absolute;
+    animation: scale-in 0.6s ease-in-out;
+}
+
+.checkmark-stem {
+    width: 3px;
+    height: 20px;
+    background: #28a745;
+    position: absolute;
+    left: 43px;
+    top: 40px;
+    transform: rotate(45deg);
+    animation: draw-stem 0.3s ease-in-out 0.6s forwards;
+    transform-origin: bottom;
+    transform: rotate(45deg) scaleY(0);
+}
+
+.checkmark-kick {
+    width: 3px;
+    height: 12px;
+    background: #28a745;
+    position: absolute;
+    left: 35px;
+    top: 48px;
+    transform: rotate(-45deg);
+    animation: draw-kick 0.2s ease-in-out 0.8s forwards;
+    transform-origin: bottom;
+    transform: rotate(-45deg) scaleY(0);
+}
+
+@keyframes scale-in {
+    0% { transform: scale(0); opacity: 0; }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes draw-stem {
+    to { transform: rotate(45deg) scaleY(1); }
+}
+
+@keyframes draw-kick {
+    to { transform: rotate(-45deg) scaleY(1); }
+}
+</style>
+{% endblock %}

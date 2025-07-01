@@ -1,0 +1,580 @@
+{% extends 'motor_imagery/base.html' %}
+
+{% block title %}Motor Imagery Session - {{ session.session_name }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid vh-100 d-flex flex-column motor-imagery-session">
+    <div class="row">
+        <div class="col-12">
+            <div class="card mb-3">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>{{ session.participant_name }}</strong> - {{ session.session_name }}
+                        </div>
+                        <div>
+                            <span id="progress-text">Ready to start...</span>
+                        </div>
+                        <div>
+                            <button id="stop-session-btn" class="btn btn-sm btn-danger" style="display: none;">
+                                <i class="bi bi-stop-fill"></i> Stop Session
+                            </button>
+                        </div>
+                    </div>
+                    <div class="progress mt-2" style="height: 8px;">
+                        <div id="progress-bar" class="progress-bar bg-primary" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row flex-grow-1">
+        <div class="col-12 d-flex align-items-center justify-content-center">
+            <div class="text-center">
+                <div id="start-screen" class="start-screen">
+                    <h1 class="display-3 text-primary mb-4">Motor Imagery Session</h1>
+                    <p class="lead mb-4">Prepare for EEG-based motor imagery classification</p>
+
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-3">
+                            <div class="p-3 border rounded">
+                                <i class="bi bi-hand-index text-primary" style="font-size: 2rem;"></i>
+                                <h6 class="mt-2">Left Hand</h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3 border rounded">
+                                <i class="bi bi-hand-index text-warning" style="font-size: 2rem;"></i>
+                                <h6 class="mt-2">Right Hand</h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3 border rounded">
+                                <i class="bi bi-person-walking text-success" style="font-size: 2rem;"></i>
+                                <h6 class="mt-2">Both Feet</h6>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="p-3 border rounded">
+                                <i class="bi bi-circle text-secondary" style="font-size: 2rem;"></i>
+                                <h6 class="mt-2">Rest</h6>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="mb-4">
+                        <button id="check-eeg-btn" class="btn btn-outline-info me-3">
+                            <i class="bi bi-activity me-2"></i>Check EEG
+                        </button>
+                        <button id="start-eeg-btn" class="btn btn-success me-3">
+                            <i class="bi bi-record-circle me-2"></i>Start EEG Recording
+                        </button>
+                    </div>
+
+                    <button id="start-btn" class="btn btn-lg btn-primary" disabled>
+                        <i class="bi bi-play-circle-fill me-2"></i>Begin Motor Imagery Session
+                    </button>
+
+                    <div id="eeg-status" class="mt-3"></div>
+                </div>
+
+                <div id="trial-display" style="display: none;">
+                    <div id="imagery-cue" class="imagery-cue-container">
+                        <div id="imagery-icon" class="imagery-icon"></div>
+                        <h2 id="imagery-title" class="imagery-title mt-3"></h2>
+                        <p id="imagery-instruction" class="imagery-instruction lead"></p>
+                        <div id="countdown" class="countdown-display mt-4"></div>
+                    </div>
+                </div>
+
+                <div id="completion-screen" style="display: none;">
+                    <h1 class="display-3 text-success mb-4">
+                        <i class="bi bi-check-circle-fill"></i> Session Complete!
+                    </h1>
+                    <p class="lead">Motor imagery data collection completed successfully!</p>
+                    <div class="mt-4">
+                        <a href="{% url 'motor_imagery:complete' session.id %}" class="btn btn-lg btn-primary me-3">
+                            <i class="bi bi-bar-chart"></i> View Results
+                        </a>
+                        <a href="{% url 'motor_imagery:home' %}" class="btn btn-lg btn-outline-secondary">
+                            <i class="bi bi-arrow-left"></i> Back to Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <audio id="beep-sound" preload="auto">
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+D" type="audio/wav">
+    </audio>
+    <audio id="left-hand-sound" src="/path/to/your/left.mp3" preload="auto"></audio>
+    <audio id="right-hand-sound" src="/path/to/your/right.mp3" preload="auto"></audio>
+    <audio id="feet-sound" src="/path/to/your/feet.mp3" preload="auto"></audio>
+    <audio id="rest-sound" src="/path/to/your/rest.mp3" preload="auto"></audio>
+
+    <input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+</div>
+
+<style>
+.motor-imagery-session {
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+}
+
+.imagery-cue-container {
+    padding: 3rem;
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+.imagery-icon {
+    font-size: 8rem;
+    margin-bottom: 1rem;
+    transition: all 0.3s ease;
+}
+
+.imagery-title {
+    font-size: 3rem;
+    font-weight: bold;
+    margin-bottom: 1rem;
+}
+
+.imagery-instruction {
+    font-size: 1.5rem;
+    color: #6c757d;
+    margin-bottom: 2rem;
+}
+
+.countdown-display {
+    font-size: 6rem;
+    font-weight: bold;
+    font-family: 'Courier New', monospace;
+    margin-top: 2rem;
+}
+
+.cue-phase .imagery-cue-container {
+    border: 4px solid #ffc107;
+    background: #fff3cd;
+}
+
+.imagery-phase .imagery-cue-container {
+    border: 4px solid #0d6efd;
+    background: #cfe2ff;
+    animation: pulse 1s ease-in-out infinite;
+}
+
+.rest-phase .imagery-cue-container {
+    border: 4px solid #6c757d;
+    background: #f8f9fa;
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+.left-hand { color: #0d6efd; }
+.right-hand { color: #ffc107; }
+.feet { color: #198754; }
+.rest { color: #6c757d; }
+
+.fade-in { animation: fadeIn 0.5s ease-in; }
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+</style>
+
+<script>
+class MotorImagerySession {
+    constructor() {
+        this.session = {
+            id: {{ session.id }},
+            imageryDuration: {{ session.imagery_duration }},
+            cueDuration: {{ session.cue_duration }},
+            restDuration: {{ session.rest_duration }},
+        };
+        this.currentTrial = 0;
+        this.totalTrials = 0;
+        this.isRunning = false;
+        this.currentPhase = 'waiting'; // waiting, cue, imagery, rest
+
+        this.initializeElements();
+        this.bindEvents();
+        this.generateAudioContext();
+    }
+
+    initializeElements() {
+        this.startBtn = document.getElementById('start-btn');
+        this.stopBtn = document.getElementById('stop-session-btn');
+        this.startScreen = document.getElementById('start-screen');
+        this.trialDisplay = document.getElementById('trial-display');
+        this.completionScreen = document.getElementById('completion-screen');
+        this.progressBar = document.getElementById('progress-bar');
+        this.progressText = document.getElementById('progress-text');
+        this.eegStatus = document.getElementById('eeg-status');
+
+        // Trial display elements
+        this.imageryIcon = document.getElementById('imagery-icon');
+        this.imageryTitle = document.getElementById('imagery-title');
+        this.imageryInstruction = document.getElementById('imagery-instruction');
+        this.countdown = document.getElementById('countdown');
+        this.cueCon = document.querySelector('.imagery-cue-container');
+
+        // Audio Cues
+        this.audioCues = {
+            'LEFT_HAND': document.getElementById('left-hand-sound'),
+            'RIGHT_HAND': document.getElementById('right-hand-sound'),
+            'FEET': document.getElementById('feet-sound'),
+            'REST': document.getElementById('rest-sound')
+        };
+    }
+
+    bindEvents() {
+        this.startBtn.addEventListener('click', () => this.startSession());
+        this.stopBtn.addEventListener('click', () => this.stopSession());
+
+        const checkEEGBtn = document.getElementById('check-eeg-btn');
+        const startEEGBtn = document.getElementById('start-eeg-btn');
+
+        if (checkEEGBtn) {
+            checkEEGBtn.addEventListener('click', () => this.checkEEGConnection());
+        }
+
+        if (startEEGBtn) {
+            startEEGBtn.addEventListener('click', () => this.startEEGRecording());
+        }
+    }
+
+    generateAudioContext() {
+        // Create audio context for beeps
+        this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    }
+
+    playBeep(frequency = 800, duration = 200) {
+        if (!this.audioContext) return;
+
+        const oscillator = this.audioContext.createOscillator();
+        const gainNode = this.audioContext.createGain();
+
+        oscillator.connect(gainNode);
+        gainNode.connect(this.audioContext.destination);
+
+        oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
+        oscillator.type = 'sine';
+
+        gainNode.gain.setValueAtTime(0.3, this.audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + duration / 1000);
+
+        oscillator.start(this.audioContext.currentTime);
+        oscillator.stop(this.audioContext.currentTime + duration / 1000);
+    }
+    
+    playWordCue(cueName) {
+        if (this.audioCues[cueName]) {
+            this.audioCues[cueName].currentTime = 0;
+            this.audioCues[cueName].play();
+        }
+    }
+
+    async checkEEGConnection() {
+        const checkBtn = document.getElementById('check-eeg-btn');
+        const startEEGBtn = document.getElementById('start-eeg-btn');
+
+        checkBtn.disabled = true;
+        checkBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Checking...';
+
+        try {
+            const response = await fetch('{% url "motor_imagery:check_eeg" %}');
+            const data = await response.json();
+
+            if (data.success) {
+                this.eegStatus.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>EEG connection good!</div>';
+                startEEGBtn.disabled = false;
+            } else {
+                this.eegStatus.innerHTML = `<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>EEG Warning: ${data.error}<br><small>You can still try to start recording.</small></div>`;
+            }
+        } catch (error) {
+            this.eegStatus.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>Could not check EEG connection<br><small>You can still try to start recording.</small></div>';
+        } finally {
+            checkBtn.disabled = false;
+            checkBtn.innerHTML = '<i class="bi bi-activity me-2"></i>Check EEG';
+        }
+    }
+
+    async startEEGRecording() {
+        const startEEGBtn = document.getElementById('start-eeg-btn');
+
+        startEEGBtn.disabled = true;
+        startEEGBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Starting...';
+
+        try {
+            const response = await fetch('{% url "motor_imagery:start_collection" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ session_id: this.session.id })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.eegStatus.innerHTML = '<div class="alert alert-success"><i class="bi bi-record-circle me-2"></i>EEG recording started!</div>';
+                this.startBtn.disabled = false;
+                startEEGBtn.style.display = 'none';
+            } else {
+                this.eegStatus.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Failed to start: ${data.error}</div>`;
+                startEEGBtn.disabled = false;
+                startEEGBtn.innerHTML = '<i class="bi bi-record-circle me-2"></i>Start EEG Recording';
+            }
+        } catch (error) {
+            this.eegStatus.innerHTML = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Error starting EEG recording</div>';
+            startEEGBtn.disabled = false;
+            startEEGBtn.innerHTML = '<i class="bi bi-record-circle me-2"></i>Start EEG Recording';
+        }
+    }
+
+    async startSession() {
+        this.isRunning = true;
+        this.startScreen.style.display = 'none';
+        this.trialDisplay.style.display = 'block';
+        this.stopBtn.style.display = 'inline-block';
+
+        // Show initial countdown
+        await this.showInitialCountdown();
+
+        if (!this.isRunning) return;
+
+        // Run trial loop
+        await this.runTrialLoop();
+    }
+
+    async showInitialCountdown() {
+        this.showCue('READY', 'Get ready for motor imagery session', 'bi-hourglass-half', 'warning');
+
+        let count = 3;
+        for (let i = count; i > 0; i--) {
+            this.countdown.textContent = i;
+            this.playBeep(600, 300);
+            await this.sleep(1000);
+            if (!this.isRunning) return;
+        }
+
+        this.countdown.textContent = 'START!';
+        this.playBeep(1000, 500);
+        await this.sleep(500);
+    }
+
+    async runTrialLoop() {
+        while (this.isRunning) {
+            try {
+                const response = await fetch('{% url "motor_imagery:next_trial" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.completed) {
+                    this.completeSession();
+                    return;
+                }
+
+                this.currentTrial = data.trial_number;
+                this.totalTrials = data.total_trials;
+
+                // Update progress
+                const progress = (this.currentTrial / this.totalTrials) * 100;
+                this.progressBar.style.width = `${progress}%`;
+                this.progressText.textContent = `Trial ${this.currentTrial} / ${this.totalTrials}`;
+
+                // Run trial phases
+                await this.runTrial(data.imagery_class, data.instruction);
+
+                if (!this.isRunning) return;
+
+            } catch (error) {
+                console.error('Error in trial loop:', error);
+                this.showError('An error occurred during the trial.');
+                break;
+            }
+        }
+    }
+
+    async runTrial(imageryClass, instruction) {
+        // Phase 1: Show cue
+        await this.showCuePhase(imageryClass, instruction);
+        if (!this.isRunning) return;
+
+        // Phase 2: Motor imagery period
+        await this.showImageryPhase(imageryClass);
+        if (!this.isRunning) return;
+
+        // Phase 3: Rest period
+        await this.showRestPhase();
+    }
+
+    async showCuePhase(imageryClass, instruction) {
+        this.currentPhase = 'cue';
+
+        // Set imagery class for EEG data
+        await this.setImageryClass('REST'); // During cue, still rest
+
+        const config = this.getImageryConfig(imageryClass);
+        this.showCue(config.title, instruction, config.icon, config.color);
+        this.cueCon.className = 'imagery-cue-container cue-phase fade-in';
+
+        // Countdown for cue phase
+        await this.showCountdown(this.session.cueDuration);
+    }
+
+    async showImageryPhase(imageryClass) {
+        this.currentPhase = 'imagery';
+
+        // Set imagery class for EEG data collection
+        await this.setImageryClass(imageryClass);
+
+        const config = this.getImageryConfig(imageryClass);
+        this.showCue('IMAGINE', `Now ${config.action}`, config.icon, config.color);
+        this.cueCon.className = 'imagery-cue-container imagery-phase fade-in';
+
+        // Audio cue for start of imagery
+        this.playWordCue(imageryClass);
+
+        // Countdown for imagery phase
+        await this.showCountdown(this.session.imageryDuration);
+
+        // Audio cue for end of imagery
+        this.playBeep(800, 200);
+    }
+
+    async showRestPhase() {
+        this.currentPhase = 'rest';
+
+        // Set to rest for EEG data
+        await this.setImageryClass('REST');
+
+        this.showCue('REST', 'Relax completely', 'bi-circle', 'secondary');
+        this.cueCon.className = 'imagery-cue-container rest-phase fade-in';
+        
+        // Play rest audio cue
+        this.playWordCue('REST');
+
+        // Countdown for rest phase
+        await this.showCountdown(this.session.restDuration);
+    }
+
+    showCue(title, instruction, icon, color) {
+        this.imageryIcon.className = `imagery-icon bi ${icon} text-${color}`;
+        this.imageryTitle.textContent = title;
+        this.imageryInstruction.textContent = instruction;
+    }
+
+    async showCountdown(duration) {
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < duration && this.isRunning) {
+            const remaining = Math.ceil((duration - (Date.now() - startTime)) / 1000);
+            this.countdown.textContent = remaining;
+            await this.sleep(100);
+        }
+
+        this.countdown.textContent = '';
+    }
+
+    getImageryConfig(imageryClass) {
+        const configs = {
+            'LEFT_HAND': {
+                title: 'LEFT HAND',
+                action: 'clench your left hand',
+                icon: 'bi-hand-index',
+                color: 'primary'
+            },
+            'RIGHT_HAND': {
+                title: 'RIGHT HAND',
+                action: 'clench your right hand',
+                icon: 'bi-hand-index',
+                color: 'warning'
+            },
+            'FEET': {
+                title: 'BOTH FEET',
+                action: 'flex both feet',
+                icon: 'bi-person-walking',
+                color: 'success'
+            }
+        };
+        return configs[imageryClass] || configs['LEFT_HAND'];
+    }
+
+    async setImageryClass(imageryClass) {
+        try {
+            await fetch('{% url "motor_imagery:set_class" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ imagery_class: imageryClass })
+            });
+        } catch (error) {
+            console.error('Failed to set imagery class:', error);
+        }
+    }
+
+    async stopSession() {
+        this.isRunning = false;
+
+        try {
+            await fetch('{% url "motor_imagery:stop_collection" %}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                    'Content-Type': 'application/json'
+                }
+            });
+        } catch (error) {
+            console.error('Error stopping collection:', error);
+        }
+
+        window.location.href = '{% url "motor_imagery:home" %}';
+    }
+
+    completeSession() {
+        this.isRunning = false;
+        this.trialDisplay.style.display = 'none';
+        this.stopBtn.style.display = 'none';
+        this.completionScreen.style.display = 'block';
+
+        this.progressBar.style.width = '100%';
+        this.progressText.textContent = 'Session Complete!';
+
+        // Play completion sound
+        this.playBeep(1200, 500);
+    }
+
+    showError(message) {
+        this.imageryTitle.textContent = 'Error';
+        this.imageryInstruction.textContent = message;
+        this.imageryIcon.className = 'imagery-icon bi bi-exclamation-triangle text-danger';
+    }
+
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    new MotorImagerySession();
+});
+</script>
+{% endblock %}

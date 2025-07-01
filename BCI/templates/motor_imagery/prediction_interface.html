@@ -1,0 +1,215 @@
+<!-- templates/motor_imagery/prediction_interface.html -->
+{% extends 'motor_imagery/base.html' %}
+
+{% block title %}Live Prediction - Motor Imagery BCI{% endblock %}
+
+{% block extra_css %}
+<style>
+    .prediction-display {
+        font-size: 4rem;
+        font-weight: bold;
+        text-align: center;
+        padding: 3rem;
+        border-radius: 20px;
+        margin: 1rem 0;
+        min-height: 200px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(145deg, #f0f0f0, #e0e0e0);
+        box-shadow: 5px 5px 10px #d0d0d0, -5px -5px 10px #ffffff;
+        transition: all 0.3s ease;
+    }
+    
+    .prediction-display.RIGHT_HAND {
+        background: linear-gradient(145deg, #ffebee, #ffcdd2);
+        color: #c62828;
+    }
+    
+    .prediction-display.LEFT_HAND {
+        background: linear-gradient(145deg, #e0f2f1, #b2dfdb);
+        color: #00695c;
+    }
+    
+    .prediction-display.FEET {
+        background: linear-gradient(145deg, #e3f2fd, #bbdefb);
+        color: #1565c0;
+    }
+    
+    .prediction-display.REST {
+        background: linear-gradient(145deg, #f3e5f5, #e1bee7);
+        color: #6a1b9a;
+    }
+    
+    .confidence-bar {
+        height: 40px;
+        background-color: #e0e0e0;
+        border-radius: 20px;
+        overflow: hidden;
+        margin: 1rem 0;
+    }
+    
+    .confidence-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #4CAF50, #8BC34A);
+        transition: width 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-weight: bold;
+    }
+    
+    .probability-item {
+        margin: 0.5rem 0;
+    }
+    
+    .probability-bar {
+        height: 30px;
+        background-color: #f0f0f0;
+        border-radius: 15px;
+        overflow: hidden;
+    }
+    
+    .probability-fill {
+        height: 100%;
+        transition: width 0.3s ease;
+    }
+    
+    .status-indicator {
+        display: inline-block;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        margin-right: 10px;
+        animation: pulse 2s infinite;
+    }
+    
+    .status-indicator.connected {
+        background-color: #4CAF50;
+    }
+    
+    .status-indicator.disconnected {
+        background-color: #f44336;
+        animation: none;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <span class="status-indicator connected" id="statusIndicator"></span>
+                Live Motor Imagery Prediction
+            </h1>
+            <button class="btn btn-danger" id="stopButton">
+                <i class="bi bi-stop-circle"></i> Stop Session
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Main Prediction Display -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-body">
+                <h4 class="text-center mb-3">Current Prediction</h4>
+                <div id="predictionDisplay" class="prediction-display">
+                    <span id="predictionText">WAITING...</span>
+                </div>
+                
+                <div class="confidence-bar">
+                    <div id="confidenceFill" class="confidence-fill" style="width: 0%">
+                        <span id="confidenceText">0%</span>
+                    </div>
+                </div>
+                
+                <p class="text-center text-muted">
+                    <i class="bi bi-clock"></i> Last updated: <span id="lastUpdate">--:--:--</span>
+                </p>
+            </div>
+        </div>
+        
+        <!-- Probability Distribution -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <h5 class="mb-0">Class Probabilities</h5>
+            </div>
+            <div class="card-body">
+                <div class="probability-item">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>RIGHT_HAND</span>
+                        <span id="probRightHand">0%</span>
+                    </div>
+                    <div class="probability-bar">
+                        <div id="barRightHand" class="probability-fill" style="width: 0%; background-color: #FF6B6B;"></div>
+                    </div>
+                </div>
+                
+                <div class="probability-item">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>LEFT_HAND</span>
+                        <span id="probLeftHand">0%</span>
+                    </div>
+                    <div class="probability-bar">
+                        <div id="barLeftHand" class="probability-fill" style="width: 0%; background-color: #4ECDC4;"></div>
+                    </div>
+                </div>
+                
+                <div class="probability-item">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>FEET</span>
+                        <span id="probFeet">0%</span>
+                    </div>
+                    <div class="probability-bar">
+                        <div id="barFeet" class="probability-fill" style="width: 0%; background-color: #45B7D1;"></div>
+                    </div>
+                </div>
+                
+                <div class="probability-item">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>REST</span>
+                        <span id="probRest">0%</span>
+                    </div>
+                    <div class="probability-bar">
+                        <div id="barRest" class="probability-fill" style="width: 0%; background-color: #95E1D3;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Side Panel -->
+    <div class="col-md-4">
+        <!-- Session Info -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Session Information</h5>
+            </div>
+            <div class="card-body">
+                <dl class="row mb-0">
+                    <dt class="col-sm-5">Model:</dt>
+                    <dd class="col-sm-7">{{ session.model.name }}</dd>
+                    
+                    <dt class="col-sm-5">Accuracy:</dt>
+                    <dd class="col-sm-7">{{ session.model.accuracy|floatformat:1 }}%</dd>
+                    
+                    <dt class="col-sm-5">Started:</dt>
+                    <dd class="col-sm-7">{{ session.started_at|date:"H:i:s" }}</dd>
+                    
+                    <dt class="col-sm-5">Duration:</dt>
+                    <dd class="col-sm-7" id="sessionDuration">00:00</dd>
+                    
+                    <dt class="col-sm-5">Predictions:</dt>
+                    <dd class="col-sm-7" id="predictionCount">0</dd>
+                </dl>
+            </div>

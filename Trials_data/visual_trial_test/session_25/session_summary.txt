@@ -1,0 +1,24 @@
+Visual Trial Session Summary
+============================
+
+Participant: TEST
+Word Set: Colors
+Session ID: 25
+Started: 2025-06-29 21:59:37.033365+00:00
+Completed: None
+Word Display Duration: 2000ms
+Rest Duration: 2000ms
+Repetitions per Word: 5
+
+Data Collection Results:
+Total EEG Samples: 13236
+Duration: 104.30 seconds
+Sampling Rate: 126.91 Hz
+
+Words in dataset:
+  XXXXX: 6627 samples
+  red: 1341 samples
+  yellow: 1325 samples
+  blue: 1315 samples
+  green: 1314 samples
+  purple: 1314 samples

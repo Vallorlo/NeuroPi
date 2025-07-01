@@ -1,0 +1,124 @@
+{% extends 'motor_imagery/base.html' %}
+
+{% block title %}Setup Motor Imagery Session{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card imagery-card">
+            <div class="card-header bg-primary text-white">
+                <h2 class="mb-0">
+                    <i class="bi bi-gear-fill me-2"></i>Setup Motor Imagery Session
+                </h2>
+            </div>
+            <div class="card-body">
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+                    {% endfor %}
+                {% endif %}
+
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label for="participant_name" class="form-label">Participant Name</label>
+                            <input type="text" class="form-control" id="participant_name" name="participant_name" 
+                                   value="{{ default_participant }}" required>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="session_name" class="form-label">Session Name</label>
+                            <input type="text" class="form-control" id="session_name" name="session_name" 
+                                   placeholder="e.g., Training Session 1" required>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label for="imagery_duration" class="form-label">Imagery Duration (ms)</label>
+                            <input type="number" class="form-control" id="imagery_duration" name="imagery_duration" 
+                                   value="4000" min="2000" max="8000" step="500">
+                            <div class="form-text">Time to perform motor imagery (2-8 seconds)</div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label for="cue_duration" class="form-label">Cue Duration (ms)</label>
+                            <input type="number" class="form-control" id="cue_duration" name="cue_duration" 
+                                   value="2000" min="1000" max="5000" step="250">
+                            <div class="form-text">Time to display instruction (1-5 seconds)</div>
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <label for="rest_duration" class="form-label">Rest Duration (ms)</label>
+                            <input type="number" class="form-control" id="rest_duration" name="rest_duration" 
+                                   value="2000" min="1000" max="5000" step="250">
+                            <div class="form-text">Time between trials (1-5 seconds)</div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <label for="trials_per_class" class="form-label">Trials per Class</label>
+                            <input type="number" class="form-control" id="trials_per_class" name="trials_per_class" 
+                                   value="20" min="5" max="50">
+                            <div class="form-text">Number of trials for each motor imagery class</div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="alert alert-info">
+                                <strong>Total Duration:</strong> 
+                                <span id="total_duration">Calculating...</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+                    
+                    <div class="alert alert-warning">
+                        <h5><i class="bi bi-info-circle-fill me-2"></i>Important Instructions</h5>
+                        <ul class="mb-0">
+                            <li>Ensure your EEG headset is properly connected and signal quality is good</li>
+                            <li>Find a quiet environment free from distractions</li>
+                            <li>Use kinesthetic imagery - focus on the FEELING of movement, not visualization</li>
+                            <li>Keep your muscles relaxed during imagery - avoid actual movement</li>
+                            <li>Take breaks between sessions to avoid fatigue</li>
+                        </ul>
+                    </div>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'motor_imagery:home' %}" class="btn btn-secondary me-md-2">Cancel</a>
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-play-circle-fill me-2"></i>Start Session
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function updateTotalDuration() {
+        const imagery = parseInt(document.getElementById('imagery_duration').value);
+        const cue = parseInt(document.getElementById('cue_duration').value);
+        const rest = parseInt(document.getElementById('rest_duration').value);
+        const trials = parseInt(document.getElementById('trials_per_class').value);
+        
+        const trialDuration = cue + imagery + rest;
+        const totalTrials = trials * 3; // 3 active classes (LEFT_HAND, RIGHT_HAND, FEET)
+        const totalMs = totalTrials * trialDuration + 60000; // +1 min setup
+        
+        const minutes = Math.floor(totalMs / 60000);
+        const seconds = Math.floor((totalMs % 60000) / 1000);
+        
+        document.getElementById('total_duration').textContent = 
+            `~${minutes}m ${seconds}s (${totalTrials} trials)`;
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputs = ['imagery_duration', 'cue_duration', 'rest_duration', 'trials_per_class'];
+        inputs.forEach(id => {
+            document.getElementById(id).addEventListener('input', updateTotalDuration);
+        });
+        updateTotalDuration();
+    });
+</script>
+{% endblock %}

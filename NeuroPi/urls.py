@@ -17,8 +17,11 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 from . import views
-
-
+from django.conf import settings
+from django.conf.urls.static import static
+from django.shortcuts import redirect
+def bci_redirect(request):
+    return redirect('/bci/')
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.homepage, name='home'),
@@ -28,5 +31,9 @@ urlpatterns = [
     path('preprocessor/', include('preprocessor.urls')),
     path('accounts/', include('accounts.urls')),
     path('motor_imagery/', include('motor_imagery.urls')),
-    path('BCI/', include('BCI.urls')),
+    path('bci/', include('bci.urls')),
+    path('BCI/', bci_redirect),  # Redirect uppercase to lowercase
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

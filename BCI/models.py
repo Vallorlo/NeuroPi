@@ -1,107 +1,223 @@
-# motor_imagery/models.py
-
 from django.db import models
 from django.contrib.auth.models import User
-from django.utils import timezone
-import json
+from django.core.validators import FileExtensionValidator
+import uuid
+import os
 
-class EEGSession(models.Model):
-    """Model to store EEG recording sessions"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='eeg_sessions')
-    session_name = models.CharField(max_length=200)
-    file_path = models.FileField(upload_to='eeg_sessions/')
-    created_at = models.DateTimeField(auto_now_add=True)
-    duration = models.FloatField(help_text="Duration in seconds", null=True, blank=True)
+
+def session_upload_path(instance, filename):
+    """Generate upload path for session files"""
+    return f'sessions/{instance.user.username}/{instance.id}/{filename}'
+
+
+def model_upload_path(instance, filename):
+    """Generate upload path for trained models"""
+    return f'models/{instance.approach}/{instance.user.username}/{instance.id}/{filename}'
+
+
+class SessionData(models.Model):
+    """Model to store uploaded session data"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    session_file = models.FileField(
+        upload_to=session_upload_path,
+        validators=[FileExtensionValidator(allowed_extensions=['csv'])]
+    )
+    approach = models.CharField(
+        max_length=50,
+        choices=[
+            ('motor_imagery', 'Motor Imagery'),
+            ('future_approach', 'Future Approach'),
+        ],
+        default='motor_imagery'
+    )
+    channels = models.JSONField(default=list)  # Store channel names
     sampling_rate = models.IntegerField(default=128)
-    n_channels = models.IntegerField(default=14)
-    
+    classes = models.JSONField(default=list)  # Store class labels found in data
+    total_samples = models.IntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         ordering = ['-created_at']
-    
-    def __str__(self):
-        return f"{self.user.username} - {self.session_name} ({self.created_at.strftime('%Y-%m-%d %H:%M')})"
 
-class TrainingModel(models.Model):
-    """Model to store trained ML models"""
-    name = models.CharField(max_length=200)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='training_models')
-    model_file = models.FileField(upload_to='trained_models/')
-    scaler_file = models.FileField(upload_to='trained_models/')
-    config = models.JSONField(default=dict)
-    accuracy = models.FloatField(null=True, blank=True)
-    training_sessions = models.ManyToManyField(EEGSession, related_name='used_in_models')
-    created_at = models.DateTimeField(auto_now_add=True)
-    is_active = models.BooleanField(default=True)
+    def __str__(self):
+        return f"{self.name} - {self.user.username}"
+
+    def delete(self, *args, **kwargs):
+        """Delete file when model instance is deleted"""
+        if self.session_file:
+            if os.path.isfile(self.session_file.path):
+                os.remove(self.session_file.path)
+        super().delete(*args, **kwargs)
+
+
+class TrainedModel(models.Model):
+    """Model to store trained ML models and their metadata"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255)
+    description = models.TextField(blank=True)
+    approach = models.CharField(
+        max_length=50,
+        choices=[
+            ('motor_imagery', 'Motor Imagery'),
+            ('future_approach', 'Future Approach'),
+        ]
+    )
     
+    # Model files
+    model_file = models.FileField(
+        upload_to=model_upload_path,
+        validators=[FileExtensionValidator(allowed_extensions=['pt', 'pth', 'pkl'])]
+    )
+    scaler_file = models.FileField(
+        upload_to=model_upload_path,
+        validators=[FileExtensionValidator(allowed_extensions=['pkl'])],
+        null=True,
+        blank=True
+    )
+    
+    # Training metadata
+    training_sessions = models.ManyToManyField(SessionData, blank=True)
+    n_classes = models.IntegerField()
+    class_labels = models.JSONField()
+    channels = models.JSONField()
+    sampling_rate = models.IntegerField(default=128)
+    window_duration = models.FloatField(default=2.0)
+    
+    # Performance metrics
+    validation_accuracy = models.FloatField(null=True, blank=True)
+    cross_val_mean = models.FloatField(null=True, blank=True)
+    cross_val_std = models.FloatField(null=True, blank=True)
+    training_epochs = models.IntegerField(null=True, blank=True)
+    
+    # Model architecture details
+    model_config = models.JSONField(default=dict)
+    
+    # Status
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('training', 'Training'),
+            ('completed', 'Completed'),
+            ('failed', 'Failed'),
+        ],
+        default='training'
+    )
+    
+    is_active = models.BooleanField(default=False)  # For selecting active model for prediction
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         ordering = ['-created_at']
-    
-    def __str__(self):
-        return f"{self.name} - {self.accuracy:.2f}%" if self.accuracy else self.name
 
-class TrainingJob(models.Model):
-    """Model to track training jobs"""
-    STATUS_CHOICES = [
-        ('pending', 'Pending'),
-        ('running', 'Running'),
-        ('completed', 'Completed'),
-        ('failed', 'Failed'),
-    ]
-    
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='training_jobs')
-    sessions = models.ManyToManyField(EEGSession, related_name='training_jobs')
-    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
-    progress = models.IntegerField(default=0)
-    error_message = models.TextField(blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
-    started_at = models.DateTimeField(null=True, blank=True)
-    completed_at = models.DateTimeField(null=True, blank=True)
-    result_model = models.OneToOneField(TrainingModel, on_delete=models.SET_NULL, null=True, blank=True, related_name='training_job')
-    training_log = models.TextField(blank=True)
-    
     def __str__(self):
-        return f"Training Job {self.id} - {self.status}"
+        return f"{self.name} ({self.approach}) - {self.user.username}"
 
-class Prediction(models.Model):
-    """Model to store individual predictions"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='predictions')
-    model = models.ForeignKey(TrainingModel, on_delete=models.CASCADE, related_name='predictions')
-    predicted_class = models.CharField(max_length=50)
-    confidence = models.FloatField()
-    probabilities = models.JSONField()
-    timestamp = models.DateTimeField(default=timezone.now)
-    
-    class Meta:
-        ordering = ['-timestamp']
-    
-    def __str__(self):
-        return f"{self.predicted_class} ({self.confidence:.2%}) - {self.timestamp}"
+    def delete(self, *args, **kwargs):
+        """Delete files when model instance is deleted"""
+        if self.model_file:
+            if os.path.isfile(self.model_file.path):
+                os.remove(self.model_file.path)
+        if self.scaler_file:
+            if os.path.isfile(self.scaler_file.path):
+                os.remove(self.scaler_file.path)
+        super().delete(*args, **kwargs)
+
+    def activate(self):
+        """Set this model as active and deactivate others for the same user and approach"""
+        TrainedModel.objects.filter(
+            user=self.user,
+            approach=self.approach,
+            is_active=True
+        ).update(is_active=False)
+        self.is_active = True
+        self.save()
+
 
 class PredictionSession(models.Model):
     """Model to store real-time prediction sessions"""
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='prediction_sessions')
-    model = models.ForeignKey(TrainingModel, on_delete=models.CASCADE, related_name='used_in_sessions')
-    started_at = models.DateTimeField(auto_now_add=True)
-    ended_at = models.DateTimeField(null=True, blank=True)
-    predictions = models.ManyToManyField(Prediction, related_name='sessions')
-    is_active = models.BooleanField(default=True)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    model = models.ForeignKey(TrainedModel, on_delete=models.CASCADE)
+    name = models.CharField(max_length=255)
     
-    def __str__(self):
-        return f"Session {self.id} - {self.started_at}"
+    # Session parameters
+    prediction_interval = models.FloatField(default=8.0)
+    window_duration = models.FloatField(default=2.0)
     
-    def duration(self):
-        if self.ended_at:
-            return (self.ended_at - self.started_at).total_seconds()
-        return None
+    # Session status
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('running', 'Running'),
+            ('stopped', 'Stopped'),
+            ('error', 'Error'),
+        ],
+        default='stopped'
+    )
+    
+    started_at = models.DateTimeField(null=True, blank=True)
+    stopped_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
 
-class ClassMetrics(models.Model):
-    """Model to store performance metrics per class"""
-    model = models.ForeignKey(TrainingModel, on_delete=models.CASCADE, related_name='class_metrics')
-    class_name = models.CharField(max_length=50)
-    precision = models.FloatField()
-    recall = models.FloatField()
-    f1_score = models.FloatField()
-    support = models.IntegerField()
-    
+    class Meta:
+        ordering = ['-created_at']
+
     def __str__(self):
-        return f"{self.model.name} - {self.class_name}: F1={self.f1_score:.3f}"
+        return f"{self.name} - {self.user.username}"
+
+
+class Prediction(models.Model):
+    """Model to store individual predictions"""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    session = models.ForeignKey(PredictionSession, on_delete=models.CASCADE, related_name='predictions')
+    
+    # Prediction results
+    predicted_class = models.IntegerField()
+    predicted_label = models.CharField(max_length=50)
+    confidence = models.FloatField()
+    probabilities = models.JSONField()  # Store all class probabilities
+    
+    # Timing
+    prediction_time_ms = models.FloatField()  # Time taken for prediction
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        return f"{self.predicted_label} ({self.confidence:.2%}) - {self.timestamp}"
+
+
+class SystemConfiguration(models.Model):
+    """Model to store system-wide configuration"""
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    
+    # Hardware settings
+    eeg_device = models.CharField(
+        max_length=50,
+        choices=[
+            ('epoc_plus', 'EPOC+'),
+            ('future_device', 'Future Device'),
+        ],
+        default='epoc_plus'
+    )
+    
+    # Default prediction settings
+    default_prediction_interval = models.FloatField(default=8.0)
+    default_window_duration = models.FloatField(default=2.0)
+    
+    # UI preferences
+    show_confidence_threshold = models.FloatField(default=0.5)
+    max_prediction_history = models.IntegerField(default=50)
+    
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"Config - {self.user.username}"

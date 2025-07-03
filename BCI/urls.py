@@ -1,41 +1,66 @@
-# motor_imagery/urls.py
-
-from django.urls import path
+from django.urls import path, include
 from . import views
 
-app_name = 'BCI'
+app_name = 'bci'
 
 urlpatterns = [
     # Dashboard
-    path('', views.dashboard, name='dashboard'),
+    path('', views.DashboardView.as_view(), name='dashboard'),
     
-    # Session Management
-    path('sessions/', views.session_list, name='session_list'),
-    path('sessions/upload/', views.upload_session, name='upload_session'),
-    path('sessions/<int:pk>/', views.session_detail, name='session_detail'),
-    path('sessions/<int:pk>/delete/', views.delete_session, name='delete_session'),
-    path('sessions/<int:pk>/visualize/', views.visualize_session, name='visualize_session'),
+    # Session management
+    path('sessions/', views.SessionListView.as_view(), name='session_list'),
+    path('sessions/upload/', views.SessionUploadView.as_view(), name='session_upload'),
+    path('sessions/upload-multiple/', views.MultipleSessionUploadView.as_view(), name='multiple_session_upload'),
+    path('sessions/<uuid:pk>/', views.SessionDetailView.as_view(), name='session_detail'),
+    path('sessions/<uuid:pk>/delete/', views.SessionDeleteView.as_view(), name='session_delete'),
+    path('sessions/<uuid:pk>/preview/', views.session_data_preview, name='session_preview'),
     
-    # Model Training
-    path('train/', views.train_model, name='train_model'),
-    path('training/<int:pk>/status/', views.training_status, name='training_status'),
-    path('training/<int:pk>/status/api/', views.training_status_api, name='training_status_api'),
+    # Model training
+    path('training/', views.TrainingListView.as_view(), name='training_list'),
+    path('training/configure/', views.TrainingConfigView.as_view(), name='training_config'),
+    path('training/<uuid:pk>/', views.TrainingDetailView.as_view(), name='training_detail'),
+    path('training/<uuid:pk>/delete/', views.TrainingDeleteView.as_view(), name='training_delete'),
+    path('training/<uuid:pk>/activate/', views.activate_model, name='activate_model'),
+    path('training/start/', views.start_training, name='start_training'),
+    path('training/status/<uuid:pk>/', views.training_status, name='training_status'),
     
-    # Model Management
-    path('models/', views.model_list, name='model_list'),
-    path('models/<int:pk>/', views.model_detail, name='model_detail'),
-    path('models/<int:pk>/delete/', views.delete_model, name='delete_model'),
+    # Real-time prediction
+    path('prediction/', views.PredictionDashboardView.as_view(), name='prediction_dashboard'),
+    path('prediction/session/create/', views.CreatePredictionSessionView.as_view(), name='create_prediction_session'),
+    path('prediction/session/<uuid:pk>/', views.PredictionSessionDetailView.as_view(), name='prediction_session_detail'),
+    path('prediction/start/<uuid:pk>/', views.start_prediction, name='start_prediction'),
+    path('prediction/stop/<uuid:pk>/', views.stop_prediction, name='stop_prediction'),
+    path('prediction/data/<uuid:pk>/', views.prediction_data, name='prediction_data'),
+    path('prediction/history/<uuid:pk>/', views.prediction_history, name='prediction_history'),
     
-    # Real-time Prediction
-    path('predict/', views.real_time_prediction, name='real_time_prediction'),
-    path('predict/<int:session_id>/', views.prediction_interface, name='prediction_interface'),
-    path('predict/<int:session_id>/stop/', views.stop_prediction, name='stop_prediction'),
+    # Motor Imagery specific URLs
+    path('motor-imagery/', include([
+        path('', views.MotorImageryDashboardView.as_view(), name='motor_imagery_dashboard'),
+        path('sessions/', views.MotorImagerySessionListView.as_view(), name='motor_imagery_sessions'),
+        path('training/', views.MotorImageryTrainingView.as_view(), name='motor_imagery_training'),
+        path('prediction/', views.MotorImageryPredictionView.as_view(), name='motor_imagery_prediction'),
+    ])),
     
-    # Prediction History
-    path('predictions/', views.prediction_history, name='prediction_history'),
-    path('predictions/<int:session_id>/export/', views.export_predictions, name='export_predictions'),
+    # P300 approach URLs
+    path('p300/', include([
+        path('', views.P300DashboardView.as_view(), name='p300_dashboard'),
+        path('sessions/', views.P300SessionListView.as_view(), name='p300_sessions'),
+        path('training/', views.P300TrainingView.as_view(), name='p300_training'),
+        path('prediction/', views.P300PredictionView.as_view(), name='p300_prediction'),
+    ])),
     
-    # API Endpoints
-    path('api/predict/', views.api_make_prediction, name='api_make_prediction'),
-    path('api/models/<int:pk>/', views.api_model_info, name='api_model_info'),
+    # API endpoints for AJAX
+    path('api/', include([
+        path('sessions/', views.SessionListAPIView.as_view(), name='api_session_list'),
+        path('models/', views.ModelListAPIView.as_view(), name='api_model_list'),
+        path('predictions/<uuid:session_pk>/', views.PredictionListAPIView.as_view(), name='api_prediction_list'),
+        path('system-status/', views.system_status, name='api_system_status'),
+    ])),
+    
+    # Configuration
+    path('config/', views.SystemConfigView.as_view(), name='system_config'),
+    
+    # Utilities
+    path('download/model/<uuid:pk>/', views.download_model, name='download_model'),
+    path('download/session/<uuid:pk>/', views.download_session, name='download_session'),
 ]

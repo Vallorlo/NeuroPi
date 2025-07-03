@@ -1,146 +1,292 @@
-# motor_imagery/forms.py
-
 from django import forms
-from .models import EEGSession, TrainingModel
+from django.core.validators import FileExtensionValidator
+from .models import SessionData, TrainedModel, PredictionSession, SystemConfiguration
+
 
 class SessionUploadForm(forms.ModelForm):
-    """Form for uploading EEG session data"""
+    """Form for uploading session data"""
+    
     class Meta:
-        model = EEGSession
-        fields = ['session_name', 'file_path', 'sampling_rate', 'n_channels']
+        model = SessionData
+        fields = ['name', 'description', 'session_file', 'approach']
         widgets = {
-            'session_name': forms.TextInput(attrs={
+            'name': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'Enter session name'
             }),
-            'file_path': forms.FileInput(attrs={
+            'description': forms.Textarea(attrs={
+                'class': 'form-control',
+                'rows': 3,
+                'placeholder': 'Optional description'
+            }),
+            'session_file': forms.FileInput(attrs={
                 'class': 'form-control',
                 'accept': '.csv'
             }),
-            'sampling_rate': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'value': 128
-            }),
-            'n_channels': forms.NumberInput(attrs={
-                'class': 'form-control',
-                'value': 14
-            }),
-        }
-        help_texts = {
-            'file_path': 'Upload CSV file with EEG data',
-            'sampling_rate': 'Sampling rate in Hz (default: 128)',
-            'n_channels': 'Number of EEG channels (default: 14 for EPOC+)'
+            'approach': forms.Select(attrs={
+                'class': 'form-control'
+            })
         }
 
-class TrainingForm(forms.Form):
-    """Form for configuring model training"""
-    sessions = forms.ModelMultipleChoiceField(
-        queryset=EEGSession.objects.none(),
-        widget=forms.CheckboxSelectMultiple(attrs={'class': 'form-check-input'}),
-        help_text='Select sessions to use for training'
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['session_file'].validators = [
+            FileExtensionValidator(allowed_extensions=['csv'])
+        ]
+
+
+class MultipleFileInput(forms.ClearableFileInput):
+    """Custom widget for multiple file uploads"""
+    allow_multiple_selected = True
+
+class MultipleFileField(forms.FileField):
+    """Custom field for multiple file uploads"""
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault("widget", MultipleFileInput())
+        super().__init__(*args, **kwargs)
+
+    def clean(self, data, initial=None):
+        # Handle multiple files
+        single_file_clean = super().clean
+        if isinstance(data, (list, tuple)):
+            result = [single_file_clean(d, initial) for d in data]
+        else:
+            result = single_file_clean(data, initial)
+        return result
+
+
+class MultipleSessionUploadForm(forms.Form):
+    """Form for uploading multiple session files"""
+    name = forms.CharField(
+        max_length=255,
+        widget=forms.TextInput(attrs={
+            'class': 'form-control',
+            'placeholder': 'Enter batch name'
+        })
     )
-    
-    model_name = forms.CharField(
-        max_length=200,
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
+            'class': 'form-control',
+            'rows': 3,
+            'placeholder': 'Optional description'
+        })
+    )
+    approach = forms.ChoiceField(
+        choices=[
+            ('motor_imagery', 'Motor Imagery'),
+            ('p300', 'P300'),
+        ],
+        widget=forms.Select(attrs={
+            'class': 'form-control'
+        })
+    )
+    session_files = MultipleFileField(
+        widget=MultipleFileInput(attrs={
+            'class': 'form-control',
+            'accept': '.csv'
+        })
+    )
+
+
+class TrainingConfigForm(forms.Form):
+    """Form for configuring model training"""
+    name = forms.CharField(
+        max_length=255,
         widget=forms.TextInput(attrs={
             'class': 'form-control',
             'placeholder': 'Enter model name'
-        }),
-        help_text='Give your model a descriptive name'
+        })
     )
-    
-    window_size = forms.FloatField(
-        initial=2.0,
-        widget=forms.NumberInput(attrs={
+    description = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={
             'class': 'form-control',
-            'step': '0.5',
-            'min': '1.0',
-            'max': '10.0'
-        }),
-        help_text='Window size in seconds (default: 2.0)'
+            'rows': 3,
+            'placeholder': 'Optional description'
+        })
+    )
+    approach = forms.ChoiceField(
+        choices=[
+            ('motor_imagery', 'Motor Imagery'),
+            ('p300', 'P300'),
+        ],
+        widget=forms.Select(attrs={
+            'class': 'form-control'
+        })
+    )
+    sessions = forms.ModelMultipleChoiceField(
+        queryset=SessionData.objects.none(),
+        widget=forms.CheckboxSelectMultiple(attrs={
+            'class': 'form-check-input'
+        })
     )
     
-    overlap = forms.FloatField(
-        initial=0.5,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'step': '0.1',
-            'min': '0.0',
-            'max': '0.9'
-        }),
-        help_text='Window overlap ratio (default: 0.5)'
-    )
-    
-    augmentation_factor = forms.IntegerField(
-        initial=3,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'min': '1',
-            'max': '10'
-        }),
-        help_text='Data augmentation factor (default: 3)'
-    )
-    
+    # Training parameters
     epochs = forms.IntegerField(
         initial=100,
+        min_value=1,
+        max_value=500,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control'
+        })
+    )
+    batch_size = forms.IntegerField(
+        initial=32,
+        min_value=1,
+        max_value=256,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control'
+        })
+    )
+    learning_rate = forms.FloatField(
+        initial=0.001,
+        min_value=0.0001,
+        max_value=0.1,
         widget=forms.NumberInput(attrs={
             'class': 'form-control',
-            'min': '10',
-            'max': '500'
-        }),
-        help_text='Number of training epochs (default: 100)'
+            'step': '0.0001'
+        })
     )
-    
     dropout_rate = forms.FloatField(
         initial=0.5,
+        min_value=0.0,
+        max_value=0.9,
         widget=forms.NumberInput(attrs={
             'class': 'form-control',
-            'step': '0.1',
-            'min': '0.0',
-            'max': '0.9'
-        }),
-        help_text='Dropout rate for regularization (default: 0.5)'
+            'step': '0.1'
+        })
     )
-    
-    def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
-        super().__init__(*args, **kwargs)
-        
-        if user:
-            self.fields['sessions'].queryset = EEGSession.objects.filter(user=user)
+    window_duration = forms.FloatField(
+        initial=2.0,
+        min_value=0.5,
+        max_value=10.0,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.1'
+        }),
+        help_text="Window duration in seconds"
+    )
+    overlap = forms.FloatField(
+        initial=0.5,
+        min_value=0.0,
+        max_value=0.9,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control',
+            'step': '0.1'
+        }),
+        help_text="Window overlap ratio"
+    )
+    augmentation_factor = forms.IntegerField(
+        initial=3,
+        min_value=1,
+        max_value=10,
+        widget=forms.NumberInput(attrs={
+            'class': 'form-control'
+        }),
+        help_text="Data augmentation factor"
+    )
 
-class PredictionConfigForm(forms.Form):
-    """Form for configuring real-time prediction"""
-    model = forms.ModelChoiceField(
-        queryset=TrainingModel.objects.none(),
-        widget=forms.Select(attrs={'class': 'form-control'}),
-        help_text='Select trained model to use'
-    )
-    
-    prediction_interval = forms.FloatField(
-        initial=8.0,
-        widget=forms.NumberInput(attrs={
-            'class': 'form-control',
-            'step': '1.0',
-            'min': '1.0',
-            'max': '30.0'
-        }),
-        help_text='Prediction interval in seconds (default: 8.0)'
-    )
-    
-    device = forms.ChoiceField(
-        choices=[('cuda', 'GPU (CUDA)'), ('cpu', 'CPU')],
-        initial='cuda',
-        widget=forms.Select(attrs={'class': 'form-control'}),
-        help_text='Select computing device'
-    )
-    
-    def __init__(self, *args, **kwargs):
-        user = kwargs.pop('user', None)
+    def __init__(self, user=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        
         if user:
-            self.fields['model'].queryset = TrainingModel.objects.filter(
-                user=user, 
-                is_active=True
+            self.fields['sessions'].queryset = SessionData.objects.filter(user=user)
+
+
+class PredictionSessionForm(forms.ModelForm):
+    """Form for creating prediction sessions"""
+    
+    class Meta:
+        model = PredictionSession
+        fields = ['name', 'prediction_interval', 'window_duration']
+        widgets = {
+            'name': forms.TextInput(attrs={
+                'class': 'form-control',
+                'placeholder': 'Enter session name'
+            }),
+            'prediction_interval': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.1',
+                'min': '0.1'
+            }),
+            'window_duration': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.1',
+                'min': '0.1'
+            })
+        }
+
+    model_selection = forms.ModelChoiceField(
+        queryset=TrainedModel.objects.none(),
+        widget=forms.Select(attrs={
+            'class': 'form-control'
+        }),
+        empty_label="Select a trained model"
+    )
+
+    def __init__(self, user=None, approach='motor_imagery', *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user:
+            self.fields['model_selection'].queryset = TrainedModel.objects.filter(
+                user=user,
+                approach=approach,
+                status='completed'
+            )
+
+
+class SystemConfigurationForm(forms.ModelForm):
+    """Form for system configuration"""
+    
+    class Meta:
+        model = SystemConfiguration
+        fields = [
+            'eeg_device',
+            'default_prediction_interval',
+            'default_window_duration',
+            'show_confidence_threshold',
+            'max_prediction_history'
+        ]
+        widgets = {
+            'eeg_device': forms.Select(attrs={
+                'class': 'form-control'
+            }),
+            'default_prediction_interval': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.1'
+            }),
+            'default_window_duration': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.1'
+            }),
+            'show_confidence_threshold': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'step': '0.05',
+                'min': '0',
+                'max': '1'
+            }),
+            'max_prediction_history': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '10',
+                'max': '1000'
+            })
+        }
+
+
+class ModelSelectionForm(forms.Form):
+    """Form for selecting active model"""
+    model = forms.ModelChoiceField(
+        queryset=TrainedModel.objects.none(),
+        widget=forms.Select(attrs={
+            'class': 'form-control'
+        }),
+        empty_label="Select a model to activate"
+    )
+
+    def __init__(self, user=None, approach='motor_imagery', *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if user:
+            self.fields['model'].queryset = TrainedModel.objects.filter(
+                user=user,
+                approach=approach,
+                status='completed'
             )

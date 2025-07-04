@@ -43,7 +43,8 @@ INSTALLED_APPS = [
     'preprocessor',
     'accounts',
     'motor_imagery',
-    'bci']
+    'bci',
+    'pi_main']
 
 
 MIDDLEWARE = [

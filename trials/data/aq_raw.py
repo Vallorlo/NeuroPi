@@ -1,4 +1,5 @@
 import os
+import sys
 import trials.data.cyPyWinUSB as hid
 import queue
 from Crypto.Cipher import AES
@@ -16,7 +17,7 @@ def signal_handler(sig, frame):
     global end_timestamp
     if end_timestamp != 0:
         print("force stop")
-        os.exit(0)
+        sys.exit(0)
     end_timestamp = time.time_ns()
     print("stoped at: ", end_timestamp)
     running = False

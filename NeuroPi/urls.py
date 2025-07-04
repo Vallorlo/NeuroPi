@@ -32,6 +32,7 @@ urlpatterns = [
     path('accounts/', include('accounts.urls')),
     path('motor_imagery/', include('motor_imagery.urls')),
     path('bci/', include('bci.urls')),
+    path('pi_main/', include('pi_main.urls')),
     path('BCI/', bci_redirect),  # Redirect uppercase to lowercase
 ]
 

@@ -162,6 +162,7 @@ def word_trials(request):
     # If GET request or no valid POST data, redirect to start_trial
     return redirect('start_trial')
 
+
 def visual_trial_setup(request):
     """Setup page for visual word focus trials."""
     if request.method == 'POST':
@@ -173,6 +174,16 @@ def visual_trial_setup(request):
         final_participant = existing_participant if existing_participant else participant_name
         
         if not final_participant or not word_set_id:
+            # If this is coming from the new separate page, reload with error
+            if 'word_set_id' in request.POST and not word_set_id:
+                existing_participants = get_existing_participants()
+                word_sets = WordSet.objects.filter(is_active=True)
+                context = {
+                    'existing_participants': existing_participants,
+                    'word_sets': word_sets,
+                    'error_message': 'Please select both a participant and a word set.'
+                }
+                return render(request, 'trials/visual_trial_setup_page.html', context)
             return redirect('start_trial')
         
         word_set = get_object_or_404(WordSet, id=word_set_id)
@@ -185,7 +196,17 @@ def visual_trial_setup(request):
             'word_set': word_set,
         })
     
-    return redirect('start_trial')
+    # GET request - show the separate setup page
+    existing_participants = get_existing_participants()
+    word_sets = WordSet.objects.filter(is_active=True)
+    
+    context = {
+        'existing_participants': existing_participants,
+        'word_sets': word_sets,
+    }
+    
+    return render(request, 'trials/visual_trial_setup_page.html', context)
+
 
 def start_visual_trial(request):
     """Start a visual word focus trial session."""
@@ -694,3 +715,16 @@ def completed_trials(request):
         'completed_data': completed_data,
         'visual_sessions': visual_sessions,
     })
+
+
+def traditional_trial_setup(request):
+    """Setup page for traditional trials."""
+    unique_words = Trial.objects.values_list('word', flat=True).distinct()
+    existing_participants = get_existing_participants()
+    
+    context = {
+        'unique_words': unique_words,
+        'existing_participants': existing_participants,
+    }
+    
+    return render(request, 'trials/traditional_trial_setup.html', context)

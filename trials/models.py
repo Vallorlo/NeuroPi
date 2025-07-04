@@ -1,6 +1,3 @@
-# trials/models.py
-# Django models for the trials app including visual word focus trial models
-
 from django.db import models
 
 class Trial(models.Model):

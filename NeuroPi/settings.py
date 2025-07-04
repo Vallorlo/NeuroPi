@@ -40,11 +40,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'trials',
     'plot.apps.PlotConfig',
-    'preprocessor',
     'accounts',
     'motor_imagery',
     'bci',
-    'pi_main']
+]
 
 
 MIDDLEWARE = [

@@ -17,17 +17,11 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.homepage, name='home'),
     path('about/', views.about, name='about'),
-    
-    # Core Applications
-    path('trials/', include('trials.urls')),           # Data Collection Platform
-    path('plot/', include('plot.urls')),               # Data Visualization
-    path('bci/', include('bci.urls')),                 # Brain-Computer Interface Platform
-    path('motor_imagery/', include('motor_imagery.urls')), # Motor Imagery Trials
-    
-    # User Management
+    path('trials/', include('trials.urls')),           
+    path('plot/', include('plot.urls')),         
+    path('bci/', include('bci.urls')),                 
+    path('motor_imagery/', include('motor_imagery.urls')), 
     path('accounts/', include('accounts.urls')),
-    
-    path('BCI/', bci_redirect),  # Redirect uppercase to lowercase
 ]
 
 if settings.DEBUG:

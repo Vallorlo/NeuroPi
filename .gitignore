@@ -1,1 +1,37 @@
 venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Django database
+db.sqlite3
+db.sqlite3-journal
+
+# Django migrations (optional - comment out if you want to track them)
+# */migrations/*.py
+# !*/migrations/__init__.py
+
+# Environment variables
+.env
+.env.local
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Media files (if you don't want to track uploaded files)
+media/
+
+# Static files collected by Django
+staticfiles/

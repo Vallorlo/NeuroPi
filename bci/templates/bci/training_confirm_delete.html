@@ -1,0 +1,73 @@
+{% extends 'bci/base.html' %}
+{% load bci_filters %}
+
+{% block title %}Delete Model - {{ object.name }}{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'bci:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'bci:training_list' %}">Training</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'bci:training_detail' object.pk %}">{{ object.name }}</a></li>
+        <li class="breadcrumb-item active">Delete</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirm Model Deletion
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone! All model files and training data will be permanently deleted.
+                </div>
+                
+                <p>Are you sure you want to delete the trained model <strong>"{{ object.name }}"</strong>?</p>
+                
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6>Model Details:</h6>
+                        <ul class="mb-0">
+                            <li><strong>Name:</strong> {{ object.name }}</li>
+                            <li><strong>Approach:</strong> {{ object.approach|title_case }}</li>
+                            <li><strong>Status:</strong> {{ object.status|title_case }}</li>
+                            {% if object.validation_accuracy %}
+                            <li><strong>Accuracy:</strong> {{ object.validation_accuracy|floatformat:1 }}%</li>
+                            {% endif %}
+                            <li><strong>Classes:</strong> {{ object.n_classes }}</li>
+                            <li><strong>Created:</strong> {{ object.created_at|date:"M d, Y" }}</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                {% if object.is_active %}
+                <div class="alert alert-danger mt-3">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    <strong>Active Model:</strong> This model is currently active for predictions. 
+                    Deleting it will stop any running prediction sessions using this model.
+                </div>
+                {% endif %}
+                
+                <form method="post" class="mt-4">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'bci:training_detail' object.pk %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-1"></i>Delete Model
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

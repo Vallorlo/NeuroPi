@@ -1,0 +1,60 @@
+{% extends 'bci/base.html' %}
+
+{% block title %}Delete Session - {{ object.name }}{% endblock %}
+{% load bci_filters %}
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'bci:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'bci:session_list' %}">Sessions</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'bci:session_detail' object.pk %}">{{ object.name }}</a></li>
+        <li class="breadcrumb-item active">Delete</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card">
+            <div class="card-header bg-danger text-white">
+                <h4 class="card-title mb-0">
+                    <i class="fas fa-exclamation-triangle me-2"></i>Confirm Deletion
+                </h4>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <strong>Warning:</strong> This action cannot be undone!
+                </div>
+                
+                <p>Are you sure you want to delete the session <strong>"{{ object.name }}"</strong>?</p>
+                
+                <div class="card bg-light">
+                    <div class="card-body">
+                        <h6>Session Details:</h6>
+                        <ul class="mb-0">
+                            <li><strong>Name:</strong> {{ object.name }}</li>
+                            <li><strong>Approach:</strong> {{ object.approach|title }}</li>
+                            <li><strong>Samples:</strong> {{ object.total_samples|default:"Unknown" }}</li>
+                            <li><strong>Created:</strong> {{ object.created_at|date:"M d, Y" }}</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <form method="post" class="mt-4">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-between">
+                        <a href="{% url 'bci:session_detail' object.pk %}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Cancel
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash me-1"></i>Delete Session
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

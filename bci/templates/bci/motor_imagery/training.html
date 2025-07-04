@@ -1,0 +1,30 @@
+{% extends 'bci/training_list.html' %}
+
+{% block title %}Motor Imagery Training - BCI{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'bci:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'bci:motor_imagery_dashboard' %}">Motor Imagery</a></li>
+        <li class="breadcrumb-item active">Training</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="fas fa-brain me-2 text-primary"></i>Motor Imagery Models
+            </h1>
+            <a href="{% url 'bci:training_config' %}?approach=motor_imagery" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>Train New Model
+            </a>
+        </div>
+    </div>
+</div>
+
+{{ block.super }}
+{% endblock %}

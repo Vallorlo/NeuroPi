@@ -1,0 +1,309 @@
+{% extends 'bci/base.html' %}
+{% load bci_filters %}
+
+{% block title %}Prediction Dashboard - BCI{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'bci:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item active">Prediction</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="fas fa-play-circle me-2"></i>Real-time Prediction
+            </h1>
+            <a href="{% url 'bci:create_prediction_session' %}" class="btn btn-primary">
+                <i class="fas fa-plus me-1"></i>New Prediction Session
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Active Models -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-check-circle me-2"></i>Active Models
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if active_models %}
+                <div class="row">
+                    {% for model in active_models %}
+                    <div class="col-md-6 col-lg-4 mb-3">
+                        <div class="card border-success">
+                            <div class="card-body">
+                                <h6 class="card-title">{{ model.name }}</h6>
+                                <p class="card-text">
+                                    <span class="badge bg-{{ model.approach|class_badge_color }}">
+                                        {{ model.approach|title_case }}
+                                    </span>
+                                    <br>
+                                    <small class="text-muted">
+                                        {{ model.n_classes }} classes, 
+                                        {% if model.validation_accuracy %}{{ model.validation_accuracy|floatformat:1 }}% accuracy{% endif %}
+                                    </small>
+                                </p>
+                                <a href="{% url 'bci:create_prediction_session' %}?model={{ model.pk }}" 
+                                   class="btn btn-sm btn-success">
+                                    <i class="fas fa-play me-1"></i>Start Prediction
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <i class="fas fa-exclamation-circle fa-2x text-warning mb-3"></i>
+                    <h5 class="text-muted">No Active Models</h5>
+                    <p class="text-muted">You need to activate a trained model before starting predictions.</p>
+                    <a href="{% url 'bci:training_list' %}" class="btn btn-primary">
+                        <i class="fas fa-cogs me-1"></i>View Models
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Running Sessions -->
+{% if running_sessions %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-play me-2"></i>Running Prediction Sessions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Session</th>
+                                <th>Model</th>
+                                <th>Started</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for session in running_sessions %}
+                            <tr>
+                                <td>
+                                    <strong>{{ session.name }}</strong>
+                                    <br><small class="text-muted">{{ session.prediction_interval }}s interval</small>
+                                </td>
+                                <td>{{ session.model.name }}</td>
+                                <td>{{ session.started_at|timesince }} ago</td>
+                                <td>
+                                    <span class="badge bg-success">
+                                        <i class="fas fa-circle me-1"></i>Running
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="{% url 'bci:prediction_session_detail' session.pk %}" 
+                                           class="btn btn-outline-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{% url 'bci:stop_prediction' session.pk %}" 
+                                           class="btn btn-outline-danger"
+                                           onclick="return confirm('Stop this prediction session?')">
+                                            <i class="fas fa-stop"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent Sessions -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-history me-2"></i>Recent Prediction Sessions
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if recent_sessions %}
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Session Name</th>
+                                <th>Model</th>
+                                <th>Status</th>
+                                <th>Duration</th>
+                                <th>Created</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for session in recent_sessions %}
+                            <tr>
+                                <td>
+                                    <strong>{{ session.name }}</strong>
+                                    <br><small class="text-muted">{{ session.prediction_interval }}s interval</small>
+                                </td>
+                                <td>{{ session.model.name }}</td>
+                                <td>
+                                    <span class="badge bg-{{ session.status|class_badge_color }}">
+                                        {{ session.status|title }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if session.started_at and session.stopped_at %}
+                                        {{ session.stopped_at|timeuntil:session.started_at }}
+                                    {% elif session.started_at and session.status == 'running' %}
+                                        {{ session.started_at|timesince }}
+                                    {% else %}
+                                        --
+                                    {% endif %}
+                                </td>
+                                <td>{{ session.created_at|timesince }} ago</td>
+                                <td>
+                                    <div class="btn-group btn-group-sm" role="group">
+                                        <a href="{% url 'bci:prediction_session_detail' session.pk %}" 
+                                           class="btn btn-outline-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        {% if session.status == 'stopped' %}
+                                        <a href="{% url 'bci:start_prediction' session.pk %}" 
+                                           class="btn btn-outline-success">
+                                            <i class="fas fa-play"></i>
+                                        </a>
+                                        {% elif session.status == 'running' %}
+                                        <a href="{% url 'bci:stop_prediction' session.pk %}" 
+                                           class="btn btn-outline-danger"
+                                           onclick="return confirm('Stop this prediction session?')">
+                                            <i class="fas fa-stop"></i>
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-play-circle fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No prediction sessions yet</h5>
+                    <p class="text-muted">Create your first prediction session to start real-time classification.</p>
+                    <a href="{% url 'bci:create_prediction_session' %}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>New Prediction Session
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- System Status -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-heartbeat me-2"></i>System Status
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="fas fa-circle text-warning" id="eeg-status"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0">EEG Device</h6>
+                                <small class="text-muted" id="eeg-status-text">Checking...</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="fas fa-circle text-success"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0">Active Models</h6>
+                                <small class="text-muted">{{ active_models|length }} ready</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="fas fa-circle text-info"></i>
+                            </div>
+                            <div>
+                                <h6 class="mb-0">Running Sessions</h6>
+                                <small class="text-muted">{{ running_sessions|length }} active</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Check EEG device status
+function checkEEGStatus() {
+    fetch("{% url 'bci:api_system_status' %}")
+        .then(response => response.json())
+        .then(data => {
+            const eegStatus = document.getElementById('eeg-status');
+            const eegStatusText = document.getElementById('eeg-status-text');
+            
+            if (data.device === 'epoc_plus') {
+                eegStatus.className = 'fas fa-circle text-success';
+                eegStatusText.textContent = 'EPOC+ Connected';
+            } else {
+                eegStatus.className = 'fas fa-circle text-warning';
+                eegStatusText.textContent = 'Not connected';
+            }
+        })
+        .catch(error => {
+            const eegStatus = document.getElementById('eeg-status');
+            const eegStatusText = document.getElementById('eeg-status-text');
+            eegStatus.className = 'fas fa-circle text-danger';
+            eegStatusText.textContent = 'Error checking status';
+        });
+}
+
+// Check status on page load and every 30 seconds
+document.addEventListener('DOMContentLoaded', function() {
+    checkEEGStatus();
+    setInterval(checkEEGStatus, 30000);
+});
+</script>
+{% endblock %}

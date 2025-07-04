@@ -1,5 +1,5 @@
 {% extends "layout.html" %}
-
+{%load static%}
 {% block title %}
     About
 {% endblock title %}
@@ -35,6 +35,10 @@
                             <p>By combining EEG recordings with synchronized audio capture and timestamping capabilities, Neuroπ allows for precise alignment of brain activity with speech or motor events, opening new avenues for research in neurolinguistics, brain-computer interfaces, and cognitive neuroscience.</p>
 
                             <p>The platform integrates data collection, signal processing, visualization, and neural network analysis in a unified environment, making it easier for researchers to explore the relationship between brain activity and speech or motor functions.</p>
+
+                            <p>The platform aims to make EEG research more accessible by providing an integrated environment for data collection, processing, and analysis.</p>
+
+                            <p>The project is continuously evolving, with ongoing development focused on improving signal processing algorithms, expanding neural network capabilities, and enhancing the user interface. Contributions from the research community are welcome!</p>
                         </div>
                         <div class="col-md-4 text-center">
                             <div class="about-logo">
@@ -47,6 +51,7 @@
                             </div>
                         </div>
                     </div>
+
                     <!-- Key Features -->
                     <div class="row mb-5">
                         <div class="col-12">
@@ -118,6 +123,7 @@
                             </div>
                         </div>
                     </div>
+
                     <!-- Research Applications -->
                     <div class="row mb-4">
                         <div class="col-12">
@@ -127,104 +133,52 @@
                                     <thead class="table-primary">
                                         <tr>
                                             <th>Field</th>
-                                            <th>Applications</th>
+                                            <th>Application</th>
+                                            <th>Benefits</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr>
-                                            <td>Neurolinguistics</td>
-                                            <td>Study neural patterns during speech production and comprehension</td>
+                                            <td><strong>Neurolinguistics</strong></td>
+                                            <td>Study brain activity during speech production and comprehension</td>
+                                            <td>Better understanding of language processing in the brain</td>
                                         </tr>
                                         <tr>
-                                            <td>Brain-Computer Interfaces</td>
-                                            <td>Develop systems for controlling devices using speech or motor imagery</td>
+                                            <td><strong>Brain-Computer Interfaces</strong></td>
+                                            <td>Decode intended speech from EEG signals</td>
+                                            <td>Assistive technology for communication disorders</td>
                                         </tr>
                                         <tr>
-                                            <td>Cognitive Neuroscience</td>
-                                            <td>Investigate cognitive processes underlying speech and motor planning</td>
+                                            <td><strong>Cognitive Neuroscience</strong></td>
+                                            <td>Examine neural correlates of different cognitive states</td>
+                                            <td>Insights into brain function and cognition</td>
                                         </tr>
                                         <tr>
-                                            <td>Speech Pathology</td>
-                                            <td>Research neural correlates of speech disorders and potential interventions</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Machine Learning</td>
-                                            <td>Create datasets for training models to recognize speech patterns from EEG</td>
-                                        </tr>
-                                        <tr>
-                                            <td>Assistive Technology</td>
-                                            <td>Develop communication aids for people with speech disabilities</td>
+                                            <td><strong>Clinical Research</strong></td>
+                                            <td>Study speech disorders and rehabilitation</td>
+                                            <td>Improved treatments and therapies</td>
                                         </tr>
                                     </tbody>
                                 </table>
                             </div>
                         </div>
                     </div>
-                    <!-- Trial Stages -->
-                    <div class="row mb-4">
+
+                    <!-- Workflow Section -->
+                    <div class="row">
                         <div class="col-12">
-                            <h2>Trial Stages</h2>
-                            <p>Neuroπ's structured approach includes five distinct trial stages that allow for comprehensive analysis:</p>
+                            <h2>Research Workflow</h2>
+                            <p class="lead">Follow these steps to conduct comprehensive EEG research with Neuroπ:</p>
 
-                            <div class="card-group mt-3">
-                                <div class="card">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-mic-fill text-danger" style="font-size: 2rem;"></i>
-                                        <h5 class="mt-2">Stage 1</h5>
-                                        <p>Vocal</p>
-                                        <small class="text-muted">Say the word out loud</small>
-                                    </div>
-                                </div>
-                                <div class="card">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-mic-mute-fill text-warning" style="font-size: 2rem;"></i>
-                                        <h5 class="mt-2">Stage 2</h5>
-                                        <p>Non-Vocal</p>
-                                        <small class="text-muted">Think about saying the word</small>
-                                    </div>
-                                </div>
-                                <div class="card">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-hand-index-thumb text-primary" style="font-size: 2rem;"></i>
-                                        <h5 class="mt-2">Stage 3</h5>
-                                        <p>Motor</p>
-                                        <small class="text-muted">Perform the action without speaking</small>
-                                    </div>
-                                </div>
-                                <div class="card">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-hand-index-thumb text-primary" style="font-size: 2rem;"></i>
-                                        <i class="bi bi-mic-fill text-danger" style="font-size: 2rem;"></i>
-                                        <h5 class="mt-2">Stage 4</h5>
-                                        <p>Motor + Vocal</p>
-                                        <small class="text-muted">Perform the action while saying the word</small>
-                                    </div>
-                                </div>
-                                <div class="card">
-                                    <div class="card-body text-center">
-                                        <i class="bi bi-hand-index-thumb text-primary" style="font-size: 2rem;"></i>
-                                        <i class="bi bi-mic-mute-fill text-warning" style="font-size: 2rem;"></i>
-                                        <h5 class="mt-2">Stage 5</h5>
-                                        <p>Motor + Non-Vocal</p>
-                                        <small class="text-muted">Perform the action while thinking about the word</small>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <h2>Data Processing Pipeline</h2>
                             <div class="card mb-3">
                                 <div class="card-body">
                                     <div class="row align-items-center">
                                         <div class="col-md-3 text-center">
-                                            <i class="bi bi-collection-play text-primary" style="font-size: 3rem;"></i>
-                                            <h5 class="mt-2">1. Data Collection</h5>
+                                            <i class="bi bi-play-circle text-primary" style="font-size: 3rem;"></i>
+                                            <h5 class="mt-2">1. Trial Setup</h5>
                                         </div>
                                         <div class="col-md-9">
-                                            <p>Record EEG data synchronized with audio (when applicable) across the five trial stages. Mark timestamps for important events during the recording sessions.</p>
+                                            <p>Start by creating trials for your participants. Define the words or phrases they will speak, and configure the different stages of your experiment.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -234,11 +188,11 @@
                                 <div class="card-body">
                                     <div class="row align-items-center">
                                         <div class="col-md-3 text-center">
-                                            <i class="bi bi-cpu text-primary" style="font-size: 3rem;"></i>
-                                            <h5 class="mt-2">2. Signal Processing</h5>
+                                            <i class="bi bi-mic text-primary" style="font-size: 3rem;"></i>
+                                            <h5 class="mt-2">2. Data Collection</h5>
                                         </div>
                                         <div class="col-md-9">
-                                            <p>Process raw EEG data to identify speech/motor events and align them with audio or timestamps. Generate combined datasets ready for cleaning and analysis.</p>
+                                            <p>Record synchronized EEG and audio data through multiple stages: vocal, non-vocal, and motor tasks. Add timestamps for important events during recording.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -248,11 +202,11 @@
                                 <div class="card-body">
                                     <div class="row align-items-center">
                                         <div class="col-md-3 text-center">
-                                            <i class="bi bi-filter-circle text-primary" style="font-size: 3rem;"></i>
-                                            <h5 class="mt-2">3. Signal Cleaning</h5>
+                                            <i class="bi bi-gear text-primary" style="font-size: 3rem;"></i>
+                                            <h5 class="mt-2">3. Signal Processing</h5>
                                         </div>
                                         <div class="col-md-9">
-                                            <p>Apply bandpass filters, notch filters, and Independent Component Analysis (ICA) to remove artifacts and improve signal quality. Generate train/test splits for machine learning.</p>
+                                            <p>Clean and preprocess the raw EEG data using built-in filtering, artifact removal, and signal enhancement tools.</p>
                                         </div>
                                     </div>
                                 </div>
@@ -263,7 +217,7 @@
                                     <div class="row align-items-center">
                                         <div class="col-md-3 text-center">
                                             <i class="bi bi-graph-up text-primary" style="font-size: 3rem;"></i>
-                                            <h5 class="mt-2">4. Visualization</h5>
+                                            <h5 class="mt-2">4. Data Visualization</h5>
                                         </div>
                                         <div class="col-md-9">
                                             <p>Visualize the EEG data with interactive plots showing different channels, stages, and events. Compare patterns between vocal and non-vocal trials.</p>
@@ -302,11 +256,9 @@
                                                 <li class="list-group-item">Django 5.1+ Web Framework</li>
                                                 <li class="list-group-item">Python 3.9+ for Backend Processing</li>
                                                 <li class="list-group-item">SciPy and NumPy for Signal Processing</li>
-                                                <li class="list-group-item">MNE-Python for EEG Analysis</li>
-                                                <li class="list-group-item">TensorFlow for Neural Network Training</li>
-                                                <li class="list-group-item">Matplotlib and Chart.js for Visualization</li>
-                                                <li class="list-group-item">Bootstrap 5 for UI Components</li>
-                                                <li class="list-group-item">SQLite for Data Storage</li>
+                                                <li class="list-group-item">TensorFlow/Keras for Neural Networks</li>
+                                                <li class="list-group-item">Bootstrap 5 for Frontend</li>
+                                                <li class="list-group-item">Chart.js for Interactive Plots</li>
                                             </ul>
                                         </div>
                                     </div>
@@ -314,32 +266,22 @@
                                 <div class="col-md-6">
                                     <div class="card h-100">
                                         <div class="card-header bg-light">
-                                            <h5 class="mb-0">Hardware Compatibility</h5>
+                                            <h5 class="mb-0">System Requirements</h5>
                                         </div>
                                         <div class="card-body">
-                                            <p>Neuroπ is designed to work with the Emotiv EPOC+ EEG headset, which provides 14 channels of EEG data at a sampling rate of 128 Hz.</p>
-                                            <p>Key hardware features:</p>
-                                            <ul>
-                                                <li>14 channel EEG recording</li>
-                                                <li>128 Hz sampling rate</li>
-                                                <li>Wireless data transmission</li>
-                                                <li>Built-in battery for portable operation</li>
-                                                <li>Sensor locations based on the 10-20 system</li>
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item">Python 3.9 or higher</li>
+                                                <li class="list-group-item">16-channel EEG headset</li>
+                                                <li class="list-group-item">Audio recording capability</li>
+                                                <li class="list-group-item">8GB RAM minimum</li>
+                                                <li class="list-group-item">Modern web browser</li>
+                                                <li class="list-group-item">Cross-platform compatibility</li>
                                             </ul>
-
-                                            <p class="mt-3">The platform can also be extended to work with other EEG devices by modifying the data collection module.</p>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="mt-5">
-                        <h2>About the Project</h2>
-                        <p>NeuroPi was developed as an open-source project to advance research in brain-computer interfaces and speech detection from EEG signals. The platform aims to make EEG research more accessible by providing an integrated environment for data collection, processing, and analysis.</p>
-
-                        <p>The project is continuously evolving, with ongoing development focused on improving signal processing algorithms, expanding neural network capabilities, and enhancing the user interface. Contributions from the research community are welcome!</p>
                     </div>
 
                     <div class="text-center mt-5 mb-3">
@@ -609,4 +551,6 @@
     }
 }
 </style>
+
+<script src="{% static 'js/main.js' %}"></script>
 {% endblock content %}

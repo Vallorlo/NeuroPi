@@ -1,101 +1,344 @@
-{% extends 'motor_imagery/base.html' %}
+<!--
+templates/home.html
+Updated homepage reflecting current application structure
+-->
+{% extends "layout.html" %}
 
-{% block title %}Motor Imagery Home{% endblock %}
+{% block title %}
+    Home
+{% endblock title %}
 
 {% block content %}
-<div class="row">
-    <div class="col-lg-8 mx-auto">
-        <div class="text-center mb-5">
-            <h1 class="display-4 text-primary">
-                <i class="bi bi-brain imagery-icon"></i>
-                <br>Motor Imagery EEG Classification
-            </h1>
-            <p class="lead text-muted">
-                Train brain-computer interface models using motor imagery patterns<br>
-                <small>Left Hand • Right Hand • Feet • Rest</small>
-            </p>
-        </div>
+<div class="home">
+    <!-- Floating elements for visual interest -->
+    <div class="floating-elements">
+        <div class="floating-element" data-speed="1"></div>
+        <div class="floating-element" data-speed="2"></div>
+        <div class="floating-element" data-speed="3"></div>
+        <div class="floating-element" data-speed="4"></div>
+        <div class="floating-element" data-speed="5"></div>
+    </div>
 
-        <div class="row g-4">
-            <div class="col-md-6">
-                <div class="card imagery-card h-100">
-                    <div class="card-body text-center">
-                        <i class="bi bi-plus-circle-fill text-success imagery-icon"></i>
-                        <h4 class="mt-3">Start New Session</h4>
-                        <p class="text-muted">Begin a new motor imagery data collection session</p>
-                        <a href="{% url 'motor_imagery:setup' %}" class="btn btn-success btn-lg">
-                            <i class="bi bi-play-fill me-2"></i>New Session
-                        </a>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-md-6">
-                <div class="card imagery-card h-100">
-                    <div class="card-body text-center">
-                        <i class="bi bi-list-ul text-info imagery-icon"></i>
-                        <h4 class="mt-3">View Sessions</h4>
-                        <p class="text-muted">Review completed motor imagery sessions</p>
-                        <a href="{% url 'motor_imagery:sessions' %}" class="btn btn-info btn-lg">
-                            <i class="bi bi-folder2-open me-2"></i>All Sessions
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
+    <!-- Hero Section -->
+    <div class="container-fluid py-5">
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2 text-center">
+                <h1 class="display-3 text-white mb-4">Welcome to Neuro<span class="text-danger fw-bold">π</span></h1>
+                <p class="lead text-white mb-5">A comprehensive platform for EEG data collection, processing, and brain-computer interface development</p>
 
-        {% if recent_sessions %}
-        <div class="mt-5">
-            <h3>Recent Sessions</h3>
-            <div class="list-group">
-                {% for session in recent_sessions %}
-                <div class="list-group-item">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <h6 class="mb-1">{{ session.session_name }}</h6>
-                            <small class="text-muted">{{ session.started_at|date:"M d, Y H:i" }}</small>
-                        </div>
-                        <div>
-                            {% if session.is_completed %}
-                                <span class="badge bg-success">Completed</span>
-                                <a href="{% url 'motor_imagery:complete' session.id %}" class="btn btn-sm btn-outline-primary">View</a>
-                            {% else %}
-                                <span class="badge bg-warning">In Progress</span>
-                                <a href="{% url 'motor_imagery:run' session.id %}" class="btn btn-sm btn-primary">Continue</a>
-                            {% endif %}
+                {% if not user.is_authenticated %}
+                <div class="cta-container mb-5">
+                    <div class="cta-card">
+                        <div class="cta-content">
+                            <div class="cta-icon">
+                                <i class="bi bi-stars"></i>
+                            </div>
+                            <div class="cta-text">
+                                <h3>Unlock the Full Potential of NeuroPi</h3>
+                                <p>Choose your role and gain access to powerful EEG analysis tools</p>
+                                <div class="cta-features">
+                                    <span><i class="bi bi-check-circle-fill"></i> EEG Data Collection</span>
+                                    <span><i class="bi bi-check-circle-fill"></i> Real-time Visualization</span>
+                                    <span><i class="bi bi-check-circle-fill"></i> BCI Model Training</span>
+                                </div>
+                                <div class="cta-actions">
+                                    <a href="{% url 'register' %}" class="btn btn-primary btn-lg me-3">
+                                        <i class="bi bi-person-plus"></i> Get Started
+                                    </a>
+                                    <a href="{% url 'login' %}" class="btn btn-outline-light btn-lg">
+                                        <i class="bi bi-box-arrow-in-right"></i> Login
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-
-        <div class="mt-5 p-4 bg-light rounded">
-            <h4>Motor Imagery Classes</h4>
-            <div class="row g-3">
-                <div class="col-md-3 text-center">
-                    <i class="bi bi-hand-index text-primary" style="font-size: 2rem;"></i>
-                    <h6 class="mt-2">Left Hand</h6>
-                    <small class="text-muted">Imagine clenching left fist</small>
+                {% else %}
+                <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
+                    <a href="{% url 'start_trial' %}" class="btn btn-primary btn-lg px-4 me-sm-3">
+                        <i class="bi bi-play-circle-fill"></i> Start New Trial
+                    </a>
+                    <a href="{% url 'completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
+                        <i class="bi bi-list-check"></i> View Completed Trials
+                    </a>
                 </div>
-                <div class="col-md-3 text-center">
-                    <i class="bi bi-hand-index text-warning" style="font-size: 2rem;"></i>
-                    <h6 class="mt-2">Right Hand</h6>
-                    <small class="text-muted">Imagine clenching right fist</small>
-                </div>
-                <div class="col-md-3 text-center">
-                    <i class="bi bi-person-walking text-success" style="font-size: 2rem;"></i>
-                    <h6 class="mt-2">Feet</h6>
-                    <small class="text-muted">Imagine flexing both feet</small>
-                </div>
-                <div class="col-md-3 text-center">
-                    <i class="bi bi-circle text-secondary" style="font-size: 2rem;"></i>
-                    <h6 class="mt-2">Rest</h6>
-                    <small class="text-muted">Relax completely</small>
-                </div>
+                {% endif %}
             </div>
         </div>
     </div>
+
+    <!-- Main Applications Section -->
+    <div class="container-fluid container-md mt-5 pb-5">
+        <div class="section-header text-center mb-5">
+            <h2 class="display-5 fw-bold">Powerful EEG Research Platform</h2>
+            <p class="lead text-muted">Complete suite of tools for neuroscience research and brain-computer interfaces</p>
+        </div>
+
+        <!-- Feature Cards -->
+        <div class="row g-4 mb-5">
+            <!-- Trials Application -->
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="feature-card" data-color="blue">
+                    <div class="feature-icon">
+                        <i class="bi bi-collection"></i>
+                    </div>
+                    <h3>Data Collection</h3>
+                    <p>Comprehensive EEG and audio data collection across multiple trial paradigms.</p>
+                    <div class="feature-details">
+                        <ul>
+                            <li>Traditional multi-stage trials</li>
+                            <li>Visual word focus experiments</li>
+                            <li>Motor imagery data collection</li>
+                            <li>Synchronized EEG and audio recording</li>
+                        </ul>
+                        <a href="{% url 'start_trial' %}" class="btn btn-primary">
+                            <i class="bi bi-play-circle"></i> Start Trial
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization -->
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="feature-card" data-color="green">
+                    <div class="feature-icon">
+                        <i class="bi bi-graph-up"></i>
+                    </div>
+                    <h3>Data Visualization</h3>
+                    <p>Interactive real-time visualization and analysis of EEG signals.</p>
+                    <div class="feature-details">
+                        <ul>
+                            <li>Real-time EEG signal plotting</li>
+                            <li>Multi-channel visualization</li>
+                            <li>Event marker overlay</li>
+                            <li>Export capabilities</li>
+                        </ul>
+                        <a href="{% url 'eeg_view' %}" class="btn btn-success">
+                            <i class="bi bi-graph-up"></i> View Plots
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BCI Training -->
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="feature-card" data-color="purple">
+                    <div class="feature-icon">
+                        <i class="bi bi-cpu"></i>
+                    </div>
+                    <h3>Brain-Computer Interface</h3>
+                    <p>Advanced machine learning models for EEG pattern recognition.</p>
+                    <div class="feature-details">
+                        <ul>
+                            <li>Motor imagery classification</li>
+                            <li>P300 visual evoked potentials</li>
+                            <li>Real-time prediction</li>
+                            <li>Model training and evaluation</li>
+                        </ul>
+                        <a href="{% url 'bci:dashboard' %}" class="btn btn-purple">
+                            <i class="bi bi-cpu"></i> BCI Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session Management -->
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="feature-card" data-color="orange">
+                    <div class="feature-icon">
+                        <i class="bi bi-folder-check"></i>
+                    </div>
+                    <h3>Session Management</h3>
+                    <p>Comprehensive tracking and management of all trial sessions.</p>
+                    <div class="feature-details">
+                        <ul>
+                            <li>Unified session tracking</li>
+                            <li>Progress monitoring</li>
+                            <li>Data export and analysis</li>
+                            <li>Participant management</li>
+                        </ul>
+                        <a href="{% url 'completed_trials' %}" class="btn btn-warning">
+                            <i class="bi bi-folder-check"></i> View Sessions
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Application Overview -->
+        <div class="row mt-5">
+            <div class="col-lg-10 offset-lg-1">
+                <div class="overview-section">
+                    <h3 class="text-center mb-4">Integrated Research Workflow</h3>
+                    <div class="workflow-steps">
+                        <div class="workflow-step">
+                            <div class="step-number">1</div>
+                            <div class="step-content">
+                                <h5>Collect Data</h5>
+                                <p>Gather EEG data using traditional trials, visual paradigms, or motor imagery tasks</p>
+                            </div>
+                        </div>
+                        <div class="workflow-arrow">
+                            <i class="bi bi-arrow-right"></i>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="step-number">2</div>
+                            <div class="step-content">
+                                <h5>Visualize & Analyze</h5>
+                                <p>Real-time signal visualization and quality assessment of collected data</p>
+                            </div>
+                        </div>
+                        <div class="workflow-arrow">
+                            <i class="bi bi-arrow-right"></i>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="step-number">3</div>
+                            <div class="step-content">
+                                <h5>Train Models</h5>
+                                <p>Build machine learning models for pattern recognition and classification</p>
+                            </div>
+                        </div>
+                        <div class="workflow-arrow">
+                            <i class="bi bi-arrow-right"></i>
+                        </div>
+                        <div class="workflow-step">
+                            <div class="step-number">4</div>
+                            <div class="step-content">
+                                <h5>Deploy & Predict</h5>
+                                <p>Use trained models for real-time brain-computer interface applications</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Stats -->
+        {% if user.is_authenticated %}
+        <div class="row mt-5">
+            <div class="col-12">
+                <div class="quick-stats-section">
+                    <h4 class="text-center mb-4">Your Research Dashboard</h4>
+                    <div class="row text-center">
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ total_trials|default:"0" }}</div>
+                                <div class="stat-label">Completed Trials</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ total_sessions|default:"0" }}</div>
+                                <div class="stat-label">Data Sessions</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ total_models|default:"0" }}</div>
+                                <div class="stat-label">Trained Models</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="stat-item">
+                                <div class="stat-number">{{ total_participants|default:"0" }}</div>
+                                <div class="stat-label">Participants</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
 </div>
+
+<style>
+.btn-purple {
+    background: #6f42c1;
+    border-color: #6f42c1;
+    color: white;
+}
+
+.btn-purple:hover {
+    background: #5a2d91;
+    border-color: #5a2d91;
+    color: white;
+}
+
+.overview-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 20px;
+    padding: 3rem 2rem;
+    color: white;
+    margin: 2rem 0;
+}
+
+.workflow-steps {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 1rem;
+}
+
+.workflow-step {
+    flex: 1;
+    min-width: 200px;
+    text-align: center;
+    padding: 1rem;
+}
+
+.step-number {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0 auto 1rem;
+}
+
+.workflow-arrow {
+    font-size: 1.5rem;
+    color: rgba(255,255,255,0.7);
+}
+
+.quick-stats-section {
+    background: #f8f9fa;
+    border-radius: 15px;
+    padding: 2rem;
+    margin: 2rem 0;
+}
+
+.stat-item {
+    padding: 1rem;
+}
+
+.stat-number {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: #6f42c1;
+    line-height: 1;
+}
+
+.stat-label {
+    color: #6c757d;
+    margin-top: 0.5rem;
+}
+
+@media (max-width: 768px) {
+    .workflow-steps {
+        flex-direction: column;
+    }
+    
+    .workflow-arrow {
+        transform: rotate(90deg);
+        margin: 1rem 0;
+    }
+}
+</style>
 {% endblock %}

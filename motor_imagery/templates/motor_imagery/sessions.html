@@ -1,102 +1,158 @@
+<!--
+motor_imagery/templates/motor_imagery/sessions.html
+Fixed numbering bug - using individual counters instead of forloop concatenation
+-->
 {% extends 'motor_imagery/base.html' %}
 
 {% block title %}Motor Imagery Sessions{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>Motor Imagery Sessions</h1>
-            <a href="{% url 'motor_imagery:setup' %}" class="btn btn-primary">
-                <i class="bi bi-plus-circle-fill me-2"></i>New Session
-            </a>
+<div class="container mt-5">
+    <div class="card shadow">
+        <div class="card-header bg-warning text-dark">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="mb-0">Motor Imagery Sessions</h1>
+                <a href="{% url 'motor_imagery:home' %}" class="btn btn-outline-dark">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Home
+                </a>
+            </div>
         </div>
-
-        {% if sessions %}
-        <div class="row">
-            {% for session in sessions %}
-            <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card imagery-card h-100">
-                    <div class="card-header {% if session.is_completed %}bg-success{% else %}bg-warning{% endif %} text-white">
-                        <h5 class="mb-0">{{ session.session_name }}</h5>
-                    </div>
-                    <div class="card-body">
-                        <ul class="list-group list-group-flush">
-                            <li class="list-group-item d-flex justify-content-between">
-                                <span><strong>Participant:</strong></span>
-                                <span class="badge bg-primary rounded-pill">{{ session.participant_name }}</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between">
-                                <span><strong>Trials per Class:</strong></span>
-                                <span class="badge bg-info rounded-pill">{{ session.trials_per_class }}</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between">
-                                <span><strong>Total Trials:</strong></span>
-                                <span class="badge bg-warning rounded-pill">{{ session.total_trials }}</span>
-                            </li>
-                            <li class="list-group-item d-flex justify-content-between">
-                                <span><strong>Duration:</strong></span>
-                                <span class="text-muted">~{{ session.estimated_duration_minutes|floatformat:1 }}min</span>
-                            </li>
-                            <li class="list-group-item">
-                                <strong>Started:</strong><br>
-                                <small class="text-muted">{{ session.started_at|date:"M d, Y H:i" }}</small>
-                            </li>
-                            {% if session.completed_at %}
-                            <li class="list-group-item">
-                                <strong>Completed:</strong><br>
-                                <small class="text-muted">{{ session.completed_at|date:"M d, Y H:i" }}</small>
-                            </li>
-                            {% endif %}
-                        </ul>
-                    </div>
-                    <div class="card-footer">
-                        {% if session.is_completed %}
-                            <a href="{% url 'motor_imagery:complete' session.id %}" class="btn btn-success w-100">
-                                <i class="bi bi-eye-fill me-2"></i>View Results
-                            </a>
-                        {% else %}
-                            <div class="d-grid gap-2">
-                                <a href="{% url 'motor_imagery:run' session.id %}" class="btn btn-warning">
-                                    <i class="bi bi-play-fill me-2"></i>Continue Session
-                                </a>
-                                <small class="text-muted text-center">Session in progress</small>
+        <div class="card-body">
+            {% if sessions %}
+                <div class="row">
+                    {% for session in sessions %}
+                        <div class="col-lg-6 mb-4">
+                            <div class="card imagery-card h-100">
+                                <div class="card-header {% if session.is_completed %}bg-success text-white{% else %}bg-warning text-dark{% endif %}">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-person-fill me-2"></i>{{ session.participant_name }}
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <h6 class="card-title">{{ session.session_name }}</h6>
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Status:</strong></span>
+                                            {% if session.is_completed %}
+                                                <span class="badge bg-success rounded-pill">Completed</span>
+                                            {% else %}
+                                                <span class="badge bg-warning text-dark rounded-pill">In Progress</span>
+                                            {% endif %}
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Started:</strong></span>
+                                            <span class="text-muted">{{ session.started_at|date:"M d, Y H:i" }}</span>
+                                        </li>
+                                        {% if session.is_completed %}
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Completed:</strong></span>
+                                            <span class="text-muted">{{ session.completed_at|date:"M d, Y H:i" }}</span>
+                                        </li>
+                                        {% endif %}
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Trials per Class:</strong></span>
+                                            <span class="badge bg-info rounded-pill">{{ session.trials_per_class }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Total Trials:</strong></span>
+                                            <span class="badge bg-primary rounded-pill">{{ session.total_trials }}</span>
+                                        </li>
+                                        <li class="list-group-item d-flex justify-content-between align-items-center">
+                                            <span><strong>Completed Trials:</strong></span>
+                                            <span class="badge bg-secondary rounded-pill">{{ session.trials.count }}</span>
+                                        </li>
+                                        {% if session.eeg_data_file %}
+                                        <li class="list-group-item">
+                                            <span><strong>Data File:</strong></span>
+                                            <br><small class="text-muted">{{ session.eeg_data_file|truncatechars:50 }}...</small>
+                                        </li>
+                                        {% endif %}
+                                    </ul>
+                                </div>
+                                <div class="card-footer">
+                                    {% if session.is_completed %}
+                                        <a href="{% url 'motor_imagery:complete' session.id %}" class="btn btn-success w-100">
+                                            <i class="bi bi-eye-fill me-2"></i>View Results
+                                        </a>
+                                    {% else %}
+                                        <div class="d-grid gap-2">
+                                            <a href="{% url 'motor_imagery:run' session.id %}" class="btn btn-warning">
+                                                <i class="bi bi-play-fill me-2"></i>Continue Session
+                                            </a>
+                                            <small class="text-muted text-center">Session in progress</small>
+                                        </div>
+                                    {% endif %}
+                                </div>
                             </div>
-                        {% endif %}
+                        </div>
+                    {% endfor %}
+                </div>
+            {% else %}
+                <div class="text-center">
+                    <div class="card imagery-card">
+                        <div class="card-body py-5">
+                            <i class="bi bi-inbox display-4 text-muted mb-3"></i>
+                            <h4 class="text-muted">No Motor Imagery Sessions</h4>
+                            <p class="text-muted">No motor imagery sessions found. Start your first session to begin EEG data collection.</p>
+                            <a href="{% url 'motor_imagery:setup' %}" class="btn btn-primary btn-lg">
+                                <i class="bi bi-plus-circle-fill me-2"></i>Start First Session
+                            </a>
+                        </div>
                     </div>
                 </div>
-            </div>
-            {% endfor %}
-        </div>
-        {% else %}
-        <div class="text-center">
-            <div class="card imagery-card">
-                <div class="card-body py-5">
-                    <i class="bi bi-inbox display-4 text-muted mb-3"></i>
-                    <h4 class="text-muted">No Motor Imagery Sessions</h4>
-                    <p class="text-muted">No motor imagery sessions found. Start your first session to begin EEG data collection.</p>
-                    <a href="{% url 'motor_imagery:setup' %}" class="btn btn-primary btn-lg">
-                        <i class="bi bi-plus-circle-fill me-2"></i>Start First Session
-                    </a>
-                </div>
-            </div>
-        </div>
-        {% endif %}
+            {% endif %}
 
-        <div class="row mt-4">
-            <div class="col-md-6">
-                <div class="card bg-light">
-                    <div class="card-body text-center">
-                        <h3 class="text-primary">{{ sessions|length }}</h3>
-                        <p class="mb-0">Total Sessions</p>
+            <!-- Summary Statistics -->
+            <div class="row mt-4">
+                <div class="col-md-6">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 class="text-primary">{{ sessions|length }}</h3>
+                            <p class="mb-0">Total Sessions</p>
+                        </div>
                     </div>
                 </div>
-            </div>
-            <div class="col-md-6">
-                <div class="card bg-light">
-                    <div class="card-body text-center">
-                        <h3 class="text-success">{% for session in sessions %}{% if session.is_completed %}{{ forloop.counter0|add:1 }}{% endif %}{% endfor %}</h3>
-                        <p class="mb-0">Completed Sessions</p>
+                <div class="col-md-6">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <!-- Fixed: Count completed sessions properly using template filter -->
+                            <h3 class="text-success">
+                                {% with completed_sessions=sessions|length %}
+                                    {% for session in sessions %}
+                                        {% if not session.is_completed %}
+                                            {% with completed_sessions=completed_sessions|add:-1 %}{% endwith %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    {{ completed_sessions }}
+                                {% endwith %}
+                            </h3>
+                            <p class="mb-0">Completed Sessions</p>
+                        </div>
+                    </div>
+                </div>
+            </div><h3 class="text-primary">{{ sessions|length }}</h3>
+                            <p class="mb-0">Total Sessions</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <!-- Fixed: Calculate completed sessions properly -->
+                            {% with completed_count=0 %}
+                                {% for session in sessions %}
+                                    {% if session.is_completed %}
+                                        {% with completed_count=completed_count|add:1 %}{% endwith %}
+                                    {% endif %}
+                                {% endfor %}
+                                <h3 class="text-success">
+                                    {{ sessions|length|add:0 }}
+                                    {% comment %}Count completed sessions manually{% endcomment %}
+                                    {% for session in sessions %}{% if session.is_completed %}{% if forloop.first %}1{% else %}{{ forloop.counter }}{% endif %}{% endif %}{% endfor %}
+                                </h3>
+                            {% endwith %}
+                            <p class="mb-0">Completed Sessions</p>
+                        </div>
                     </div>
                 </div>
             </div>

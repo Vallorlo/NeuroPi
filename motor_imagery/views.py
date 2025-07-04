@@ -100,13 +100,16 @@ def session_complete(request, session_id):
 def session_list(request):
     """List all motor imagery sessions."""
     sessions = MotorImagerySession.objects.all().order_by('-started_at')
+    completed_sessions = sessions.filter(is_completed=True)
     
     context = {
-        'sessions': sessions
+        'sessions': sessions,
+        'completed_sessions': completed_sessions,
+        'completed_count': completed_sessions.count(),
+        'total_count': sessions.count(),
     }
     return render(request, 'motor_imagery/sessions.html', context)
 
-# API Views
 
 def start_eeg_collection(request):
     """API endpoint to start EEG data collection."""
@@ -119,11 +122,17 @@ def start_eeg_collection(request):
         
         try:
             collector = start_motor_imagery_collection(session_id)
-            return JsonResponse({
-                'success': True,
-                'message': 'Motor imagery EEG collection started',
-                'output_file': collector.output_file
-            })
+            
+            if collector is not None:
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Motor imagery EEG collection started',
+                    'output_file': collector.output_file
+                })
+            else:
+                return JsonResponse({
+                    'error': 'Failed to start collection: Unable to initialize collector'
+                }, status=500)
         
         except Exception as e:
             return JsonResponse({

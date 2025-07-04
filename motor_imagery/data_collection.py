@@ -1,9 +1,8 @@
 # motor_imagery/data_collection.py
 """
-Motor Imagery EEG Data Collection Module
+Updated Motor Imagery EEG Data Collection Module
 
-Integrates with existing trials.data_collection module to provide
-motor imagery specific data collection functionality.
+Now saves data to Trials_data folder for consistency with other trial types.
 """
 
 import time
@@ -31,18 +30,20 @@ class MotorImageryDataCollector:
         self.collection_thread = None
         self.start_time = None
         
-        # Create output directory
+        # Create output directory using CONSISTENT path structure
         self.output_dir = os.path.join(
             settings.BASE_DIR, 
-            "Motor_Imagery_data", 
-            f"session_{self.session.participant_name}_{self.session.id}"
+            "Trials_data",  # Changed from "Motor_Imagery_data" to "Trials_data"
+            f"trial_{self.session.participant_name}",  # Consistent with other trial types
+            "motor_imagery",
+            f"session_{self.session.id}_{self.session.started_at.strftime('%Y%m%d_%H%M%S')}"
         )
         os.makedirs(self.output_dir, exist_ok=True)
         
         # Output file path
         self.output_file = os.path.join(
             self.output_dir, 
-            f"motor_imagery_{self.session.started_at.strftime('%Y%m%d_%H%M%S')}.csv"
+            f"motor_imagery_eeg_data.csv"  # Simplified filename
         )
         
         # Generate randomized trial sequence
@@ -65,57 +66,50 @@ class MotorImageryDataCollector:
     def start_collection(self):
         """Start EEG data collection for motor imagery session."""
         if self.is_collecting:
-            print("Motor imagery data collection already in progress")
+            print("Motor imagery collection already in progress")
             return False
         
-        # Ensure EEG headset is initialized
-        try:
-            from trials.visual_data_collection import ensure_eeg_initialized
-            cyHeadset = ensure_eeg_initialized()
-            print("EEG headset verified for motor imagery collection")
-        except Exception as e:
-            print(f"ERROR: Cannot initialize EEG headset: {e}")
+        # Check if EEG headset is available
+        if data_collection.cyHeadset is None:
+            print("ERROR: No EEG headset available for motor imagery collection")
             return False
         
         self.is_collecting = True
         self.start_time = time.time()
-        self.eeg_data = []
         
-        # Clear EEG buffer
-        try:
-            cyHeadset = data_collection.cyHeadset
-            cyHeadset.clear_data()
-            print("Cleared EEG data buffer for motor imagery")
-        except Exception as e:
-            print(f"Warning: Could not clear EEG data buffer: {e}")
+        # Clear any existing data in the headset
+        data_collection.cyHeadset.clear_data()
         
         # Start data collection thread
         self.collection_thread = threading.Thread(target=self._collect_data)
         self.collection_thread.daemon = True
         self.collection_thread.start()
         
-        print(f"Motor imagery EEG data collection started for session {self.session.id}")
+        print(f"Motor imagery EEG collection started for session {self.session.id}")
+        print(f"Data will be saved to: {self.output_file}")
+        
         return True
     
     def stop_collection(self):
         """Stop EEG data collection and save data."""
         if not self.is_collecting:
-            print("No motor imagery data collection in progress to stop")
+            print("Motor imagery collection not in progress")
             return False
         
-        print("Stopping motor imagery EEG data collection...")
         self.is_collecting = False
         
-        if self.collection_thread:
+        # Wait for collection thread to finish
+        if self.collection_thread and self.collection_thread.is_alive():
             self.collection_thread.join(timeout=5)
         
         # Save collected data
         self._save_data()
-        print(f"Motor imagery data collection stopped and saved")
+        
+        print(f"Motor imagery EEG collection stopped and data saved")
         return True
     
-    def set_current_class(self, imagery_class):
-        """Set the current motor imagery class being performed."""
+    def set_imagery_class(self, imagery_class):
+        """Set the current motor imagery class."""
         self.current_class = imagery_class
         print(f"Motor imagery class changed to: {self.current_class}")
     
@@ -206,28 +200,37 @@ class MotorImageryDataCollector:
         self.session.completed_at = timezone.now()
         self.session.save()
         
-        # Create summary file
+        # Create session summary file (consistent with other trial types)
         summary_file = os.path.join(self.output_dir, "session_summary.txt")
         with open(summary_file, 'w') as f:
-            f.write(f"Motor Imagery Session Summary\n")
-            f.write(f"===============================\n\n")
+            f.write(f"Motor Imagery Trial Session Summary\n")
+            f.write(f"===================================\n\n")
             f.write(f"Participant: {self.session.participant_name}\n")
             f.write(f"Session Name: {self.session.session_name}\n")
+            f.write(f"Trial Type: Motor Imagery\n")
             f.write(f"Session ID: {self.session.id}\n")
             f.write(f"Started: {self.session.started_at}\n")
-            f.write(f"Completed: {self.session.completed_at}\n")
-            f.write(f"Imagery Duration: {self.session.imagery_duration}ms\n")
-            f.write(f"Cue Duration: {self.session.cue_duration}ms\n")
-            f.write(f"Rest Duration: {self.session.rest_duration}ms\n")
-            f.write(f"Trials per Class: {self.session.trials_per_class}\n\n")
+            f.write(f"Completed: {self.session.completed_at}\n\n")
+            f.write(f"Configuration:\n")
+            f.write(f"  Imagery Duration: {self.session.imagery_duration}ms\n")
+            f.write(f"  Cue Duration: {self.session.cue_duration}ms\n")
+            f.write(f"  Rest Duration: {self.session.rest_duration}ms\n")
+            f.write(f"  Trials per Class: {self.session.trials_per_class}\n\n")
             f.write(f"Data Collection Results:\n")
-            f.write(f"Total EEG Samples: {len(df)}\n")
-            f.write(f"Duration: {df['Timestamp'].max():.2f} seconds\n")
-            f.write(f"Sampling Rate: {len(df) / df['Timestamp'].max():.2f} Hz\n\n")
-            f.write(f"Motor imagery classes in dataset:\n")
+            f.write(f"  Total EEG Samples: {len(df)}\n")
+            f.write(f"  Duration: {df['Timestamp'].max():.2f} seconds\n")
+            f.write(f"  Sampling Rate: {len(df) / df['Timestamp'].max():.2f} Hz\n\n")
+            f.write(f"Motor Imagery Classes:\n")
             class_counts = df['motor_imagery_class'].value_counts()
             for imagery_class, count in class_counts.items():
-                f.write(f"  {imagery_class}: {count} samples\n")
+                f.write(f"  {imagery_class}: {count} samples ({count/len(df)*100:.1f}%)\n")
+            
+            # Add metadata file for consistency with other trials
+            f.write(f"\nData Structure:\n")
+            f.write(f"  File Format: CSV\n")
+            f.write(f"  Columns: {', '.join(columns)}\n")
+            f.write(f"  EEG Channels: {', '.join(SENSOR_ORDER)}\n")
+            f.write(f"  Labels: motor_imagery_class column contains imagery class labels\n")
     
     def get_collection_status(self):
         """Get current collection status."""
@@ -237,7 +240,8 @@ class MotorImageryDataCollector:
             'samples_collected': len(self.eeg_data),
             'output_file': self.output_file,
             'trials_completed': self.current_trial_index,
-            'total_trials': len(self.trial_sequence)
+            'total_trials': len(self.trial_sequence),
+            'data_folder': self.output_dir
         }
 
 # Global collector instance
@@ -248,57 +252,59 @@ def start_motor_imagery_collection(session_id):
     global _current_collector
     
     if _current_collector and _current_collector.is_collecting:
-        raise Exception("Motor imagery data collection already in progress")
+        print("Motor imagery collection already in progress")
+        return _current_collector  # Return existing collector instead of False
     
-    _current_collector = MotorImageryDataCollector(session_id)
-    success = _current_collector.start_collection()
-    
-    if not success:
-        _current_collector = None
-        raise Exception("Failed to start motor imagery data collection")
-    
-    return _current_collector
+    try:
+        _current_collector = MotorImageryDataCollector(session_id)
+        success = _current_collector.start_collection()
+        if success:
+            return _current_collector  # Return the collector object
+        else:
+            return None
+    except Exception as e:
+        print(f"Error starting motor imagery collection: {e}")
+        return None
 
 def stop_motor_imagery_collection():
-    """Stop current motor imagery data collection."""
+    """Stop EEG data collection."""
     global _current_collector
     
-    if not _current_collector:
-        return False, {'message': 'No active collection to stop'}
+    if _current_collector:
+        success = _current_collector.stop_collection()
+        return success, _current_collector.get_collection_status() if success else None
     
-    success = _current_collector.stop_collection()
-    result = _current_collector.get_collection_status()
-    _current_collector = None
-    
-    return success, result
+    return False, None
 
 def set_motor_imagery_class(imagery_class):
-    """Set the current motor imagery class being performed."""
+    """Set the current motor imagery class."""
     global _current_collector
     
-    if _current_collector and _current_collector.is_collecting:
-        _current_collector.set_current_class(imagery_class)
-        return True
-    return False
+    if _current_collector:
+        _current_collector.set_imagery_class(imagery_class)
 
 def get_next_motor_imagery_trial():
-    """Get the next trial in the motor imagery sequence."""
+    """Get the next trial in the sequence."""
     global _current_collector
     
     if _current_collector:
         return _current_collector.get_next_trial()
+    
     return None
 
 def get_motor_imagery_status():
-    """Get current motor imagery collection status."""
+    """Get current collection status."""
     global _current_collector
     
     if _current_collector:
         return _current_collector.get_collection_status()
-    return None
+    
+    return {
+        'is_collecting': False,
+        'error': 'No active collector'
+    }
 
 def is_motor_imagery_collecting():
-    """Check if motor imagery data collection is currently active."""
+    """Check if collection is in progress."""
     global _current_collector
-    
     return _current_collector and _current_collector.is_collecting

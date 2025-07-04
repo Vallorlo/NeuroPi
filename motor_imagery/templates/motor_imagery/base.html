@@ -1,42 +1,150 @@
-<!DOCTYPE html>
-{% load static %}
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>
-        {% block title %}Motor Imagery EEG{% endblock %} - NeuroPi
-    </title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-        .motor-imagery-nav { background: linear-gradient(90deg, #2563eb, #1d4ed8); }
-        .imagery-card { border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-        .imagery-icon { font-size: 3rem; }
-    </style>
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg motor-imagery-nav text-white">
-        <div class="container">
-            <a class="navbar-brand text-white fw-bold" href="{% url 'motor_imagery:home' %}">
-                <i class="bi bi-brain me-2"></i>Motor Imagery EEG
-            </a>
-            <div class="navbar-nav ms-auto">
-                <a class="nav-link text-white" href="{% url 'motor_imagery:home' %}">Home</a>
-                <a class="nav-link text-white" href="{% url 'motor_imagery:setup' %}">New Session</a>
-                <a class="nav-link text-white" href="{% url 'motor_imagery:sessions' %}">All Sessions</a>
-                <a class="nav-link text-white" href="/">Main App</a>
+{% extends 'bci/base.html' %}
+
+{% block title %}BCI Dashboard{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item active">Dashboard</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-brain text-primary me-2"></i>
+            BCI Dashboard
+        </h1>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-primary text-white bci-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Sessions</h5>
+                        <h2 class="mb-0">{{ total_sessions|default:0 }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-database fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'bci:session_list' %}" class="text-white text-decoration-none">
+                    View all <i class="fas fa-arrow-right"></i>
+                </a>
             </div>
         </div>
-    </nav>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white bci-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Models</h5>
+                        <h2 class="mb-0">{{ total_models|default:0 }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-cogs fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'bci:training_list' %}" class="text-white text-decoration-none">
+                    View all <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-info text-white bci-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Active Models</h5>
+                        <h2 class="mb-0">{{ active_models|default:0 }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-play fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'bci:prediction_dashboard' %}" class="text-white text-decoration-none">
+                    View all <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white bci-card">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Predictions</h5>
+                        <h2 class="mb-0">{{ prediction_sessions|default:0 }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-chart-line fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'bci:prediction_dashboard' %}" class="text-white text-decoration-none">
+                    View all <i class="fas fa-arrow-right"></i>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
 
-    <main class="container mt-4">
-        {% block content %}
-        {% endblock %}
-    </main>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    {% block extra_js %}{% endblock %}
-</body>
-</html>
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card bci-card">
+            <div class="card-header bg-light">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'bci:session_upload' %}" class="btn btn-outline-primary w-100 btn-bci">
+                            <i class="fas fa-upload d-block mb-2" style="font-size: 2rem;"></i>
+                            <strong>Upload Session</strong>
+                            <br><small>Import EEG data</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'bci:motor_imagery_dashboard' %}" class="btn btn-outline-primary w-100 btn-bci">
+                            <i class="fas fa-brain d-block mb-2" style="font-size: 2rem;"></i>
+                            <strong>Motor Imagery</strong>
+                            <br><small>Classification</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'bci:p300_dashboard' %}" class="btn btn-outline-info w-100 btn-bci">
+                            <i class="fas fa-eye d-block mb-2" style="font-size: 2rem;"></i>
+                            <strong>P300 Analysis</strong>
+                            <br><small>Event-related potentials</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <a href="{% url 'bci:training_config' %}" class="btn btn-outline-success w-100 btn-bci">
+                            <i class="fas fa-cogs d-block mb-2" style="font-size: 2rem;"></i>
+                            <strong>Train Model</strong>
+                            <br><small>Configure training</small>
+                        </a>
+                    </div>
+                </div>
+            </div>

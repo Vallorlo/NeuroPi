@@ -1,4 +1,7 @@
-
+<!--
+trials/templates/trials/completed_trials.html
+Updated to include Motor Imagery sessions and fix numbering bug
+-->
 {% extends "layout.html" %}
 {% load custom_filters %}
 
@@ -25,93 +28,50 @@
                         <i class="bi bi-eye-fill me-2"></i>Visual Trials
                     </button>
                 </li>
+                {% if motor_imagery_available %}
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="motor-imagery-tab" data-bs-toggle="tab" data-bs-target="#motor-imagery-trials" type="button" role="tab">
+                        <i class="bi bi-gear-fill me-2"></i>Motor Imagery
+                    </button>
+                </li>
+                {% endif %}
             </ul>
 
             <div class="tab-content" id="trialTabsContent">
                 <!-- Traditional Trials Tab -->
                 <div class="tab-pane fade show active" id="traditional-trials" role="tabpanel">
-                    {% if completed_data %}
+                    {% if participants_data %}
                         <div class="row">
-                            {% for participant in completed_data %}
+                            {% for participant in participants_data %}
                                 <div class="col-12 mb-4">
                                     <div class="card">
                                         <div class="card-header bg-secondary text-white">
                                             <h4 class="mb-0">
-                                                <i class="bi bi-person-fill me-2"></i>{{ participant.name }}
+                                                <i class="bi bi-person-fill me-2"></i>{{ participant.participant_name }}
                                             </h4>
                                         </div>
                                         <div class="card-body">
-                                            {% for word in participant.words %}
-                                                <div class="mb-4">
-                                                    <h5 class="text-primary">
-                                                        <i class="bi bi-chat-square-text me-2"></i>{{ word.name }}
-                                                    </h5>
-                                                    <div class="table-responsive">
-                                                        <table class="table table-sm table-striped">
-                                                            <thead>
-                                                                <tr>
-                                                                    <th>Stage</th>
-                                                                    <th>Type</th>
-                                                                    <th>Attempts</th>
-                                                                    <th>Date</th>
-                                                                    <th>Actions</th>
-                                                                </tr>
-                                                            </thead>
-                                                            <tbody>
-                                                                {% for stage in word.stages %}
-                                                                    <tr>
-                                                                        <td>
-                                                                            {% if stage.name == 'stage1' %}
-                                                                                <i class="bi bi-mic-fill text-danger"></i> Stage 1
-                                                                            {% elif stage.name == 'stage2' %}
-                                                                                <i class="bi bi-mic-mute-fill text-warning"></i> Stage 2
-                                                                            {% elif stage.name == 'stage3' %}
-                                                                                <i class="bi bi-hand-index-thumb text-primary"></i> Stage 3
-                                                                            {% elif stage.name == 'stage4' %}
-                                                                                <i class="bi bi-hand-index-thumb text-primary"></i><i class="bi bi-mic-fill text-danger"></i> Stage 4
-                                                                            {% elif stage.name == 'stage5' %}
-                                                                                <i class="bi bi-hand-index-thumb text-primary"></i><i class="bi bi-mic-mute-fill text-warning"></i> Stage 5
-                                                                            {% else %}
-                                                                                {{ stage.name }}
-                                                                            {% endif %}
-                                                                        </td>
-                                                                        <td>
-                                                                            {% if stage.name == 'stage1' %}
-                                                                                Vocal
-                                                                            {% elif stage.name == 'stage2' %}
-                                                                                Non-Vocal
-                                                                            {% elif stage.name == 'stage3' %}
-                                                                                Motor
-                                                                            {% elif stage.name == 'stage4' %}
-                                                                                Motor + Vocal
-                                                                            {% elif stage.name == 'stage5' %}
-                                                                                Motor + Non-Vocal
-                                                                            {% else %}
-                                                                                -
-                                                                            {% endif %}
-                                                                        </td>
-                                                                        <td><span class="badge bg-primary">{{ stage.attempts }}</span></td>
-                                                                        <td>{{ stage.date }}</td>
-                                                                        <td>
-                                                                            <div class="btn-group">
-                                                                                <button type="button" class="btn btn-sm btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
-                                                                                    Actions
-                                                                                </button>
-                                                                                <ul class="dropdown-menu">
-                                                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-download"></i> Download Data</a></li>
-                                                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-graph-up"></i> View Plots</a></li>
-                                                                                    <li><hr class="dropdown-divider"></li>
-                                                                                    <li><a class="dropdown-item text-danger" href="#"><i class="bi bi-trash"></i> Delete</a></li>
-                                                                                </ul>
-                                                                            </div>
-                                                                        </td>
-                                                                    </tr>
-                                                                {% endfor %}
-                                                            </tbody>
-                                                        </table>
+                                            <div class="row">
+                                                {% for word in participant.words %}
+                                                    <div class="col-md-6 col-lg-4 mb-3">
+                                                        <div class="card border-primary">
+                                                            <div class="card-header bg-primary text-white">
+                                                                <h6 class="mb-0">{{ word.word|title }}</h6>
+                                                            </div>
+                                                            <div class="card-body">
+                                                                <p class="card-text">
+                                                                    <span class="badge bg-success rounded-pill">{{ word.stage_count }} stages</span>
+                                                                </p>
+                                                                <div class="mb-2">
+                                                                    {% for stage in word.stages %}
+                                                                        <span class="badge bg-outline-secondary me-1">{{ stage }}</span>
+                                                                    {% endfor %}
+                                                                </div>
+                                                            </div>
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            {% endfor %}
+                                                {% endfor %}
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -121,9 +81,9 @@
                         <div class="text-center">
                             <div class="card">
                                 <div class="card-body">
-                                    <i class="bi bi-inbox display-4 text-muted mb-3"></i>
+                                    <i class="bi bi-mic display-4 text-muted mb-3"></i>
                                     <h4 class="text-muted">No Traditional Trials Completed</h4>
-                                    <p class="text-muted">No traditional trial data found. Start a new trial to see results here.</p>
+                                    <p class="text-muted">No traditional trials found. Start a new trial to see results here.</p>
                                     <a href="{% url 'start_trial' %}" class="btn btn-primary">
                                         <i class="bi bi-plus-circle me-2"></i>Start First Trial
                                     </a>
@@ -164,33 +124,21 @@
                                                     <span class="badge bg-warning rounded-pill">{{ session.word_set.words.count|mul:session.repetitions_per_word }}</span>
                                                 </li>
                                                 <li class="list-group-item">
-                                                    <strong>Display Duration:</strong> {{ session.word_display_duration }}ms<br>
-                                                    <strong>Rest Duration:</strong> 
-                                                    {% if session.rest_duration == 0 %}
-                                                        No rest periods
-                                                    {% else %}
-                                                        {{ session.rest_duration }}ms
-                                                    {% endif %}
-                                                </li>
-                                                <li class="list-group-item">
-                                                    <strong>Completed:</strong><br>
-                                                    <small class="text-muted">{{ session.completed_at|date:"M d, Y H:i" }}</small>
+                                                    <strong>Completed:</strong> {{ session.completed_at|date:"M d, Y H:i" }}
                                                 </li>
                                             </ul>
                                         </div>
                                         <div class="card-footer">
-                                            <div class="btn-group w-100">
-                                                <button type="button" class="btn btn-outline-primary dropdown-toggle" data-bs-toggle="dropdown">
-                                                    <i class="bi bi-gear"></i> Actions
+                                            <div class="dropdown dropup">
+                                                <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <i class="bi bi-three-dots me-2"></i>Actions
                                                 </button>
-                                                <ul class="dropdown-menu">
-                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-download"></i> Download EEG Data</a></li>
-                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-graph-up"></i> View Analysis</a></li>
-                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-list-ul"></i> Event Timeline</a></li>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li><a class="dropdown-item" href="{% url 'visual_trial_complete' session.id %}"><i class="bi bi-eye me-2"></i> View Details</a></li>
+                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-download me-2"></i> Download EEG Data</a></li>
+                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-graph-up me-2"></i> View Analysis</a></li>
                                                     <li><hr class="dropdown-divider"></li>
-                                                    <li><a class="dropdown-item" href="{% url 'visual_trial_setup' %}"><i class="bi bi-arrow-repeat"></i> Repeat Setup</a></li>
-                                                    <li><hr class="dropdown-divider"></li>
-                                                    <li><a class="dropdown-item text-danger" href="#"><i class="bi bi-trash"></i> Delete Session</a></li>
+                                                    <li><a class="dropdown-item" href="{% url 'visual_trial_setup' %}"><i class="bi bi-arrow-repeat me-2"></i> Repeat Setup</a></li>
                                                 </ul>
                                             </div>
                                         </div>
@@ -213,19 +161,90 @@
                         </div>
                     {% endif %}
                 </div>
+
+                <!-- Motor Imagery Trials Tab -->
+                {% if motor_imagery_available %}
+                <div class="tab-pane fade" id="motor-imagery-trials" role="tabpanel">
+                    {% if motor_imagery_sessions %}
+                        <div class="row">
+                            {% for session in motor_imagery_sessions %}
+                                <div class="col-md-6 mb-4">
+                                    <div class="card h-100">
+                                        <div class="card-header bg-warning text-dark">
+                                            <h5 class="mb-0">
+                                                <i class="bi bi-person-fill me-2"></i>{{ session.participant_name }}
+                                            </h5>
+                                        </div>
+                                        <div class="card-body">
+                                            <ul class="list-group list-group-flush">
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><strong>Session Name:</strong></span>
+                                                    <span class="badge bg-warning text-dark rounded-pill">{{ session.session_name }}</span>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><strong>Trials per Class:</strong></span>
+                                                    <span class="badge bg-info rounded-pill">{{ session.trials_per_class }}</span>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><strong>Total Trials:</strong></span>
+                                                    <span class="badge bg-primary rounded-pill">{{ session.total_trials }}</span>
+                                                </li>
+                                                <li class="list-group-item d-flex justify-content-between align-items-center">
+                                                    <span><strong>Completed Trials:</strong></span>
+                                                    <span class="badge bg-success rounded-pill">{{ session.trials.count }}</span>
+                                                </li>
+                                                <li class="list-group-item">
+                                                    <strong>Completed:</strong> {{ session.completed_at|date:"M d, Y H:i" }}
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        <div class="card-footer">
+                                            <div class="dropdown dropup">
+                                                <button class="btn btn-outline-secondary dropdown-toggle w-100" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                                    <i class="bi bi-three-dots me-2"></i>Actions
+                                                </button>
+                                                <ul class="dropdown-menu dropdown-menu-end">
+                                                    <li><a class="dropdown-item" href="{% url 'motor_imagery:complete' session.id %}"><i class="bi bi-eye me-2"></i> View Details</a></li>
+                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-download me-2"></i> Download EEG Data</a></li>
+                                                    <li><a class="dropdown-item" href="#"><i class="bi bi-graph-up me-2"></i> View Analysis</a></li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><a class="dropdown-item" href="{% url 'motor_imagery:setup' %}"><i class="bi bi-arrow-repeat me-2"></i> Repeat Setup</a></li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center">
+                            <div class="card">
+                                <div class="card-body">
+                                    <i class="bi bi-gear display-4 text-muted mb-3"></i>
+                                    <h4 class="text-muted">No Motor Imagery Trials Completed</h4>
+                                    <p class="text-muted">No motor imagery sessions found. Start a new motor imagery trial to see results here.</p>
+                                    <a href="{% url 'motor_imagery:setup' %}" class="btn btn-warning">
+                                        <i class="bi bi-gear-fill me-2"></i>Start First Motor Imagery Trial
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    {% endif %}
+                </div>
+                {% endif %}
             </div>
 
             <!-- Summary Statistics -->
             <div class="row mt-4">
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <div class="card bg-light">
                         <div class="card-body text-center">
-                            <h3 class="text-primary">{{ completed_data|length }}</h3>
+                            <h3 class="text-primary">{{ participants_data|length }}</h3>
                             <p class="mb-0">Participants with Traditional Trials</p>
                         </div>
                     </div>
                 </div>
-                <div class="col-md-6">
+                <div class="col-md-4">
                     <div class="card bg-light">
                         <div class="card-body text-center">
                             <h3 class="text-success">{{ visual_sessions|length }}</h3>
@@ -233,6 +252,16 @@
                         </div>
                     </div>
                 </div>
+                {% if motor_imagery_available %}
+                <div class="col-md-4">
+                    <div class="card bg-light">
+                        <div class="card-body text-center">
+                            <h3 class="text-warning">{{ motor_imagery_sessions|length }}</h3>
+                            <p class="mb-0">Completed Motor Imagery Sessions</p>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <div class="text-center mt-4">
@@ -247,21 +276,46 @@
 <style>
     .card {
         transition: transform 0.2s ease-in-out;
+        position: relative;
+        z-index: 1;
     }
 
     .card:hover {
         transform: translateY(-2px);
         box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        z-index: 10;
+    }
+
+    /* Ensure dropdowns appear above other cards */
+    .dropdown {
+        position: relative;
+        z-index: 1000;
+    }
+
+    .dropdown-menu {
+        z-index: 1050;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        border: none;
+        border-radius: 8px;
+    }
+
+    .dropdown.show {
+        z-index: 1060;
+    }
+
+    /* Fix for cards in grid layout */
+    .card-footer .dropdown.show {
+        position: static;
+    }
+
+    .card-footer .dropdown-menu {
+        position: absolute;
+        transform: translateY(-100%);
+        margin-bottom: 10px;
     }
 
     .badge {
         font-size: 0.8em;
-    }
-
-    .table th {
-        border-top: none;
-        font-weight: 600;
-        color: #495057;
     }
 
     .nav-tabs .nav-link {
@@ -293,6 +347,16 @@
     .list-group-item:last-child {
         border-bottom: none;
     }
+
+    /* Improve dropdown spacing */
+    .dropdown-item {
+        padding: 0.5rem 1rem;
+    }
+
+    .dropdown-item i {
+        width: 1rem;
+        text-align: center;
+    }
 </style>
 
 <script>
@@ -312,17 +376,6 @@
         ['click', 'scroll', 'keypress'].forEach(event => {
             document.addEventListener(event, () => {
                 lastUserInteraction = Date.now();
-            });
-        });
-        
-        // Add confirmation for delete actions
-        document.querySelectorAll('.dropdown-item.text-danger').forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                if (confirm('Are you sure you want to delete this trial data? This action cannot be undone.')) {
-                    // Implement delete functionality here
-                    console.log('Delete confirmed');
-                }
             });
         });
     });

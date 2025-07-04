@@ -663,59 +663,84 @@ def capture_stage(request):
         'microphone_name': microphone_name,
     })
 
+
 def completed_trials(request):
-    """View to show a list of all completed trials."""
+    """Display completed trials from all trial types in a unified view."""
+    from .models import VisualTrialSession, UnifiedTrialSession
+    
+    # Import motor imagery models
+    try:
+        from motor_imagery.models import MotorImagerySession
+        motor_imagery_available = True
+    except ImportError:
+        motor_imagery_available = False
+        MotorImagerySession = None
+
+    # Get traditional trial data (existing logic)
     trials_dir = os.path.join(settings.BASE_DIR, "Trials_data")
-    completed_data = []
+    participants_data = []
     
     if os.path.exists(trials_dir):
-        for participant_dir in os.listdir(trials_dir):
-            if os.path.isdir(os.path.join(trials_dir, participant_dir)) and participant_dir.startswith('trial_'):
-                participant_name = participant_dir.replace('trial_', '')
-                participant_path = os.path.join(trials_dir, participant_dir)
+        for item in os.listdir(trials_dir):
+            full_path = os.path.join(trials_dir, item)
+            if os.path.isdir(full_path) and item.startswith('trial_'):
+                participant_name = item.replace('trial_', '')
                 
-                participant_data = {
-                    'name': participant_name,
-                    'words': []
-                }
+                # Check for completed traditional trials
+                completed_words = []
+                participant_path = full_path
                 
-                # Get all words for this participant
-                for word_dir in os.listdir(participant_path):
-                    word_path = os.path.join(participant_path, word_dir)
-                    if os.path.isdir(word_path):
-                        word_data = {
-                            'name': word_dir,
-                            'stages': []
-                        }
-                        
-                        # Get completed stages for this word
-                        for stage_dir in os.listdir(word_path):
-                            stage_path = os.path.join(word_path, stage_dir)
-                            if os.path.isdir(stage_path):
-                                # Check if there's at least one EEG data file in this stage directory
-                                eeg_files = [f for f in os.listdir(stage_path) if f.endswith('.csv') and 'eeg' in f.lower()]
-                                if eeg_files:
-                                    stage_data = {
-                                        'name': stage_dir,
-                                        'attempts': len(eeg_files),
-                                        'date': datetime.datetime.fromtimestamp(os.path.getmtime(stage_path)).strftime('%Y-%m-%d')
-                                    }
-                                    word_data['stages'].append(stage_data)
-                        
-                        if word_data['stages']:  # Only add words with completed stages
-                            participant_data['words'].append(word_data)
+                if os.path.exists(participant_path):
+                    for word_dir in os.listdir(participant_path):
+                        word_path = os.path.join(participant_path, word_dir)
+                        if os.path.isdir(word_path) and word_dir not in ['motor_imagery', 'visual_trial']:
+                            # Check if this word has completed stages
+                            completed_stages = []
+                            for stage_dir in os.listdir(word_path):
+                                stage_path = os.path.join(word_path, stage_dir)
+                                if os.path.isdir(stage_path):
+                                    eeg_files = [f for f in os.listdir(stage_path) if f.endswith('.csv') and 'eeg' in f.lower()]
+                                    if eeg_files:
+                                        completed_stages.append(stage_dir)
+                            
+                            if completed_stages:
+                                completed_words.append({
+                                    'word': word_dir,
+                                    'stages': completed_stages,
+                                    'stage_count': len(completed_stages)
+                                })
                 
-                if participant_data['words']:  # Only add participants with completed words
-                    completed_data.append(participant_data)
-    
+                if completed_words:
+                    participants_data.append({
+                        'participant_name': participant_name,
+                        'words': completed_words,
+                        'total_words': len(completed_words),
+                        'trial_type': 'traditional'
+                    })
+
     # Get visual trial sessions
     visual_sessions = VisualTrialSession.objects.filter(is_completed=True).order_by('-completed_at')
     
-    return render(request, 'trials/completed_trials.html', {
-        'completed_data': completed_data,
-        'visual_sessions': visual_sessions,
-    })
+    # Get motor imagery sessions
+    motor_imagery_sessions = []
+    if motor_imagery_available:
+        motor_imagery_sessions = MotorImagerySession.objects.filter(is_completed=True).order_by('-completed_at')
+    
+    # Get unified sessions (for future use)
+    try:
+        unified_sessions = UnifiedTrialSession.objects.filter(is_completed=True).order_by('-completed_at')
+    except:
+        unified_sessions = []
 
+    context = {
+        'participants_data': participants_data,
+        'visual_sessions': visual_sessions,
+        'motor_imagery_sessions': motor_imagery_sessions,
+        'unified_sessions': unified_sessions,
+        'motor_imagery_available': motor_imagery_available,
+    }
+    
+    return render(request, 'trials/completed_trials.html', context)
 
 def traditional_trial_setup(request):
     """Setup page for traditional trials."""

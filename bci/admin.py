@@ -92,33 +92,36 @@ class PredictionInline(admin.TabularInline):
 
 @admin.register(PredictionSession)
 class PredictionSessionAdmin(admin.ModelAdmin):
-    list_display = ['name', 'user', 'approach', 'model', 'status', 'created_at']
-    list_filter = ['approach', 'status', 'created_at', 'user']
-    search_fields = ['name', 'description', 'user__username']
-    readonly_fields = ['id', 'created_at', 'updated_at', 'started_at', 'stopped_at']
+    list_display = ['name', 'user', 'model', 'status', 'created_at']  # Removed 'approach'
+    list_filter = ['status', 'created_at', 'user', 'model__approach']  # Use model__approach
+    search_fields = ['name', 'user__username', 'model__name']  # Removed 'description'
+    readonly_fields = ['id', 'created_at', 'started_at', 'stopped_at']
     inlines = [PredictionInline]
     
     fieldsets = (
         ('Basic Information', {
-            'fields': ('id', 'user', 'name', 'description', 'approach')
+            'fields': ('id', 'user', 'name', 'model')  # Removed non-existent fields
         }),
-        ('Configuration', {
-            'fields': ('model', 'session_config')
+        ('Session Parameters', {
+            'fields': ('prediction_interval', 'window_duration')  # Original fields
         }),
         ('Status', {
             'fields': ('status', 'started_at', 'stopped_at')
         }),
         ('Timestamps', {
-            'fields': ('created_at', 'updated_at'),
+            'fields': ('created_at',),
             'classes': ('collapse',)
         })
     )
+
+    def get_queryset(self, request):
+        return super().get_queryset(request).select_related('user', 'model')
 
 
 @admin.register(Prediction)
 class PredictionAdmin(admin.ModelAdmin):
     list_display = ['session', 'predicted_class', 'confidence', 'timestamp']
-    list_filter = ['predicted_class', 'session__approach', 'timestamp']
+    list_filter = ['predicted_class', 'session__model__approach', 'timestamp']  # FIXED
     search_fields = ['session__name', 'predicted_class']
     readonly_fields = ['id', 'timestamp']
     
@@ -127,7 +130,7 @@ class PredictionAdmin(admin.ModelAdmin):
             'fields': ('id', 'session', 'predicted_class', 'confidence')
         }),
         ('Prediction Data', {
-            'fields': ('raw_output', 'prediction_data'),
+            'fields': ('probabilities', 'prediction_time_ms'),  # Only existing fields
             'classes': ('collapse',)
         }),
         ('Timestamp', {
@@ -136,13 +139,13 @@ class PredictionAdmin(admin.ModelAdmin):
     )
 
     def get_queryset(self, request):
-        return super().get_queryset(request).select_related('session')
+        return super().get_queryset(request).select_related('session', 'session__model')
 
 
 @admin.register(SystemConfiguration)
 class SystemConfigurationAdmin(admin.ModelAdmin):
-    list_display = ['user', 'eeg_device', 'sampling_rate', 'enable_real_time_processing', 'updated_at']
-    list_filter = ['eeg_device', 'enable_real_time_processing', 'updated_at']
+    list_display = ['user', 'eeg_device', 'default_prediction_interval', 'updated_at']  # FIXED
+    list_filter = ['eeg_device', 'updated_at']  # Removed non-existent fields
     search_fields = ['user__username']
     readonly_fields = ['created_at', 'updated_at']
     
@@ -151,13 +154,13 @@ class SystemConfigurationAdmin(admin.ModelAdmin):
             'fields': ('user',)
         }),
         ('EEG Device Configuration', {
-            'fields': ('eeg_device', 'sampling_rate', 'buffer_size')
+            'fields': ('eeg_device',)  # Only existing fields
         }),
-        ('Processing Configuration', {
-            'fields': ('enable_real_time_processing', 'prediction_interval')
+        ('Default Settings', {
+            'fields': ('default_prediction_interval', 'default_window_duration')
         }),
         ('UI Configuration', {
-            'fields': ('auto_refresh_interval', 'show_advanced_options')
+            'fields': ('show_confidence_threshold', 'max_prediction_history')
         }),
         ('Timestamps', {
             'fields': ('created_at', 'updated_at'),

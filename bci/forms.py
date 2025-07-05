@@ -249,29 +249,41 @@ class TrainingConfigForm(forms.ModelForm):
             print(f"✅ Saved model with {len(training_sessions)} training sessions")
         
         return instance
-    
-    
+
+
 class PredictionSessionForm(forms.ModelForm):
-    """Form for creating prediction sessions"""
+    """Form for creating prediction sessions - UNIFIED FOR ALL APPROACHES"""
+    
+    # Custom model selection field
+    model_selection = forms.ModelChoiceField(
+        queryset=TrainedModel.objects.none(),
+        widget=forms.Select(attrs={'class': 'form-control'}),
+        label="Select Model",
+        help_text="Choose a trained model for real-time prediction.",
+        required=True
+    )
     
     class Meta:
         model = PredictionSession
-        fields = ['name', 'description', 'model', 'approach']
+        fields = ['name', 'prediction_interval', 'window_duration']  # Only fields that exist
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
                 'placeholder': 'Enter session name'
             }),
-            'description': forms.Textarea(attrs={
+            'prediction_interval': forms.NumberInput(attrs={
                 'class': 'form-control',
-                'rows': 3,
-                'placeholder': 'Optional description'
+                'min': '1.0',
+                'max': '30.0',
+                'step': '0.5',
+                'value': '8.0'
             }),
-            'model': forms.Select(attrs={
-                'class': 'form-control'
-            }),
-            'approach': forms.Select(attrs={
-                'class': 'form-control'
+            'window_duration': forms.NumberInput(attrs={
+                'class': 'form-control',
+                'min': '1.0',
+                'max': '5.0',
+                'step': '0.1',
+                'value': '2.0'
             })
         }
 
@@ -281,41 +293,58 @@ class PredictionSessionForm(forms.ModelForm):
         super().__init__(*args, **kwargs)
         
         if user:
-            # Filter models by user and approach
+            # Get ALL completed models for this user
             queryset = TrainedModel.objects.filter(
                 user=user, 
-                status='completed'
+                status='completed',
+                is_active=True  # Only show active models
             )
-            if approach:
+            
+            # Apply approach filter if specified, but don't default to motor_imagery
+            if approach and approach != 'all':
                 queryset = queryset.filter(approach=approach)
+                print(f"Filtering models by approach: {approach}")
+                print(f"Models found: {queryset.count()}")
+                for model in queryset:
+                    print(f"  - {model.name} ({model.approach})")
+            else:
+                print(f"Showing ALL completed active models: {queryset.count()}")
+                for model in queryset:
+                    print(f"  - {model.name} ({model.approach})")
             
-            self.fields['model'].queryset = queryset
-            
-            # Set approach if provided
-            if approach:
-                self.fields['approach'].initial = approach
+            self.fields['model_selection'].queryset = queryset
+            self.fields['model_selection'].empty_label = "Select a trained model..."
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        # Set the model from the model_selection field
+        instance.model = self.cleaned_data['model_selection']
+        
+        if commit:
+            instance.save()
+        return instance
+
 
 
 class SystemConfigurationForm(forms.ModelForm):
-    """Form for system configuration"""
+    """Form for system configuration - FIXED for original model structure"""
     
     class Meta:
         model = SystemConfiguration
         fields = [
-            'eeg_device', 'sampling_rate', 'buffer_size',
-            'enable_real_time_processing', 'prediction_interval',
-            'auto_refresh_interval', 'show_advanced_options'
-        ]
+            'eeg_device', 
+            'default_prediction_interval',
+            'default_window_duration', 
+            'show_confidence_threshold',
+            'max_prediction_history'
+        ]  
         widgets = {
             'eeg_device': forms.Select(attrs={'class': 'form-control'}),
-            'sampling_rate': forms.NumberInput(attrs={'class': 'form-control'}),
-            'buffer_size': forms.NumberInput(attrs={'class': 'form-control'}),
-            'enable_real_time_processing': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
-            'prediction_interval': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
-            'auto_refresh_interval': forms.NumberInput(attrs={'class': 'form-control'}),
-            'show_advanced_options': forms.CheckboxInput(attrs={'class': 'form-check-input'}),
+            'default_prediction_interval': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
+            'default_window_duration': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1'}),
+            'show_confidence_threshold': forms.NumberInput(attrs={'class': 'form-control', 'step': '0.01', 'min': '0', 'max': '1'}),
+            'max_prediction_history': forms.NumberInput(attrs={'class': 'form-control', 'min': '10', 'max': '500'}),
         }
-
 
 class ModelSelectionForm(forms.Form):
     """Form for selecting a model"""

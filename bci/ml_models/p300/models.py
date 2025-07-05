@@ -1,7 +1,8 @@
 # bci/ml_models/p300/models.py
 """
-P300 Neural Network Models for PyTorch
-Advanced CNN+LSTM+Multi-Head-Attention architecture for P300 classification
+P300 Neural Network Models - Ultimate PyTorch Implementation
+Advanced CNN+LSTM+Multi-Head-Attention architecture inspired by TensorFlow implementations
+Converted to PyTorch with enhanced features and optimizations
 """
 
 import torch
@@ -9,10 +10,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from typing import Tuple, Optional
+import math
 
 
 class MultiHeadAttention(nn.Module):
-    """Multi-Head Attention mechanism for P300 signals"""
+    """Enhanced Multi-Head Attention mechanism for P300 signals"""
     
     def __init__(self, d_model: int, num_heads: int, dropout: float = 0.1):
         super().__init__()
@@ -22,15 +24,37 @@ class MultiHeadAttention(nn.Module):
         self.num_heads = num_heads
         self.d_k = d_model // num_heads
         
-        self.W_q = nn.Linear(d_model, d_model)
-        self.W_k = nn.Linear(d_model, d_model)
-        self.W_v = nn.Linear(d_model, d_model)
+        # Linear projections
+        self.W_q = nn.Linear(d_model, d_model, bias=False)
+        self.W_k = nn.Linear(d_model, d_model, bias=False)
+        self.W_v = nn.Linear(d_model, d_model, bias=False)
         self.W_o = nn.Linear(d_model, d_model)
         
+        # Regularization
         self.dropout = nn.Dropout(dropout)
         self.layer_norm = nn.LayerNorm(d_model)
         
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Initialize weights
+        self._init_weights()
+    
+    def _init_weights(self):
+        """Initialize weights using Xavier initialization"""
+        for module in [self.W_q, self.W_k, self.W_v, self.W_o]:
+            nn.init.xavier_uniform_(module.weight)
+            if hasattr(module, 'bias') and module.bias is not None:
+                nn.init.constant_(module.bias, 0)
+    
+    def forward(self, x: torch.Tensor, mask: Optional[torch.Tensor] = None) -> torch.Tensor:
+        """
+        Forward pass of multi-head attention
+        
+        Args:
+            x: Input tensor (batch_size, seq_len, d_model)
+            mask: Optional attention mask
+            
+        Returns:
+            Output tensor with same shape as input
+        """
         batch_size, seq_len, d_model = x.size()
         
         # Generate Q, K, V
@@ -39,7 +63,13 @@ class MultiHeadAttention(nn.Module):
         V = self.W_v(x).view(batch_size, seq_len, self.num_heads, self.d_k).transpose(1, 2)
         
         # Scaled dot-product attention
-        scores = torch.matmul(Q, K.transpose(-2, -1)) / np.sqrt(self.d_k)
+        scores = torch.matmul(Q, K.transpose(-2, -1)) / math.sqrt(self.d_k)
+        
+        # Apply mask if provided
+        if mask is not None:
+            scores.masked_fill_(mask == 0, -1e9)
+        
+        # Apply softmax and dropout
         attention_weights = F.softmax(scores, dim=-1)
         attention_weights = self.dropout(attention_weights)
         
@@ -54,97 +84,158 @@ class MultiHeadAttention(nn.Module):
         return self.layer_norm(x + self.dropout(output))
 
 
+class SeparableConv1d(nn.Module):
+    """Separable 1D convolution for efficient feature extraction"""
+    
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int, 
+                 stride: int = 1, padding: int = 0, bias: bool = True):
+        super().__init__()
+        
+        # Depthwise convolution
+        self.depthwise = nn.Conv1d(
+            in_channels, in_channels, kernel_size, 
+            stride=stride, padding=padding, groups=in_channels, bias=False
+        )
+        
+        # Pointwise convolution
+        self.pointwise = nn.Conv1d(in_channels, out_channels, 1, bias=bias)
+        
+        # Batch normalization
+        self.bn = nn.BatchNorm1d(out_channels)
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.depthwise(x)
+        x = self.pointwise(x)
+        x = self.bn(x)
+        return x
+
+
+class ResidualBlock(nn.Module):
+    """Residual block for CNN feature extraction"""
+    
+    def __init__(self, in_channels: int, out_channels: int, kernel_size: int = 3, 
+                 dropout: float = 0.1):
+        super().__init__()
+        
+        self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size, padding=kernel_size//2)
+        self.bn1 = nn.BatchNorm1d(out_channels)
+        self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size, padding=kernel_size//2)
+        self.bn2 = nn.BatchNorm1d(out_channels)
+        self.dropout = nn.Dropout(dropout)
+        
+        # Skip connection
+        self.skip_connection = nn.Conv1d(in_channels, out_channels, 1) if in_channels != out_channels else nn.Identity()
+        
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        residual = self.skip_connection(x)
+        
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = self.dropout(out)
+        out = self.bn2(self.conv2(out))
+        
+        return F.relu(out + residual)
+
+
 class P300_CNN_LSTM_Attention(nn.Module):
     """
-    Advanced P300 Classification Model
+    Ultimate P300 Classification Model
     Multi-scale CNN + Bidirectional LSTM + Multi-Head Attention
+    Inspired by TensorFlow implementations with PyTorch optimizations
     """
     
     def __init__(self, n_channels: int = 14, n_classes: int = 6, 
-                 dropout_rate: float = 0.3, sampling_rate: int = 128):
+                 sampling_rate: int = 128, dropout_rate: float = 0.3):
         super().__init__()
         
         self.n_channels = n_channels
         self.n_classes = n_classes
-        self.dropout_rate = dropout_rate
         self.sampling_rate = sampling_rate
+        self.dropout_rate = dropout_rate
         
-        # Multi-scale CNN feature extraction
-        # Scale 1: Large receptive field for slow P300 components
+        # Multi-scale CNN feature extraction (inspired by TF implementation)
+        # Scale 1: Large receptive field (captures slow P300 components)
         self.conv1_large = nn.Sequential(
             nn.Conv1d(n_channels, 64, kernel_size=9, padding=4),
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.MaxPool1d(2),
-            nn.Dropout(dropout_rate)
+            nn.Dropout(dropout_rate * 0.5)
         )
         
-        # Scale 2: Medium receptive field for P300 peak detection
+        # Scale 2: Medium receptive field (captures medium-frequency components)
         self.conv1_medium = nn.Sequential(
             nn.Conv1d(n_channels, 64, kernel_size=5, padding=2),
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.MaxPool1d(2),
-            nn.Dropout(dropout_rate)
+            nn.Dropout(dropout_rate * 0.5)
         )
         
-        # Scale 3: Small receptive field for fine-grained features
+        # Scale 3: Small receptive field (captures fast transients)
         self.conv1_small = nn.Sequential(
             nn.Conv1d(n_channels, 64, kernel_size=3, padding=1),
             nn.BatchNorm1d(64),
             nn.ReLU(),
             nn.MaxPool1d(2),
-            nn.Dropout(dropout_rate)
+            nn.Dropout(dropout_rate * 0.5)
         )
         
-        # Combine multi-scale features
+        # Feature fusion and additional processing
         self.conv_fusion = nn.Sequential(
-            nn.Conv1d(192, 256, kernel_size=3, padding=1),  # 64*3 = 192
+            nn.Conv1d(192, 256, kernel_size=3, padding=1),  # 64*3 = 192 input channels
             nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.MaxPool1d(2),
             nn.Dropout(dropout_rate)
         )
         
-        # Additional CNN layers for deeper feature extraction
-        self.conv2 = nn.Sequential(
-            nn.Conv1d(256, 512, kernel_size=3, padding=1),
-            nn.BatchNorm1d(512),
-            nn.ReLU(),
-            nn.Dropout(dropout_rate)
+        # Residual blocks for deep feature extraction
+        self.residual_block1 = ResidualBlock(256, 256, dropout=dropout_rate)
+        self.residual_block2 = ResidualBlock(256, 512, dropout=dropout_rate)
+        
+        # Separable convolution for efficiency
+        self.separable_conv = SeparableConv1d(512, 256, kernel_size=3, padding=1)
+        
+        # Bidirectional LSTM layers (captures temporal dependencies)
+        self.lstm1 = nn.LSTM(
+            256, 128, batch_first=True, bidirectional=True, 
+            dropout=dropout_rate if dropout_rate > 0 else 0, num_layers=1
         )
+        self.ln_lstm1 = nn.LayerNorm(256)  # 128*2 = 256 for bidirectional
         
-        # Bidirectional LSTM for temporal modeling
-        self.lstm1 = nn.LSTM(512, 128, batch_first=True, bidirectional=True, dropout=dropout_rate)
-        self.lstm2 = nn.LSTM(256, 64, batch_first=True, bidirectional=True, dropout=dropout_rate)
+        self.lstm2 = nn.LSTM(
+            256, 64, batch_first=True, bidirectional=True,
+            dropout=dropout_rate if dropout_rate > 0 else 0, num_layers=1
+        )
+        self.ln_lstm2 = nn.LayerNorm(128)  # 64*2 = 128 for bidirectional
         
-        # Layer normalization for LSTM outputs
-        self.ln_lstm1 = nn.LayerNorm(256)  # 128*2 for bidirectional
-        self.ln_lstm2 = nn.LayerNorm(128)  # 64*2 for bidirectional
-        
-        # Multi-Head Attention
+        # Multi-Head Attention mechanism
         self.attention = MultiHeadAttention(d_model=128, num_heads=4, dropout=dropout_rate)
         
-        # Global pooling
+        # Global pooling strategies
         self.global_avg_pool = nn.AdaptiveAvgPool1d(1)
         self.global_max_pool = nn.AdaptiveMaxPool1d(1)
         
-        # Classification head with progressive dropout
+        # Advanced classification head with progressive dropout
         self.classifier = nn.Sequential(
+            # First dense block
             nn.Linear(256, 512),  # 128*2 for avg+max pooling
             nn.BatchNorm1d(512),
             nn.ReLU(),
             nn.Dropout(0.5),
             
+            # Second dense block
             nn.Linear(512, 256),
             nn.BatchNorm1d(256),
             nn.ReLU(),
             nn.Dropout(0.4),
             
+            # Third dense block
             nn.Linear(256, 128),
             nn.ReLU(),
             nn.Dropout(0.3),
             
+            # Output layer
             nn.Linear(128, n_classes)
         )
         
@@ -185,9 +276,16 @@ class P300_CNN_LSTM_Attention(nn.Module):
         # Concatenate multi-scale features
         multi_scale = torch.cat([conv1_large, conv1_medium, conv1_small], dim=1)
         
-        # Feature fusion and additional CNN
+        # Feature fusion and additional CNN processing
         conv_features = self.conv_fusion(multi_scale)
-        conv_features = self.conv2(conv_features)
+        
+        # Apply residual blocks
+        conv_features = self.residual_block1(conv_features)
+        conv_features = self.residual_block2(conv_features)
+        
+        # Apply separable convolution
+        conv_features = self.separable_conv(conv_features)
+        conv_features = F.relu(conv_features)
         
         # Prepare for LSTM (batch_size, seq_len, features)
         lstm_input = conv_features.transpose(1, 2)
@@ -205,7 +303,7 @@ class P300_CNN_LSTM_Attention(nn.Module):
         # Back to CNN format for global pooling
         attention_out = attention_out.transpose(1, 2)
         
-        # Global pooling
+        # Global pooling with multiple strategies
         avg_pooled = self.global_avg_pool(attention_out).squeeze(-1)
         max_pooled = self.global_max_pool(attention_out).squeeze(-1)
         
@@ -221,7 +319,7 @@ class P300_CNN_LSTM_Attention(nn.Module):
 class P300_EEGNet(nn.Module):
     """
     EEGNet architecture adapted for P300 classification
-    Compact and efficient model for P300 detection
+    Compact and efficient model based on the original EEGNet paper
     """
     
     def __init__(self, n_channels: int = 14, n_classes: int = 6, 
@@ -232,13 +330,13 @@ class P300_EEGNet(nn.Module):
         self.n_classes = n_classes
         self.sampling_rate = sampling_rate
         
-        # Temporal convolution
+        # Block 1: Temporal convolution
         self.temporal_conv = nn.Sequential(
             nn.Conv2d(1, 16, (1, 64), padding=(0, 32), bias=False),
             nn.BatchNorm2d(16)
         )
         
-        # Spatial convolution (depthwise)
+        # Block 2: Spatial convolution (depthwise)
         self.spatial_conv = nn.Sequential(
             nn.Conv2d(16, 32, (n_channels, 1), groups=16, bias=False),
             nn.BatchNorm2d(32),
@@ -247,7 +345,7 @@ class P300_EEGNet(nn.Module):
             nn.Dropout(dropout_rate)
         )
         
-        # Separable convolution
+        # Block 3: Separable convolution
         self.separable_conv = nn.Sequential(
             nn.Conv2d(32, 32, (1, 16), padding=(0, 8), groups=32, bias=False),
             nn.Conv2d(32, 64, 1, bias=False),
@@ -292,12 +390,83 @@ class P300_EEGNet(nn.Module):
         return logits
 
 
+class P300_DeepConvNet(nn.Module):
+    """
+    Deep Convolutional Network for P300 classification
+    Alternative architecture for comparison
+    """
+    
+    def __init__(self, n_channels: int = 14, n_classes: int = 6, 
+                 sampling_rate: int = 128, dropout_rate: float = 0.3):
+        super().__init__()
+        
+        self.n_channels = n_channels
+        self.n_classes = n_classes
+        
+        # Block 1
+        self.block1 = nn.Sequential(
+            nn.Conv2d(1, 25, (1, 10), padding=(0, 4)),
+            nn.Conv2d(25, 25, (n_channels, 1)),
+            nn.BatchNorm2d(25),
+            nn.ELU(),
+            nn.MaxPool2d((1, 3)),
+            nn.Dropout(dropout_rate)
+        )
+        
+        # Block 2
+        self.block2 = nn.Sequential(
+            nn.Conv2d(25, 50, (1, 10), padding=(0, 4)),
+            nn.BatchNorm2d(50),
+            nn.ELU(),
+            nn.MaxPool2d((1, 3)),
+            nn.Dropout(dropout_rate)
+        )
+        
+        # Block 3
+        self.block3 = nn.Sequential(
+            nn.Conv2d(50, 100, (1, 10), padding=(0, 4)),
+            nn.BatchNorm2d(100),
+            nn.ELU(),
+            nn.MaxPool2d((1, 3)),
+            nn.Dropout(dropout_rate)
+        )
+        
+        # Block 4
+        self.block4 = nn.Sequential(
+            nn.Conv2d(100, 200, (1, 10), padding=(0, 4)),
+            nn.BatchNorm2d(200),
+            nn.ELU(),
+            nn.MaxPool2d((1, 3)),
+            nn.Dropout(dropout_rate)
+        )
+        
+        # Classification
+        self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),
+            nn.Linear(200, n_classes)
+        )
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Add channel dimension
+        x = x.unsqueeze(1)
+        
+        # Apply blocks sequentially
+        x = self.block1(x)
+        x = self.block2(x)
+        x = self.block3(x)
+        x = self.block4(x)
+        
+        # Classification
+        return self.classifier(x)
+
+
 def create_p300_model(model_type: str = 'cnn_lstm_attention', **kwargs) -> nn.Module:
     """
     Factory function to create P300 models
     
     Args:
-        model_type: Type of model ('cnn_lstm_attention', 'eegnet')
+        model_type: Type of model ('cnn_lstm_attention', 'eegnet', 'deepconvnet')
         **kwargs: Model parameters
         
     Returns:
@@ -307,13 +476,15 @@ def create_p300_model(model_type: str = 'cnn_lstm_attention', **kwargs) -> nn.Mo
         return P300_CNN_LSTM_Attention(**kwargs)
     elif model_type == 'eegnet':
         return P300_EEGNet(**kwargs)
+    elif model_type == 'deepconvnet':
+        return P300_DeepConvNet(**kwargs)
     else:
-        raise ValueError(f"Unknown model type: {model_type}")
+        raise ValueError(f"Unknown model type: {model_type}. Available: 'cnn_lstm_attention', 'eegnet', 'deepconvnet'")
 
 
-# Model configurations for different scenarios
+# Model configurations inspired by TensorFlow implementations
 P300_MODEL_CONFIGS = {
-    'default': {
+    'ultimate': {
         'model_type': 'cnn_lstm_attention',
         'n_channels': 14,
         'n_classes': 6,  # silence, green, purple, yellow, red, blue
@@ -327,6 +498,13 @@ P300_MODEL_CONFIGS = {
         'dropout_rate': 0.25,
         'sampling_rate': 128
     },
+    'deep': {
+        'model_type': 'deepconvnet',
+        'n_channels': 14,
+        'n_classes': 6,
+        'dropout_rate': 0.3,
+        'sampling_rate': 128
+    },
     'high_performance': {
         'model_type': 'cnn_lstm_attention',
         'n_channels': 14,
@@ -335,3 +513,80 @@ P300_MODEL_CONFIGS = {
         'sampling_rate': 128
     }
 }
+
+
+def get_model_info(model: nn.Module) -> dict:
+    """
+    Get comprehensive information about a P300 model
+    
+    Args:
+        model: PyTorch model
+        
+    Returns:
+        Dictionary with model information
+    """
+    total_params = sum(p.numel() for p in model.parameters())
+    trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    
+    model_info = {
+        'model_class': model.__class__.__name__,
+        'total_parameters': total_params,
+        'trainable_parameters': trainable_params,
+        'model_size_mb': total_params * 4 / 1024 / 1024,  # Assuming float32
+    }
+    
+    # Add model-specific info
+    if hasattr(model, 'n_channels'):
+        model_info['n_channels'] = model.n_channels
+    if hasattr(model, 'n_classes'):
+        model_info['n_classes'] = model.n_classes
+    if hasattr(model, 'sampling_rate'):
+        model_info['sampling_rate'] = model.sampling_rate
+    
+    return model_info
+
+
+def test_model_forward_pass(model: nn.Module, input_shape: tuple = (1, 14, 128)) -> bool:
+    """
+    Test if model can perform forward pass
+    
+    Args:
+        model: PyTorch model to test
+        input_shape: Input tensor shape
+        
+    Returns:
+        True if test passes, False otherwise
+    """
+    try:
+        model.eval()
+        with torch.no_grad():
+            test_input = torch.randn(input_shape)
+            output = model(test_input)
+            
+            # Check output shape
+            expected_classes = getattr(model, 'n_classes', 6)
+            if output.shape[-1] != expected_classes:
+                print(f"❌ Output shape mismatch: expected {expected_classes}, got {output.shape[-1]}")
+                return False
+            
+            print(f"✅ Model test passed: {input_shape} -> {output.shape}")
+            return True
+            
+    except Exception as e:
+        print(f"❌ Model test failed: {e}")
+        return False
+
+
+# Export all models and utilities
+__all__ = [
+    'P300_CNN_LSTM_Attention',
+    'P300_EEGNet', 
+    'P300_DeepConvNet',
+    'MultiHeadAttention',
+    'SeparableConv1d',
+    'ResidualBlock',
+    'create_p300_model',
+    'P300_MODEL_CONFIGS',
+    'get_model_info',
+    'test_model_forward_pass'
+]

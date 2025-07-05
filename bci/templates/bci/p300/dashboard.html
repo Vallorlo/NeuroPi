@@ -1,4 +1,6 @@
+<!-- bci/templates/bci/p300/dashboard.html -->
 {% extends 'bci/base.html' %}
+{% load bci_filters %}
 
 {% block title %}P300 Dashboard - BCI{% endblock %}
 
@@ -16,55 +18,137 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>
-                <i class="fas fa-eye me-2 text-info"></i>P300 Event-Related Potential
+                <i class="fas fa-eye me-2 text-info"></i>P300 Event-Related Potentials
             </h1>
+            <div class="btn-group" role="group">
+                <a href="{% url 'bci:session_upload' %}?approach=p300" class="btn btn-outline-info">
+                    <i class="fas fa-upload me-1"></i>Upload Visual Trial Data
+                </a>
+                <a href="{% url 'bci:training_config' %}?approach=p300" class="btn btn-info">
+                    <i class="fas fa-cogs me-1"></i>Train P300 Model
+                </a>
+            </div>
         </div>
     </div>
 </div>
 
-<div class="row">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-body text-center py-5">
-                <i class="fas fa-eye fa-5x text-info mb-4"></i>
-                <h2 class="text-muted mb-3">P300 Implementation Ready</h2>
-                <p class="text-muted mb-4">
-                    This section is ready for P300 event-related potential classification. 
-                    The modular architecture allows easy integration of P300-specific models and training procedures.
-                </p>
-                
-                <div class="row">
-                    <div class="col-md-6 mx-auto">
-                        <div class="card bg-light">
-                            <div class="card-body">
-                                <h5>P300 Capabilities</h5>
-                                <ul class="list-unstyled text-start">
-                                    <li><i class="fas fa-check text-success me-2"></i>Event-related potential detection</li>
-                                    <li><i class="fas fa-check text-success me-2"></i>Oddball paradigm support</li>
-                                    <li><i class="fas fa-check text-success me-2"></i>Temporal feature extraction</li>
-                                    <li><i class="fas fa-check text-success me-2"></i>Multi-channel ERP analysis</li>
-                                    <li><i class="fas fa-check text-success me-2"></i>Real-time P300 classification</li>
-                                </ul>
-                            </div>
-                        </div>
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Sessions</h5>
+                        <h2 class="mb-0">{{ sessions }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-database fa-2x opacity-75"></i>
                     </div>
                 </div>
-                
-                <div class="mt-4">
-                    <a href="{% url 'bci:session_upload' %}?approach=p300" class="btn btn-info me-2">
-                        <i class="fas fa-upload me-1"></i>Upload P300 Data
-                    </a>
-                    <a href="{% url 'bci:motor_imagery_dashboard' %}" class="btn btn-outline-primary">
-                        <i class="fas fa-brain me-1"></i>Try Motor Imagery
-                    </a>
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'bci:p300_sessions' %}" class="text-white text-decoration-none">
+                    <i class="fas fa-arrow-circle-right"></i> View All Sessions
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Models</h5>
+                        <h2 class="mb-0">{{ models }}</h2>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-brain fa-2x opacity-75"></i>
+                    </div>
                 </div>
+            </div>
+            <div class="card-footer">
+                <a href="{% url 'bci:p300_training' %}" class="text-white text-decoration-none">
+                    <i class="fas fa-arrow-circle-right"></i> View All Models
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Active Model</h5>
+                        <p class="mb-0">
+                            {% if active_model %}
+                                {{ active_model.name|truncatechars:15 }}
+                            {% else %}
+                                No active model
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="align-self-center">
+                        {% if active_model %}
+                            <i class="fas fa-check-circle fa-2x opacity-75"></i>
+                        {% else %}
+                            <i class="fas fa-times-circle fa-2x opacity-75"></i>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                {% if active_model %}
+                    <span class="text-white">
+                        <i class="fas fa-info-circle"></i> Accuracy: {{ active_model.validation_accuracy|floatformat:1 }}%
+                    </span>
+                {% else %}
+                    <span class="text-white">
+                        <i class="fas fa-exclamation-triangle"></i> Train a model first
+                    </span>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Prediction</h5>
+                        <p class="mb-0">
+                            {% if active_model %}
+                                Ready
+                            {% else %}
+                                Not Ready
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="align-self-center">
+                        <i class="fas fa-rocket fa-2x opacity-75"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="card-footer">
+                {% if active_model %}
+                    <a href="{% url 'bci:p300_prediction' %}" class="text-white text-decoration-none">
+                        <i class="fas fa-play-circle"></i> Start Prediction
+                    </a>
+                {% else %}
+                    <span class="text-white">
+                        <i class="fas fa-ban"></i> No model available
+                    </span>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
 
 <!-- P300 Information -->
-<div class="row mt-4">
+<div class="row">
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
@@ -73,16 +157,20 @@
                 </h5>
             </div>
             <div class="card-body">
-                <p>The P300 component is a positive deflection in the EEG signal that occurs approximately 300ms after a rare or significant stimulus. It's widely used in brain-computer interfaces for:</p>
+                <p class="lead">
+                    The P300 component is a positive deflection in the EEG signal that occurs approximately 300ms after a rare or significant stimulus.
+                    It's widely used in brain-computer interfaces for word detection and speller systems.
+                </p>
                 
                 <div class="row">
                     <div class="col-md-6">
                         <h6><i class="fas fa-chart-line text-info me-2"></i>Applications</h6>
                         <ul class="list-unstyled">
-                            <li><span class="badge bg-info me-2">•</span>Speller systems</li>
-                            <li><span class="badge bg-info me-2">•</span>Menu navigation</li>
+                            <li><span class="badge bg-info me-2">•</span>Word detection systems</li>
+                            <li><span class="badge bg-info me-2">•</span>Visual speller interfaces</li>
                             <li><span class="badge bg-info me-2">•</span>Yes/No communication</li>
                             <li><span class="badge bg-info me-2">•</span>Attention monitoring</li>
+                            <li><span class="badge bg-info me-2">•</span>Target selection</li>
                         </ul>
                     </div>
                     <div class="col-md-6">
@@ -92,39 +180,129 @@
                             <li><strong>Amplitude:</strong> 5-20 μV</li>
                             <li><strong>Location:</strong> Parietal electrodes (Pz, P3, P4)</li>
                             <li><strong>Paradigm:</strong> Oddball task</li>
+                            <li><strong>Classes:</strong> {{ target_words|length }} words + silence</li>
                         </ul>
+                    </div>
+                </div>
+                
+                <div class="mt-3">
+                    <h6><i class="fas fa-palette text-warning me-2"></i>Target Words</h6>
+                    <div class="d-flex flex-wrap gap-2">
+                        {% for word in target_words %}
+                            <span class="badge bg-{{ forloop.counter|add:1|mod:5|yesno:"primary,success,danger,warning,info" }} fs-6">
+                                {{ word|title }}
+                            </span>
+                        {% endfor %}
                     </div>
                 </div>
             </div>
         </div>
+        
+        <!-- Recent Sessions -->
+        {% if recent_sessions %}
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-history me-2"></i>Recent Sessions
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Name</th>
+                                <th>Samples</th>
+                                <th>Uploaded</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for session in recent_sessions %}
+                            <tr>
+                                <td>
+                                    <strong>{{ session.name }}</strong>
+                                    {% if session.description %}
+                                        <br><small class="text-muted">{{ session.description|truncatechars:50 }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ session.total_samples|default:"--" }}</td>
+                                <td>
+                                    <small>{{ session.created_at|timesince }} ago</small>
+                                </td>
+                                <td>
+                                    <a href="{% url 'bci:session_detail' session.pk %}" class="btn btn-sm btn-outline-primary">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
     
     <div class="col-md-4">
         <div class="card">
             <div class="card-header">
                 <h5 class="card-title mb-0">
-                    <i class="fas fa-chart-area me-2"></i>Current Status
+                    <i class="fas fa-chart-area me-2"></i>P300 Features
                 </h5>
             </div>
             <div class="card-body">
-                <div class="text-center">
-                    <h3 class="text-info">{{ sessions }}</h3>
-                    <p class="text-muted mb-3">P300 Sessions</p>
-                    
-                    <h3 class="text-success">{{ models }}</h3>
-                    <p class="text-muted mb-3">Trained Models</p>
-                    
+                <ul class="list-unstyled">
+                    {% for feature in p300_features %}
+                    <li class="mb-2">
+                        <i class="fas fa-check text-success me-2"></i>{{ feature }}
+                    </li>
+                    {% endfor %}
+                </ul>
+                
+                {% if active_model %}
+                <div class="alert alert-success mt-3">
+                    <i class="fas fa-check-circle me-2"></i>
+                    <strong>Ready for prediction!</strong><br>
+                    Model: {{ active_model.name }}<br>
+                    Accuracy: {{ active_model.validation_accuracy|floatformat:1 }}%
+                </div>
+                {% else %}
+                <div class="alert alert-info mt-3">
+                    <i class="fas fa-info-circle me-2"></i>
+                    <strong>Getting Started:</strong><br>
+                    1. Upload visual trial data<br>
+                    2. Train a P300 model<br>
+                    3. Start prediction session
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Quick Actions -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-bolt me-2"></i>Quick Actions
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'bci:session_upload' %}?approach=p300" class="btn btn-outline-info">
+                        <i class="fas fa-upload me-2"></i>Upload Data
+                    </a>
+                    <a href="{% url 'bci:training_config' %}?approach=p300" class="btn btn-outline-success">
+                        <i class="fas fa-cogs me-2"></i>Train Model
+                    </a>
                     {% if active_model %}
-                    <div class="alert alert-success">
-                        <i class="fas fa-check-circle me-2"></i>
-                        Active Model: {{ active_model.name }}
-                    </div>
-                    {% else %}
-                    <div class="alert alert-info">
-                        <i class="fas fa-info-circle me-2"></i>
-                        No active P300 model
-                    </div>
+                    <a href="{% url 'bci:p300_prediction' %}" class="btn btn-outline-primary">
+                        <i class="fas fa-play me-2"></i>Start Prediction
+                    </a>
                     {% endif %}
+                    <a href="{% url 'bci:motor_imagery_dashboard' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-brain me-2"></i>Motor Imagery
+                    </a>
                 </div>
             </div>
         </div>

@@ -7,102 +7,266 @@ import numpy as np
 from typing import Dict, Any, List
 import os
 
+from django.core.exceptions import ValidationError
 
-def process_session_file(file_path: str) -> Dict[str, Any]:
-    """
-    Process a session CSV file and extract metadata
-    
-    Args:
-        file_path: Path to the CSV file
-        
-    Returns:
-        Dictionary containing file information
-    """
+
+def validate_session_file(file_path, approach='motor_imagery'):
+    """Validate uploaded session file"""
     try:
+        # Read CSV file
         df = pd.read_csv(file_path)
         
-        # Expected channel names for EPOC+
-        expected_channels = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 
-                           'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+        # Clean column names
+        df.columns = df.columns.str.strip()
         
-        # Check for required columns
-        missing_channels = [ch for ch in expected_channels if ch not in df.columns]
+        # Required EEG channels
+        required_channels = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+        
+        # Check if all required channels exist
+        missing_channels = [ch for ch in required_channels if ch not in df.columns]
         if missing_channels:
-            raise ValueError(f"Missing EEG channels: {missing_channels}")
+            raise ValidationError(f"Missing required EEG channels: {missing_channels}")
         
-        # Extract classes if motor_imagery_class column exists
-        classes = []
-        class_distribution = {}
-        if 'motor_imagery_class' in df.columns:
-            unique_classes = df['motor_imagery_class'].dropna().unique()
-            classes = [str(cls) for cls in unique_classes]
-            
-            # Get class distribution
-            class_counts = df['motor_imagery_class'].value_counts()
-            class_distribution = class_counts.to_dict()
+        # Check for timestamp column
+        timestamp_cols = [col for col in df.columns if 'timestamp' in col.lower()]
+        if not timestamp_cols:
+            raise ValidationError("No timestamp column found")
         
-        # Check data quality
-        data_quality = {
-            'missing_values': df[expected_channels].isnull().sum().to_dict(),
-            'data_range': {
-                'min': df[expected_channels].min().to_dict(),
-                'max': df[expected_channels].max().to_dict(),
-                'mean': df[expected_channels].mean().to_dict(),
-                'std': df[expected_channels].std().to_dict()
-            }
-        }
+        # Approach-specific validation
+        if approach == 'motor_imagery':
+            # Check for motor imagery class column
+            class_cols = [col for col in df.columns if 'motor_imagery' in col.lower() or 'class' in col.lower()]
+            if not class_cols:
+                raise ValidationError("No motor imagery class column found")
         
-        return {
-            'channels': expected_channels,
-            'classes': classes,
-            'class_distribution': class_distribution,
-            'total_samples': len(df),
-            'columns': list(df.columns),
-            'shape': df.shape,
-            'has_labels': 'motor_imagery_class' in df.columns,
-            'data_quality': data_quality,
-            'sampling_rate': 128,  # Default for EPOC+
-            'duration_seconds': len(df) / 128  # Assuming 128 Hz
-        }
-        
-    except Exception as e:
-        raise ValueError(f"Error processing session file: {str(e)}")
-
-
-def validate_session_file(file_path: str) -> bool:
-    """
-    Validate that a session file has the correct format
-    
-    Args:
-        file_path: Path to the CSV file
-        
-    Returns:
-        True if valid, False otherwise
-    """
-    try:
-        info = process_session_file(file_path)
-        
-        # Basic validation checks
-        if len(info['channels']) != 14:
-            return False
-        
-        if info['total_samples'] == 0:
-            return False
-        
-        # Check for reasonable data ranges (basic sanity check)
-        for channel in info['channels']:
-            min_val = info['data_quality']['data_range']['min'][channel]
-            max_val = info['data_quality']['data_range']['max'][channel]
-            
-            # Very basic range check - EEG data should be reasonable
-            if abs(min_val) > 100000 or abs(max_val) > 100000:
-                return False
+        elif approach == 'p300':
+            # Check for word column
+            word_cols = [col for col in df.columns if 'word' in col.lower()]
+            if not word_cols:
+                raise ValidationError("No word column found for P300 data")
         
         return True
         
-    except Exception:
-        return False
+    except Exception as e:
+        raise ValidationError(f"File validation failed: {str(e)}")
 
+
+def process_session_file(session_instance):
+    """Process uploaded session file and extract metadata"""
+    try:
+        file_path = session_instance.session_file.path
+        
+        # Read CSV file
+        df = pd.read_csv(file_path)
+        
+        # Clean column names - IMPORTANT!
+        df.columns = df.columns.str.strip()
+        
+        print(f"📊 Processing {session_instance.approach} file: {file_path}")
+        print(f"📊 Columns found: {list(df.columns)}")
+        print(f"📊 Data shape: {df.shape}")
+        
+        # Extract basic info
+        total_samples = len(df)
+        
+        # Detect sampling rate from timestamp
+        timestamp_col = None
+        for col in df.columns:
+            if 'timestamp' in col.lower():
+                timestamp_col = col
+                break
+        
+        sampling_rate = 128  # Default
+        if timestamp_col and len(df) > 1:
+            try:
+                time_diff = df[timestamp_col].iloc[1] - df[timestamp_col].iloc[0]
+                if time_diff > 0:
+                    sampling_rate = int(1.0 / time_diff)
+            except:
+                sampling_rate = 128
+        
+        # EEG channels
+        eeg_channels = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+        available_channels = [ch for ch in eeg_channels if ch in df.columns]
+        
+        # Extract classes based on approach
+        classes = []
+        
+        if session_instance.approach == 'motor_imagery':
+            # Look for motor imagery classes
+            class_columns = [col for col in df.columns if 'motor_imagery' in col.lower() or 
+                           ('class' in col.lower() and 'motor' in col.lower())]
+            
+            if class_columns:
+                class_col = class_columns[0]
+                unique_classes = df[class_col].dropna().unique()
+                classes = [str(cls) for cls in unique_classes if str(cls) not in ['nan', 'NaN', '']]
+                print(f"🎯 Motor Imagery classes found: {classes}")
+        
+        elif session_instance.approach == 'p300':
+            # Look for word column - FIXED LOGIC
+            word_columns = [col for col in df.columns if 'word' in col.lower()]
+            
+            if word_columns:
+                word_col = word_columns[0]
+                print(f"🔍 Found word column: '{word_col}'")
+                
+                # Get unique words, excluding NaN and empty values
+                unique_words = df[word_col].dropna().unique()
+                classes = [str(word).strip() for word in unique_words if str(word).strip() not in ['nan', 'NaN', '', 'None']]
+                
+                print(f"🎯 P300 words found: {classes}")
+                print(f"📊 Word distribution:")
+                word_counts = df[word_col].value_counts()
+                for word, count in word_counts.items():
+                    print(f"  {word}: {count} samples")
+            else:
+                print("⚠️ No word column found in P300 data")
+                # Check all columns for potential word data
+                print("📋 Available columns:")
+                for col in df.columns:
+                    print(f"  - {col}")
+        
+        # Update session instance
+        session_instance.total_samples = total_samples
+        session_instance.sampling_rate = sampling_rate
+        session_instance.channels = available_channels
+        session_instance.classes = classes
+        session_instance.save()
+        
+        print(f"✅ Session processed successfully:")
+        print(f"  - Total samples: {total_samples}")
+        print(f"  - Sampling rate: {sampling_rate} Hz")
+        print(f"  - Channels: {len(available_channels)}")
+        print(f"  - Classes: {len(classes)} - {classes}")
+        
+        return {
+            'total_samples': total_samples,
+            'sampling_rate': sampling_rate,
+            'channels': available_channels,
+            'classes': classes,
+            'success': True
+        }
+        
+    except Exception as e:
+        print(f"❌ Error processing session file: {str(e)}")
+        
+        # Update session with error info
+        session_instance.total_samples = 0
+        session_instance.classes = []
+        session_instance.save()
+        
+        return {
+            'error': str(e),
+            'success': False
+        }
+
+
+def get_session_preview_data(session_instance, max_samples=1000):
+    """Get preview data for session visualization"""
+    try:
+        file_path = session_instance.session_file.path
+        df = pd.read_csv(file_path)
+        
+        # Clean column names
+        df.columns = df.columns.str.strip()
+        
+        # Limit samples for preview
+        if len(df) > max_samples:
+            df = df.head(max_samples)
+        
+        # Get EEG channels
+        eeg_channels = ['F3', 'FC5', 'AF3', 'F7', 'T7', 'P7', 'O1', 'O2', 'P8', 'T8', 'F8', 'AF4', 'FC6', 'F4']
+        available_channels = [ch for ch in eeg_channels if ch in df.columns]
+        
+        # Get timestamp
+        timestamp_col = None
+        for col in df.columns:
+            if 'timestamp' in col.lower():
+                timestamp_col = col
+                break
+        
+        preview_data = {
+            'timestamps': df[timestamp_col].tolist() if timestamp_col else list(range(len(df))),
+            'channels': {},
+            'classes': [],
+            'total_samples': len(df)
+        }
+        
+        # Add channel data
+        for ch in available_channels:
+            preview_data['channels'][ch] = df[ch].tolist()
+        
+        # Add class information
+        if session_instance.approach == 'motor_imagery':
+            class_columns = [col for col in df.columns if 'motor_imagery' in col.lower() or 
+                           ('class' in col.lower() and 'motor' in col.lower())]
+            if class_columns:
+                preview_data['classes'] = df[class_columns[0]].tolist()
+        
+        elif session_instance.approach == 'p300':
+            word_columns = [col for col in df.columns if 'word' in col.lower()]
+            if word_columns:
+                preview_data['classes'] = df[word_columns[0]].tolist()
+        
+        return preview_data
+        
+    except Exception as e:
+        return {'error': str(e)}
+
+
+def analyze_p300_data(file_path):
+    """Special analysis function for P300 data"""
+    try:
+        df = pd.read_csv(file_path)
+        df.columns = df.columns.str.strip()
+        
+        # Find word column
+        word_col = None
+        for col in df.columns:
+            if 'word' in col.lower():
+                word_col = col
+                break
+        
+        if not word_col:
+            return {'error': 'No word column found'}
+        
+        # Analyze word distribution
+        word_counts = df[word_col].value_counts()
+        
+        # Calculate session duration
+        timestamp_col = None
+        for col in df.columns:
+            if 'timestamp' in col.lower():
+                timestamp_col = col
+                break
+        
+        duration = 0
+        if timestamp_col:
+            duration = df[timestamp_col].max() - df[timestamp_col].min()
+        
+        # Analyze transitions (word changes)
+        transitions = []
+        prev_word = None
+        for i, word in enumerate(df[word_col]):
+            if word != prev_word:
+                transitions.append({
+                    'index': i,
+                    'timestamp': df[timestamp_col].iloc[i] if timestamp_col else i,
+                    'word': word
+                })
+            prev_word = word
+        
+        return {
+            'word_counts': dict(word_counts),
+            'total_transitions': len(transitions),
+            'duration': duration,
+            'transitions': transitions[:20],  # First 20 transitions
+            'unique_words': list(word_counts.keys())
+        }
+        
+    except Exception as e:
+        return {'error': str(e)}
 
 def export_session_data(session_data, export_format='csv', include_metadata=True):
     """

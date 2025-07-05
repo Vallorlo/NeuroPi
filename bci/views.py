@@ -1,3 +1,9 @@
+# bci/views.py - FIXED IMPORTS
+"""
+BCI Views with correct imports
+Add these imports to the top of your bci/views.py file
+"""
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.mixins import LoginRequiredMixin
@@ -5,6 +11,7 @@ from django.views.generic import (
     TemplateView, ListView, DetailView, CreateView, 
     UpdateView, DeleteView, FormView
 )
+from django.views import View  # ADD THIS IMPORT
 from django.http import JsonResponse, HttpResponse, Http404
 from django.contrib import messages
 from django.urls import reverse_lazy, reverse
@@ -12,6 +19,8 @@ from django.core.paginator import Paginator
 from django.db.models import Q, Count
 from django.utils import timezone
 from django.conf import settings
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 import json
 import os
 import pandas as pd
@@ -31,10 +40,13 @@ from .utils.file_handlers import process_session_file, validate_session_file
 from .ml_models.motor_imagery.trainer import MotorImageryTrainer
 from .ml_models.motor_imagery.predictor import MotorImageryPredictor
 
-# Global prediction manager to keep track of running predictions
+# P300 imports
+from .ml_models.p300.trainer import P300Trainer
+from .ml_models.p300.predictor import P300Predictor
+
+# Global prediction managers
 prediction_manager = {}
-
-
+p300_prediction_manager = {}
 class DashboardView(LoginRequiredMixin, TemplateView):
     """Main BCI dashboard"""
     template_name = 'bci/dashboard.html'
@@ -269,54 +281,169 @@ class TrainingListView(LoginRequiredMixin, ListView):
         ).values_list('status', flat=True).distinct()
         return context
 
-
-class TrainingConfigView(LoginRequiredMixin, FormView):
-    """Configure and start model training"""
+class TrainingConfigView(LoginRequiredMixin, CreateView):
+    """Configure and create a new training model - AUTO-START VERSION"""
+    model = TrainedModel
     form_class = TrainingConfigForm
     template_name = 'bci/training_config.html'
-    
+    def get_success_url(self):
+        """Dynamic success URL based on approach"""
+        approach = self.object.approach
+        
+        if approach == 'p300':
+            return reverse_lazy('bci:p300_training')
+        elif approach == 'motor_imagery':
+            return reverse_lazy('bci:motor_imagery_training')
+        else:
+            return reverse_lazy('bci:training_list')
+
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
         kwargs['user'] = self.request.user
+        
+        # Get approach from URL parameter or form data
+        if self.request.method == 'POST':
+            approach = self.request.POST.get('approach', 'motor_imagery')
+        else:
+            approach = self.request.GET.get('approach', 'motor_imagery')
+        
+        kwargs['approach'] = approach
+        
+        print(f"🔍 get_form_kwargs: method={self.request.method}, approach={approach}")
+        
         return kwargs
-    
+
     def form_valid(self, form):
-        # Create model instance
-        model = TrainedModel.objects.create(
-            user=self.request.user,
-            name=form.cleaned_data['name'],
-            description=form.cleaned_data['description'],
-            approach=form.cleaned_data['approach'],
-            n_classes=0,  # Will be updated during training
-            class_labels=[],  # Will be updated during training
-            channels=[],  # Will be updated during training
-            window_duration=form.cleaned_data['window_duration'],
-            model_config={
-                'epochs': form.cleaned_data['epochs'],
-                'batch_size': form.cleaned_data['batch_size'],
-                'learning_rate': form.cleaned_data['learning_rate'],
-                'dropout_rate': form.cleaned_data['dropout_rate'],
-                'overlap': form.cleaned_data['overlap'],
-                'augmentation_factor': form.cleaned_data['augmentation_factor'],
-            }
-        )
+        print(f"✅ Form is VALID!")
+        print(f"  Approach: {form.cleaned_data.get('approach')}")
+        print(f"  Name: {form.cleaned_data.get('name')}")
+        print(f"  Training sessions: {form.cleaned_data.get('training_sessions')}")
         
-        # Add selected sessions
-        model.training_sessions.set(form.cleaned_data['sessions'])
+        # Set the user BEFORE calling form.save()
+        form.instance.user = self.request.user
         
-        # Store training config in session for the training process
-        self.request.session['training_config'] = {
-            'model_id': str(model.id),
-            'approach': form.cleaned_data['approach'],
-        }
+        # Get approach from form data
+        approach = form.cleaned_data.get('approach', 'motor_imagery')
+        form.instance.approach = approach
+        
+        print(f"✅ Set user: {form.instance.user}")
+        print(f"✅ Set approach: {form.instance.approach}")
+        
+        # Call the parent form_valid which will save the form
+        response = super().form_valid(form)
+        
+        # ✨ AUTO-START TRAINING HERE ✨
+        self.start_training_automatically(form.instance, approach)
         
         messages.success(
-            self.request,
-            f"Training configuration saved. Model '{model.name}' created."
+            self.request, 
+            f'Model "{form.instance.name}" created and training started! '
+            f'Check the training status on the {approach.replace("_", " ").title()} training page.'
         )
         
-        return redirect('bci:start_training')
+        return response
 
+    def start_training_automatically(self, model_instance, approach):
+        """Automatically start training after model creation"""
+        try:
+            print(f"🚀 Auto-starting {approach} training for model: {model_instance.name}")
+            
+            if approach == 'p300':
+                trainer = P300Trainer(model_instance)
+            elif approach == 'motor_imagery':
+                trainer = MotorImageryTrainer(model_instance)
+            else:
+                print(f"❌ Unknown approach: {approach}")
+                return
+            
+            # Start training in background thread
+            def train_model():
+                try:
+                    print(f"🔥 Starting {approach} training in background...")
+                    result = trainer.train()
+                    print(f"✅ Training completed: {result}")
+                except Exception as e:
+                    print(f"❌ Training failed: {e}")
+                    # Update model status to failed
+                    model_instance.status = 'failed'
+                    model_instance.save()
+            
+            training_thread = threading.Thread(target=train_model)
+            training_thread.daemon = True
+            training_thread.start()
+            
+            print(f"✅ Training thread started for model: {model_instance.name}")
+            
+        except Exception as e:
+            print(f"❌ Error starting training: {e}")
+            messages.error(
+                self.request,
+                f'Model created but failed to start training: {str(e)}'
+            )
+
+    def form_invalid(self, form):
+        print(f"❌ Form is INVALID!")
+        print(f"  Form errors: {form.errors}")
+        print(f"  Non-field errors: {form.non_field_errors()}")
+        
+        messages.error(
+            self.request, 
+            'Form validation failed. Please check the errors below.'
+        )
+        
+        return super().form_invalid(form)
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        
+        # Get approach from URL parameter
+        approach = self.request.GET.get('approach', 'motor_imagery')
+        
+        # Get ALL sessions for both approaches (for dynamic switching)
+        motor_imagery_sessions = SessionData.objects.filter(
+            user=self.request.user, 
+            approach='motor_imagery'
+        ).values('id', 'name', 'total_samples', 'classes', 'created_at')
+        
+        p300_sessions = SessionData.objects.filter(
+            user=self.request.user, 
+            approach='p300'
+        ).values('id', 'name', 'total_samples', 'classes', 'created_at')
+        
+        # Convert to JSON-serializable format
+        import json
+        sessions_data = {
+            'motor_imagery': [
+                {
+                    'id': str(session['id']),
+                    'name': session['name'],
+                    'total_samples': session['total_samples'],
+                    'classes': session['classes'],
+                    'created_at': session['created_at'].isoformat() if session['created_at'] else None
+                }
+                for session in motor_imagery_sessions
+            ],
+            'p300': [
+                {
+                    'id': str(session['id']),
+                    'name': session['name'],
+                    'total_samples': session['total_samples'],
+                    'classes': session['classes'],
+                    'created_at': session['created_at'].isoformat() if session['created_at'] else None
+                }
+                for session in p300_sessions
+            ]
+        }
+        
+        context.update({
+            'approach': approach,
+            'approach_name': 'P300' if approach == 'p300' else 'Motor Imagery',
+            'sessions_data': json.dumps(sessions_data),
+            'motor_imagery_count': len(sessions_data['motor_imagery']),
+            'p300_count': len(sessions_data['p300'])
+        })
+        
+        return context
 
 class TrainingDetailView(LoginRequiredMixin, DetailView):
     """View training details"""
@@ -676,7 +803,6 @@ class MotorImageryPredictionView(PredictionDashboardView):
         return context
 
 
-# P300 approach views (placeholders for future implementation)
 class P300DashboardView(LoginRequiredMixin, TemplateView):
     template_name = 'bci/p300/dashboard.html'
     
@@ -684,20 +810,28 @@ class P300DashboardView(LoginRequiredMixin, TemplateView):
         context = super().get_context_data(**kwargs)
         user = self.request.user
         
+        # Get P300-specific statistics
+        p300_sessions = SessionData.objects.filter(user=user, approach='p300')
+        p300_models = TrainedModel.objects.filter(user=user, approach='p300')
+        active_p300_model = p300_models.filter(is_active=True).first()
+        
         context.update({
-            'sessions': SessionData.objects.filter(
-                user=user, approach='p300'
-            ).count(),
-            'models': TrainedModel.objects.filter(
-                user=user, approach='p300'
-            ).count(),
-            'active_model': TrainedModel.objects.filter(
-                user=user, approach='p300', is_active=True
-            ).first(),
+            'sessions': p300_sessions.count(),
+            'models': p300_models.count(),
+            'active_model': active_p300_model,
+            'recent_sessions': p300_sessions[:5],
+            'recent_models': p300_models[:5],
+            'target_words': ['green', 'purple', 'yellow', 'red', 'blue'],
+            'p300_features': [
+                'Event-related potential detection',
+                'Visual word classification', 
+                'Real-time P300 analysis',
+                'Single-trial prediction',
+                'Advanced CNN+LSTM+Attention'
+            ]
         })
         
         return context
-
 
 class P300SessionListView(SessionListView):
     template_name = 'bci/p300/sessions.html'
@@ -707,7 +841,12 @@ class P300SessionListView(SessionListView):
             user=self.request.user,
             approach='p300'
         ).order_by('-created_at')
-
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['approach'] = 'p300'
+        context['approach_name'] = 'P300'
+        return context
 
 class P300TrainingView(TrainingListView):
     template_name = 'bci/p300/training.html'
@@ -717,6 +856,27 @@ class P300TrainingView(TrainingListView):
             user=self.request.user,
             approach='p300'
         ).order_by('-created_at')
+    
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        context['approach'] = 'p300'
+        context['approach_name'] = 'P300'
+        
+        # P300 specific training options
+        context['model_options'] = [
+            {
+                'value': 'cnn_lstm_attention',
+                'name': 'CNN+LSTM+Multi-Head-Attention',
+                'description': 'Advanced architecture for high accuracy'
+            },
+            {
+                'value': 'eegnet',
+                'name': 'EEGNet',
+                'description': 'Lightweight and efficient model'
+            }
+        ]
+        
+        return context
 
 
 class P300PredictionView(PredictionDashboardView):
@@ -724,16 +884,31 @@ class P300PredictionView(PredictionDashboardView):
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['active_models'] = context['active_models'].filter(
-            approach='p300'
-        )
+        
+        # Filter for P300 models only
+        context['active_models'] = context['active_models'].filter(approach='p300')
+        
+        # P300 specific context
+        context.update({
+            'approach': 'p300',
+            'approach_name': 'P300',
+            'target_words': ['green', 'purple', 'yellow', 'red', 'blue'],
+            'prediction_modes': [
+                {
+                    'value': 'single_trial',
+                    'name': 'Single Trial',
+                    'description': 'Present all words once and predict the target'
+                },
+                {
+                    'value': 'continuous',
+                    'name': 'Continuous',
+                    'description': 'Continuous P300 monitoring'
+                }
+            ]
+        })
+        
         return context
 
-
-# API Views for AJAX
-from django.views import View
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_exempt
 
 
 class SessionListAPIView(LoginRequiredMixin, View):
@@ -825,8 +1000,6 @@ def system_status(request):
         'timestamp': timezone.now().isoformat(),
     })
 
-
-# Configuration Views
 class SystemConfigView(LoginRequiredMixin, UpdateView):
     """System configuration view"""
     model = SystemConfiguration
@@ -845,7 +1018,6 @@ class SystemConfigView(LoginRequiredMixin, UpdateView):
         return super().form_valid(form)
 
 
-# Utility Views
 @login_required
 def download_model(request, pk):
     """Download trained model file"""
@@ -876,3 +1048,212 @@ def download_session(request, pk):
     )
     response['Content-Disposition'] = f'attachment; filename="{session.name}.csv"'
     return response
+
+
+@login_required
+def start_p300_training(request):
+    """Start P300 model training"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            
+            # Get model instance
+            model_id = data.get('model_id')
+            model_instance = get_object_or_404(
+                TrainedModel, 
+                id=model_id, 
+                user=request.user,
+                approach='p300'
+            )
+            
+            # Start training in background thread
+            trainer = P300Trainer(model_instance)
+            
+            def train_model():
+                try:
+                    trainer.train()
+                except Exception as e:
+                    print(f"P300 training error: {e}")
+            
+            training_thread = threading.Thread(target=train_model)
+            training_thread.daemon = True
+            training_thread.start()
+            
+            return JsonResponse({
+                'status': 'success',
+                'message': 'P300 training started successfully'
+            })
+            
+        except Exception as e:
+            return JsonResponse({
+                'status': 'error',
+                'message': f'Failed to start P300 training: {str(e)}'
+            }, status=500)
+    
+    return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
+
+
+# P300 Prediction Functions - REAL IMPLEMENTATION ONLY
+@login_required
+def start_p300_prediction(request, session_pk):
+    """Start P300 prediction session with REAL EEG data"""
+    try:
+        prediction_session = get_object_or_404(
+            PredictionSession, 
+            pk=session_pk, 
+            user=request.user
+        )
+        
+        # Check if we have a P300 model
+        if not prediction_session.model or prediction_session.model.approach != 'p300':
+            return JsonResponse({
+                'status': 'error',
+                'message': 'No active P300 model found'
+            }, status=400)
+        
+        # Get prediction mode
+        prediction_mode = request.GET.get('mode', 'single_trial')
+        
+        # Create REAL predictor (no simulator option)
+        predictor = P300Predictor(prediction_session)
+        
+        # Store in global manager
+        p300_prediction_manager[str(session_pk)] = predictor
+        
+        # Start prediction with REAL EEG data
+        if prediction_mode == 'single_trial':
+            predictor.start_single_trial_prediction()
+        else:
+            predictor.start_data_collection()
+        
+        # Update session status
+        prediction_session.status = 'running'
+        prediction_session.save()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': f'P300 prediction started in {prediction_mode} mode with REAL EEG data',
+            'session_id': str(session_pk),
+            'prediction_mode': prediction_mode,
+            'real_eeg': True
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to start P300 prediction: {str(e)}'
+        }, status=500)
+
+
+@login_required
+def stop_p300_prediction(request, session_pk):
+    """Stop P300 prediction session"""
+    try:
+        prediction_session = get_object_or_404(
+            PredictionSession, 
+            pk=session_pk, 
+            user=request.user
+        )
+        
+        # Get predictor from manager
+        predictor = p300_prediction_manager.get(str(session_pk))
+        
+        if predictor:
+            # Stop prediction
+            predictor.stop_prediction()
+            
+            # Remove from manager
+            del p300_prediction_manager[str(session_pk)]
+        
+        # Update session status
+        prediction_session.status = 'stopped'
+        prediction_session.save()
+        
+        return JsonResponse({
+            'status': 'success',
+            'message': 'P300 prediction stopped'
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to stop P300 prediction: {str(e)}'
+        }, status=500)
+
+
+@login_required
+def p300_prediction_status(request, session_pk):
+    """Get P300 prediction status"""
+    try:
+        prediction_session = get_object_or_404(
+            PredictionSession, 
+            pk=session_pk, 
+            user=request.user
+        )
+        
+        # Get predictor from manager
+        predictor = p300_prediction_manager.get(str(session_pk))
+        
+        if predictor and hasattr(predictor, 'get_prediction_status'):
+            status_data = predictor.get_prediction_status()
+        else:
+            status_data = {
+                'is_running': False,
+                'trial_active': False,
+                'last_prediction': None,
+                'confidence': 0.0
+            }
+        
+        # Add session info
+        status_data.update({
+            'session_status': prediction_session.status,
+            'session_name': prediction_session.name,
+            'model_name': prediction_session.model.name if prediction_session.model else 'No model',
+            'real_eeg': True  # Always using real EEG
+        })
+        
+        return JsonResponse(status_data)
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to get prediction status: {str(e)}'
+        }, status=500)
+
+
+@login_required
+def p300_trial_results(request, session_pk):
+    """Get P300 trial results"""
+    try:
+        prediction_session = get_object_or_404(
+            PredictionSession, 
+            pk=session_pk, 
+            user=request.user
+        )
+        
+        # Get recent predictions
+        predictions = Prediction.objects.filter(
+            session=prediction_session
+        ).order_by('-timestamp')[:10]
+        
+        results = []
+        for pred in predictions:
+            results.append({
+                'id': str(pred.id),
+                'predicted_class': pred.predicted_class,
+                'confidence': pred.confidence,
+                'timestamp': pred.timestamp.isoformat(),
+                'trial_data': pred.prediction_data
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'results': results,
+            'total_predictions': predictions.count()
+        })
+        
+    except Exception as e:
+        return JsonResponse({
+            'status': 'error',
+            'message': f'Failed to get trial results: {str(e)}'
+        }, status=500)

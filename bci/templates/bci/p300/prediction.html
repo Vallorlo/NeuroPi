@@ -1,4 +1,6 @@
-{% extends 'bci/prediction_dashboard.html' %}
+<!-- bci/templates/bci/p300/prediction.html -->
+{% extends 'bci/base.html' %}
+{% load bci_filters %}
 
 {% block title %}P300 Prediction - BCI{% endblock %}
 
@@ -12,19 +14,100 @@
 </nav>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+.word-display {
+    font-size: 4rem;
+    font-weight: bold;
+    text-align: center;
+    padding: 2rem;
+    border-radius: 15px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+}
+
+.word-green { background: linear-gradient(135deg, #28a745, #20c997); color: white; }
+.word-purple { background: linear-gradient(135deg, #6f42c1, #e83e8c); color: white; }
+.word-yellow { background: linear-gradient(135deg, #ffc107, #fd7e14); color: black; }
+.word-red { background: linear-gradient(135deg, #dc3545, #e83e8c); color: white; }
+.word-blue { background: linear-gradient(135deg, #007bff, #6610f2); color: white; }
+.word-rest { background: linear-gradient(135deg, #6c757d, #495057); color: white; }
+
+.prediction-confidence {
+    height: 20px;
+    border-radius: 10px;
+    transition: width 0.5s ease;
+}
+
+.trial-progress {
+    height: 25px;
+    border-radius: 12px;
+}
+
+.eeg-status {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>
-                <i class="fas fa-eye me-2 text-info"></i>P300 Prediction
+                <i class="fas fa-rocket me-2 text-primary"></i>P300 Word Prediction
             </h1>
-            <a href="{% url 'bci:create_prediction_session' %}?approach=p300" class="btn btn-info">
-                <i class="fas fa-plus me-1"></i>New Prediction Session
-            </a>
+            <div class="btn-group">
+                <a href="{% url 'bci:create_prediction_session' %}?approach=p300" class="btn btn-primary">
+                    <i class="fas fa-plus me-1"></i>New Session
+                </a>
+                <a href="{% url 'bci:p300_training' %}" class="btn btn-outline-success">
+                    <i class="fas fa-cogs me-1"></i>Train Model
+                </a>
+            </div>
         </div>
     </div>
 </div>
 
-{{ block.super }}
-{% endblock %}
+<!-- Active Model Info -->
+<div class="row mb-4">
+    <div class="col-12">
+        {% if active_models %}
+            {% for model in active_models %}
+            <div class="alert alert-success">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <h5 class="mb-1">
+                            <i class="fas fa-check-circle me-2"></i>Active P300 Model: {{ model.name }}
+                        </h5>
+                        <p class="mb-0">
+                            Architecture: 
+                            {% if model.model_config.model_type == 'cnn_lstm_attention' %}
+                                CNN+LSTM+Multi-Head-Attention
+                            {% else %}
+                                {{ model.model_config.model_type|title }}
+                            {% endif %}
+                            | Accuracy: {{ model.validation_accuracy|floatformat:1 }}%
+                            | Classes: {{ model.n_classes }}
+                        </p>
+                    </div>
+                    <div class="col-md-4 text-end">
+                        <span class="badge bg-success fs-6">Ready for Prediction</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+            <div class="alert alert-warning">
+                <h5 class="mb-1">
+                    <i class="fas fa-exclamation-triangle me-2"></i>No Active P300 Model
+                </h5>
+                <p class="mb-2">You need an active P300 model to start prediction sessions.</p>
+                <a href="{% url 'bci:p300_training' %}" class="btn btn-outline-warning btn-sm">
+                    <i class="fas fa-cogs me-1"></i>Train P300 Model

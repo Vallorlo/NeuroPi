@@ -1,3 +1,9 @@
+# bci/urls.py - Updated with P300 endpoints
+"""
+Updated URL patterns to include P300 functionality
+Add these patterns to your existing bci/urls.py
+"""
+
 from django.urls import path, include
 from . import views
 
@@ -47,6 +53,13 @@ urlpatterns = [
         path('sessions/', views.P300SessionListView.as_view(), name='p300_sessions'),
         path('training/', views.P300TrainingView.as_view(), name='p300_training'),
         path('prediction/', views.P300PredictionView.as_view(), name='p300_prediction'),
+        
+        # P300 specific endpoints
+        path('training/start/', views.start_p300_training, name='start_p300_training'),
+        path('prediction/start/<uuid:session_pk>/', views.start_p300_prediction, name='start_p300_prediction'),
+        path('prediction/stop/<uuid:session_pk>/', views.stop_p300_prediction, name='stop_p300_prediction'),
+        path('prediction/status/<uuid:session_pk>/', views.p300_prediction_status, name='p300_prediction_status'),
+        path('prediction/results/<uuid:session_pk>/', views.p300_trial_results, name='p300_trial_results'),
     ])),
     
     # API endpoints for AJAX

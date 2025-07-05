@@ -1,3 +1,4 @@
+<!-- bci/templates/bci/training_config.html -->
 {% extends 'bci/base.html' %}
 {% load bci_filters %}
 
@@ -15,208 +16,471 @@
 
 {% block content %}
 <div class="row">
-    <div class="col-md-8 mx-auto">
-        <div class="card">
-            <div class="card-header">
-                <h4 class="card-title mb-0">
-                    <i class="fas fa-cogs me-2"></i>Configure Model Training
-                </h4>
-            </div>
-            <div class="card-body">
-                <form method="post">
-                    {% csrf_token %}
-                    
-                    <!-- Basic Information -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <h5>Basic Information</h5>
-                            <hr>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.name.id_for_label }}" class="form-label">Model Name</label>
-                                {{ form.name }}
-                                {% if form.name.errors %}
-                                    <div class="text-danger">{{ form.name.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.approach.id_for_label }}" class="form-label">Approach</label>
-                                {{ form.approach }}
-                                {% if form.approach.errors %}
-                                    <div class="text-danger">{{ form.approach.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-12">
-                            <div class="mb-3">
-                                <label for="{{ form.description.id_for_label }}" class="form-label">Description</label>
-                                {{ form.description }}
-                                {% if form.description.errors %}
-                                    <div class="text-danger">{{ form.description.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Session Selection -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <h5>Training Data</h5>
-                            <hr>
-                            <div class="mb-3">
-                                <label class="form-label">Select Sessions for Training</label>
-                                {% if form.sessions %}
-                                    <div class="border rounded p-3" style="max-height: 200px; overflow-y: auto;">
-                                        {% for choice in form.sessions %}
-                                            <div class="form-check">
-                                                {{ choice.tag }}
-                                                <label class="form-check-label" for="{{ choice.id_for_label }}">
-                                                    {{ choice.choice_label }}
-                                                </label>
-                                            </div>
-                                        {% endfor %}
-                                    </div>
-                                {% else %}
-                                    <div class="alert alert-warning">
-                                        <i class="fas fa-exclamation-triangle me-2"></i>
-                                        No sessions available for training. Please upload session data first.
-                                        <br>
-                                        <a href="{% url 'bci:session_upload' %}" class="btn btn-sm btn-primary mt-2">
-                                            Upload Session Data
-                                        </a>
-                                    </div>
-                                {% endif %}
-                                {% if form.sessions.errors %}
-                                    <div class="text-danger">{{ form.sessions.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Training Parameters -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <h5>Training Parameters</h5>
-                            <hr>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.epochs.id_for_label }}" class="form-label">Epochs</label>
-                                {{ form.epochs }}
-                                {% if form.epochs.errors %}
-                                    <div class="text-danger">{{ form.epochs.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.batch_size.id_for_label }}" class="form-label">Batch Size</label>
-                                {{ form.batch_size }}
-                                {% if form.batch_size.errors %}
-                                    <div class="text-danger">{{ form.batch_size.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.learning_rate.id_for_label }}" class="form-label">Learning Rate</label>
-                                {{ form.learning_rate }}
-                                {% if form.learning_rate.errors %}
-                                    <div class="text-danger">{{ form.learning_rate.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <div class="mb-3">
-                                <label for="{{ form.dropout_rate.id_for_label }}" class="form-label">Dropout Rate</label>
-                                {{ form.dropout_rate }}
-                                {% if form.dropout_rate.errors %}
-                                    <div class="text-danger">{{ form.dropout_rate.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <!-- Data Processing Parameters -->
-                    <div class="row mb-4">
-                        <div class="col-12">
-                            <h5>Data Processing</h5>
-                            <hr>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="{{ form.window_duration.id_for_label }}" class="form-label">Window Duration (s)</label>
-                                {{ form.window_duration }}
-                                {% if form.window_duration.errors %}
-                                    <div class="text-danger">{{ form.window_duration.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="{{ form.overlap.id_for_label }}" class="form-label">Window Overlap</label>
-                                {{ form.overlap }}
-                                {% if form.overlap.errors %}
-                                    <div class="text-danger">{{ form.overlap.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="mb-3">
-                                <label for="{{ form.augmentation_factor.id_for_label }}" class="form-label">Augmentation Factor</label>
-                                {{ form.augmentation_factor }}
-                                {% if form.augmentation_factor.errors %}
-                                    <div class="text-danger">{{ form.augmentation_factor.errors }}</div>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="d-flex justify-content-between">
-                        <a href="{% url 'bci:training_list' %}" class="btn btn-secondary">
-                            <i class="fas fa-arrow-left me-1"></i>Cancel
-                        </a>
-                        <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-play me-1"></i>Start Training
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-        
-        <!-- Training Information -->
-        <div class="card mt-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-info-circle me-2"></i>Training Information
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6>Model Architecture</h6>
-                        <ul class="list-unstyled">
-                            <li><i class="fas fa-check text-success me-2"></i>ATCNet with attention mechanisms</li>
-                            <li><i class="fas fa-check text-success me-2"></i>Temporal and spatial convolutions</li>
-                            <li><i class="fas fa-check text-success me-2"></i>Multi-head attention layers</li>
-                            <li><i class="fas fa-check text-success me-2"></i>Squeeze-and-excitation blocks</li>
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <h6>Training Process</h6>
-                        <ul class="list-unstyled">
-                            <li><i class="fas fa-check text-success me-2"></i>Leave-One-Session-Out cross-validation</li>
-                            <li><i class="fas fa-check text-success me-2"></i>Data augmentation with noise injection</li>
-                            <li><i class="fas fa-check text-success me-2"></i>Early stopping to prevent overfitting</li>
-                            <li><i class="fas fa-check text-success me-2"></i>Final model trained on all data</li>
-                        </ul>
-                    </div>
-                </div>
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h1>
+                <i class="fas fa-cogs me-2 text-success"></i>Configure Model Training
+            </h1>
+            <div class="btn-group">
+                <a href="{% url 'bci:training_list' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-arrow-left me-1"></i>Back to Training
+                </a>
             </div>
         </div>
     </div>
 </div>
+
+<div class="row">
+    <!-- Main Configuration Form -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-sliders-h me-2"></i>Training Configuration
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" id="trainingForm">
+                    {% csrf_token %}
+                    
+                    <!-- Basic Information Section -->
+                    <div class="mb-4">
+                        <h6 class="text-primary border-bottom pb-2 mb-3">
+                            <i class="fas fa-info-circle me-2"></i>Basic Information
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.name.id_for_label }}" class="form-label">Model Name</label>
+                                    {{ form.name }}
+                                    {% if form.name.errors %}
+                                        <div class="text-danger small">{{ form.name.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="id_approach" class="form-label">
+                                        <i class="fas fa-brain me-1"></i>BCI Approach
+                                    </label>
+                                    <select name="approach" id="id_approach" class="form-control">
+                                        <option value="motor_imagery" {% if approach == 'motor_imagery' %}selected{% endif %}>
+                                            🧠 Motor Imagery
+                                        </option>
+                                        <option value="p300" {% if approach == 'p300' %}selected{% endif %}>
+                                            👁️ P300 (Visual Words)
+                                        </option>
+                                    </select>
+                                    {% if form.approach.errors %}
+                                        <div class="text-danger small">{{ form.approach.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="{{ form.description.id_for_label }}" class="form-label">Description (Optional)</label>
+                                    {{ form.description }}
+                                    {% if form.description.errors %}
+                                        <div class="text-danger small">{{ form.description.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Session Selection Section -->
+                    <div class="mb-4">
+                        <h6 class="text-info border-bottom pb-2 mb-3">
+                            <i class="fas fa-database me-2"></i>Select Training Sessions
+                            <span id="approachLabel" class="badge bg-info ms-2">{{ approach_name|default:"Motor Imagery" }}</span>
+                        </h6>
+                        
+                        <!-- Loading indicator -->
+                        <div id="sessionsLoading" class="text-center py-4" style="display: none;">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading sessions...</span>
+                            </div>
+                            <p class="text-muted mt-2">Loading sessions...</p>
+                        </div>
+                        
+                        <!-- Sessions container -->
+                        <div id="sessionsContainer">
+                            <!-- Sessions will be loaded here dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- Training Parameters Section -->
+                    <div class="mb-4">
+                        <h6 class="text-warning border-bottom pb-2 mb-3">
+                            <i class="fas fa-cogs me-2"></i>Training Parameters
+                        </h6>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.epochs.id_for_label }}" class="form-label">
+                                        Training Epochs
+                                        <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" 
+                                           title="Number of complete passes through the training data"></i>
+                                    </label>
+                                    {{ form.epochs }}
+                                    {% if form.epochs.errors %}
+                                        <div class="text-danger small">{{ form.epochs.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.batch_size.id_for_label }}" class="form-label">
+                                        Batch Size
+                                        <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" 
+                                           title="Number of samples processed together"></i>
+                                    </label>
+                                    {{ form.batch_size }}
+                                    {% if form.batch_size.errors %}
+                                        <div class="text-danger small">{{ form.batch_size.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.learning_rate.id_for_label }}" class="form-label">
+                                        Learning Rate
+                                        <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" 
+                                           title="Controls how fast the model learns"></i>
+                                    </label>
+                                    {{ form.learning_rate }}
+                                    {% if form.learning_rate.errors %}
+                                        <div class="text-danger small">{{ form.learning_rate.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.dropout_rate.id_for_label }}" class="form-label">
+                                        Dropout Rate
+                                        <i class="fas fa-question-circle text-muted" data-bs-toggle="tooltip" 
+                                           title="Prevents overfitting by randomly dropping neurons"></i>
+                                    </label>
+                                    {{ form.dropout_rate }}
+                                    {% if form.dropout_rate.errors %}
+                                        <div class="text-danger small">{{ form.dropout_rate.errors }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Action Buttons -->
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-success btn-lg" id="startTrainingBtn">
+                            <i class="fas fa-play me-2"></i>Start Training
+                        </button>
+                        <a href="{% url 'bci:training_list' %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times me-1"></i>Cancel
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Configuration Help Sidebar -->
+    <div class="col-lg-4">
+        <div class="card" id="helpCard">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-lightbulb me-2"></i>Configuration Guide
+                </h5>
+            </div>
+            <div class="card-body" id="helpContent">
+                <!-- Help content will be loaded dynamically -->
+            </div>
+        </div>
+        
+        <!-- Session Summary Card -->
+        <div class="card mt-3" id="summaryCard">
+            <div class="card-header">
+                <h6 class="card-title mb-0">
+                    <i class="fas fa-chart-bar me-2"></i>Session Summary
+                </h6>
+            </div>
+            <div class="card-body" id="summaryContent">
+                <!-- Summary will be loaded dynamically -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden data for JavaScript -->
+<script type="application/json" id="sessionsData">
+{{ sessions_data|safe }}
+</script>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Get sessions data from backend
+    const sessionsData = JSON.parse(document.getElementById('sessionsData').textContent);
+    
+    // Configuration data for each approach
+    const approachConfigs = {
+        'motor_imagery': {
+            name: 'Motor Imagery',
+            icon: '🧠',
+            epochs: 100,
+            dropout: 0.5,
+            help: {
+                title: 'Motor Imagery Classification',
+                description: 'Optimized for classifying imagined hand and feet movements.',
+                settings: [
+                    { param: 'Epochs', value: '100', badge: 'Optimal' },
+                    { param: 'Batch Size', value: '32', badge: 'Balanced' },
+                    { param: 'Learning Rate', value: '0.001', badge: 'Stable' },
+                    { param: 'Dropout', value: '0.5', badge: 'Medium' }
+                ],
+                tips: [
+                    'Select sessions with clear motor imagery tasks',
+                    'Higher dropout prevents overfitting',
+                    'Consistent mental imagery improves results',
+                    'More training data = better accuracy'
+                ]
+            }
+        },
+        'p300': {
+            name: 'P300',
+            icon: '👁️',
+            epochs: 120,
+            dropout: 0.3,
+            help: {
+                title: 'P300 Event-Related Potentials',
+                description: 'Specialized for detecting P300 responses to visual word stimuli.',
+                settings: [
+                    { param: 'Epochs', value: '120', badge: 'Optimal' },
+                    { param: 'Batch Size', value: '32', badge: 'Balanced' },
+                    { param: 'Learning Rate', value: '0.001', badge: 'Stable' },
+                    { param: 'Dropout', value: '0.3', badge: 'Low' }
+                ],
+                tips: [
+                    'Select sessions with balanced word representation',
+                    'Higher epochs improve P300 detection accuracy',
+                    'Lower dropout helps capture subtle P300 signals',
+                    'Ensure clean EEG data for best results'
+                ]
+            }
+        }
+    };
+    
+    // Initialize tooltips
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Handle approach selection change
+    const approachSelect = document.getElementById('id_approach');
+    approachSelect.addEventListener('change', function() {
+        const selectedApproach = this.value;
+        updateSessions(selectedApproach);
+        updateParameters(selectedApproach);
+        updateHelp(selectedApproach);
+        updateApproachLabel(selectedApproach);
+    });
+    
+    // Load initial sessions
+    updateSessions(approachSelect.value);
+    updateParameters(approachSelect.value);
+    updateHelp(approachSelect.value);
+    updateApproachLabel(approachSelect.value);
+    
+    function updateSessions(approach) {
+        const container = document.getElementById('sessionsContainer');
+        const loading = document.getElementById('sessionsLoading');
+        
+        // Show loading
+        loading.style.display = 'block';
+        container.innerHTML = '';
+        
+        // Simulate network delay for better UX
+        setTimeout(() => {
+            const sessions = sessionsData[approach] || [];
+            
+            if (sessions.length > 0) {
+                container.innerHTML = `
+                    <div class="alert alert-success">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <strong>${sessions.length} ${approachConfigs[approach].name} sessions available</strong>
+                    </div>
+                    <div class="row">
+                        ${sessions.map((session, index) => `
+                            <div class="col-md-6 mb-2">
+                                <div class="card h-100">
+                                    <div class="card-body p-3">
+                                        <div class="form-check">
+                                            <input type="checkbox" name="training_sessions" 
+                                                   value="${session.id}" class="form-check-input" 
+                                                   id="session_${index}" ${sessions.length <= 3 ? 'checked' : ''}>
+                                            <label class="form-check-label w-100" for="session_${index}">
+                                                <strong>${session.name.length > 40 ? session.name.substring(0, 40) + '...' : session.name}</strong>
+                                                <br>
+                                                <small class="text-muted">
+                                                    <i class="fas fa-chart-line me-1"></i>${session.total_samples || '--'} samples
+                                                    <br>
+                                                    <i class="fas fa-tags me-1"></i>${session.classes ? session.classes.length : 0} classes
+                                                </small>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            } else {
+                const uploadUrl = approach === 'p300' ? 
+                    '/bci/sessions/upload/?approach=p300' : 
+                    '/bci/sessions/upload/';
+                
+                container.innerHTML = `
+                    <div class="alert alert-warning">
+                        <h6><i class="fas fa-exclamation-triangle me-2"></i>No Sessions Available</h6>
+                        <p class="mb-3">Please upload ${approachConfigs[approach].name} data before configuring training.</p>
+                        <a href="${uploadUrl}" class="btn btn-${approach === 'p300' ? 'info' : 'primary'}">
+                            <i class="fas fa-upload me-1"></i>Upload ${approachConfigs[approach].name} Sessions
+                        </a>
+                    </div>
+                `;
+            }
+            
+            // Update summary
+            updateSummary(sessions, approach);
+            
+            // Hide loading
+            loading.style.display = 'none';
+        }, 300);
+    }
+    
+    function updateParameters(approach) {
+        const config = approachConfigs[approach];
+        document.getElementById('id_epochs').value = config.epochs;
+        document.getElementById('id_dropout_rate').value = config.dropout;
+    }
+    
+    function updateHelp(approach) {
+        const config = approachConfigs[approach];
+        const helpContent = document.getElementById('helpContent');
+        
+        helpContent.innerHTML = `
+            <div class="alert alert-${approach === 'p300' ? 'info' : 'primary'}">
+                <h6><i class="fas fa-${approach === 'p300' ? 'eye' : 'brain'} me-2"></i>${config.help.title}</h6>
+                <p class="small mb-2">${config.help.description}</p>
+            </div>
+            
+            <h6 class="text-primary">Recommended Settings</h6>
+            <ul class="list-unstyled mb-3">
+                ${config.help.settings.map(setting => `
+                    <li><strong>${setting.param}:</strong> ${setting.value} 
+                        <span class="badge bg-success">${setting.badge}</span>
+                    </li>
+                `).join('')}
+            </ul>
+            
+            <h6 class="text-success">${config.name} Tips</h6>
+            <ul class="small">
+                ${config.help.tips.map(tip => `<li>${tip}</li>`).join('')}
+            </ul>
+            
+            <div class="border-top pt-3 mt-3">
+                <h6 class="text-dark">Training Process</h6>
+                <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-primary me-2">1</span>
+                    <small>Data preprocessing and epoching</small>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-primary me-2">2</span>
+                    <small>Feature extraction and selection</small>
+                </div>
+                <div class="d-flex align-items-center mb-2">
+                    <span class="badge bg-primary me-2">3</span>
+                    <small>Model training with validation</small>
+                </div>
+                <div class="d-flex align-items-center">
+                    <span class="badge bg-success me-2">4</span>
+                    <small>Model evaluation and saving</small>
+                </div>
+            </div>
+        `;
+    }
+    
+    function updateSummary(sessions, approach) {
+        const summaryContent = document.getElementById('summaryContent');
+        
+        if (sessions.length > 0) {
+            const totalClasses = sessions.length > 0 ? (sessions[0].classes ? sessions[0].classes.length : 0) : 0;
+            
+            summaryContent.innerHTML = `
+                <div class="row text-center">
+                    <div class="col-6">
+                        <h4 class="text-primary mb-0">${sessions.length}</h4>
+                        <small class="text-muted">Available Sessions</small>
+                    </div>
+                    <div class="col-6">
+                        <h4 class="text-success mb-0">${totalClasses}</h4>
+                        <small class="text-muted">Classes</small>
+                    </div>
+                </div>
+            `;
+        } else {
+            summaryContent.innerHTML = `
+                <div class="text-center text-muted">
+                    <i class="fas fa-inbox fa-2x mb-2"></i>
+                    <p class="small">No sessions available</p>
+                </div>
+            `;
+        }
+    }
+    
+    function updateApproachLabel(approach) {
+        const label = document.getElementById('approachLabel');
+        const config = approachConfigs[approach];
+        label.textContent = `${config.icon} ${config.name}`;
+        label.className = `badge bg-${approach === 'p300' ? 'info' : 'primary'} ms-2`;
+    }
+    
+    // Form validation
+    const form = document.getElementById('trainingForm');
+    form.addEventListener('submit', function(e) {
+        const selectedSessions = document.querySelectorAll('input[name="training_sessions"]:checked');
+        
+        if (selectedSessions.length === 0) {
+            e.preventDefault();
+            
+            const alertDiv = document.createElement('div');
+            alertDiv.className = 'alert alert-danger alert-dismissible fade show';
+            alertDiv.innerHTML = `
+                <i class="fas fa-exclamation-circle me-2"></i>
+                <strong>No sessions selected!</strong> Please select at least one session for training.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            `;
+            
+            form.insertBefore(alertDiv, form.firstChild);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return false;
+        }
+        
+        const approach = document.getElementById('id_approach').value;
+        const confirmed = confirm(`Start ${approachConfigs[approach].name} training with ${selectedSessions.length} selected session(s)?`);
+        
+        if (!confirmed) {
+            e.preventDefault();
+            return false;
+        }
+        
+        const submitBtn = document.getElementById('startTrainingBtn');
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Starting Training...';
+        submitBtn.disabled = true;
+    });
+});
+</script>
 {% endblock %}

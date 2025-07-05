@@ -14,749 +14,513 @@
 </nav>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-.word-display {
-    font-size: 4rem;
-    font-weight: bold;
-    text-align: center;
-    padding: 2rem;
-    border-radius: 15px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-    transition: all 0.3s ease;
-    min-height: 200px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.word-green { background: linear-gradient(135deg, #28a745, #20c997); color: white; }
-.word-purple { background: linear-gradient(135deg, #6f42c1, #e83e8c); color: white; }
-.word-yellow { background: linear-gradient(135deg, #ffc107, #fd7e14); color: black; }
-.word-red { background: linear-gradient(135deg, #dc3545, #e83e8c); color: white; }
-.word-blue { background: linear-gradient(135deg, #007bff, #6610f2); color: white; }
-.word-silence { background: linear-gradient(135deg, #6c757d, #495057); color: white; }
-
-.prediction-confidence {
-    height: 20px;
-    border-radius: 10px;
-    transition: width 0.5s ease;
-}
-
-.trial-progress {
-    height: 25px;
-    border-radius: 12px;
-}
-
-.eeg-status {
-    animation: pulse 2s infinite;
-}
-
-@keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.5; }
-    100% { opacity: 1; }
-}
-
-.prediction-card {
-    border-left: 4px solid #007bff;
-}
-
-.confidence-bar {
-    background: linear-gradient(90deg, #dc3545 0%, #ffc107 50%, #28a745 100%);
-    border-radius: 10px;
-    height: 20px;
-}
-
-.word-button {
-    font-size: 1.5rem;
-    padding: 1rem 2rem;
-    margin: 0.5rem;
-    border-radius: 15px;
-    transition: all 0.3s ease;
-}
-
-.word-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-}
-</style>
-{% endblock %}
-
 {% block content %}
-<div class="row">
-    <div class="col-12">
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <h1>
-                <i class="fas fa-rocket me-2 text-primary"></i>P300 Word Prediction
-            </h1>
-            <div class="btn-group">
-                <a href="{% url 'bci:create_prediction_session' %}?approach=p300" class="btn btn-primary">
-                    <i class="fas fa-plus me-1"></i>New Session
-                </a>
-                <a href="{% url 'bci:p300_training' %}" class="btn btn-outline-success">
-                    <i class="fas fa-cogs me-1"></i>Train Model
-                </a>
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="fas fa-brain me-2 text-info"></i>P300 Word Prediction
+                </h1>
+                <div class="btn-group" role="group">
+                    <a href="{% url 'bci:p300_training' %}" class="btn btn-outline-info">
+                        <i class="fas fa-cogs me-1"></i>Train Model
+                    </a>
+                    <a href="{% url 'bci:p300_dashboard' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+                    </a>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Active Model Info -->
-<div class="row mb-4">
-    <div class="col-12">
-        {% if active_models %}
-            {% for model in active_models %}
-            <div class="alert alert-success">
-                <div class="row align-items-center">
-                    <div class="col-md-8">
-                        <h5 class="mb-1">
-                            <i class="fas fa-check-circle me-2"></i>Active P300 Model: {{ model.name }}
-                        </h5>
-                        <p class="mb-0">
-                            Architecture: 
-                            {% if model.model_config.model_type == 'cnn_lstm_attention' %}
-                                CNN+LSTM+Multi-Head-Attention
-                            {% else %}
-                                {{ model.model_config.model_type|title }}
-                            {% endif %}
-                            | Accuracy: {{ model.validation_accuracy|floatformat:1 }}%
-                            | Classes: {{ model.n_classes }}
-                        </p>
-                    </div>
-                    <div class="col-md-4 text-end">
-                        <span class="badge bg-success fs-6">Ready for Prediction</span>
-                    </div>
+    <!-- Active Models Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-microchip me-2"></i>Available P300 Models
+                    </h5>
                 </div>
-            </div>
-            {% endfor %}
-        {% else %}
-            <div class="alert alert-warning">
-                <h5 class="mb-1">
-                    <i class="fas fa-exclamation-triangle me-2"></i>No Active P300 Model
-                </h5>
-                <p class="mb-2">You need an active P300 model to start prediction sessions.</p>
-                <a href="{% url 'bci:p300_training' %}" class="btn btn-outline-warning btn-sm">
-                    <i class="fas fa-cogs me-1"></i>Train P300 Model
-                </a>
-            </div>
-        {% endif %}
-    </div>
-</div>
-
-{% if active_models %}
-<!-- Prediction Interface -->
-<div class="row">
-    <!-- Main Prediction Area -->
-    <div class="col-lg-8">
-        <!-- Word Display Area -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-eye me-2"></i>Visual Word Presentation
-                </h5>
-            </div>
-            <div class="card-body">
-                <div id="word-display" class="word-display word-silence">
-                    <span id="current-word">Ready</span>
-                </div>
-                
-                <!-- Trial Controls -->
-                <div class="text-center mt-4">
-                    <button id="start-trial-btn" class="btn btn-success btn-lg me-3">
-                        <i class="fas fa-play me-2"></i>Start P300 Trial
-                    </button>
-                    <button id="stop-trial-btn" class="btn btn-danger btn-lg me-3" disabled>
-                        <i class="fas fa-stop me-2"></i>Stop Trial
-                    </button>
-                    <button id="test-eeg-btn" class="btn btn-outline-info btn-lg">
-                        <i class="fas fa-brain me-2"></i>Test EEG Connection
-                    </button>
-                </div>
-                
-                <!-- Trial Progress -->
-                <div class="mt-4" id="trial-progress-container" style="display: none;">
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span>Trial Progress</span>
-                        <span id="trial-timer">0 / 5 words</span>
-                    </div>
-                    <div class="progress trial-progress">
-                        <div id="trial-progress-bar" class="progress-bar bg-primary" role="progressbar" style="width: 0%"></div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Target Words -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-list me-2"></i>Target Words
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="text-center">
-                    {% for word in target_words %}
-                    <button class="word-button btn btn-outline-{{ word }} word-btn" 
-                            data-word="{{ word }}" data-color="{{ word }}">
-                        {{ word|title }}
-                    </button>
-                    {% endfor %}
-                </div>
-                <div class="mt-3">
-                    <small class="text-muted">
-                        <i class="fas fa-info-circle me-1"></i>
-                        Focus on the target word when it appears. The P300 response will be detected automatically.
-                    </small>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Prediction Results -->
-    <div class="col-lg-4">
-        <!-- Real-time Prediction -->
-        <div class="card prediction-card mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-brain me-2"></i>Real-time Prediction
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="text-center">
-                    <h3 id="predicted-word" class="text-primary">-</h3>
-                    <div class="mt-2">
-                        <span class="badge bg-secondary" id="confidence-badge">Confidence: 0%</span>
-                    </div>
-                    
-                    <!-- Confidence Bar -->
-                    <div class="mt-3">
-                        <div class="confidence-bar">
-                            <div id="confidence-fill" class="bg-primary" style="width: 0%; height: 100%; border-radius: 10px; transition: width 0.5s ease;"></div>
-                        </div>
-                    </div>
-                </div>
-                
-                <hr>
-                
-                <!-- Word Probabilities -->
-                <h6>Word Probabilities:</h6>
-                <div id="word-probabilities">
-                    {% for word in target_words %}
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="text-capitalize">{{ word }}</span>
-                        <div class="flex-grow-1 mx-2">
-                            <div class="progress" style="height: 15px;">
-                                <div id="prob-{{ word }}" class="progress-bar bg-{{ word }}" 
-                                     style="width: 0%"></div>
+                <div class="card-body">
+                    {% if active_models %}
+                        <div class="row">
+                            {% for model in active_models %}
+                            <div class="col-md-6 col-lg-4 mb-3">
+                                <div class="card border-info">
+                                    <div class="card-body">
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <h6 class="card-title mb-0">{{ model.name }}</h6>
+                                            {% if model.is_active %}
+                                                <span class="badge bg-success">Active</span>
+                                            {% endif %}
+                                        </div>
+                                        <p class="card-text small text-muted">
+                                            <strong>Architecture:</strong> 
+                                            {% if model.model_config.model_type == 'cnn_lstm_attention' %}
+                                                CNN+LSTM+Multi-Head-Attention
+                                            {% else %}
+                                                {{ model.model_config.model_type|title }}
+                                            {% endif %}<br>
+                                            <strong>Accuracy:</strong> {{ model.validation_accuracy|floatformat:1 }}%<br>
+                                            <strong>Classes:</strong> {{ model.n_classes }}
+                                        </p>
+                                        <button class="btn btn-info btn-sm w-100" onclick="startPredictionWithModel('{{ model.id }}')">
+                                            <i class="fas fa-play me-1"></i>Start Prediction Session
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
+                            {% endfor %}
                         </div>
-                        <span id="prob-{{ word }}-text" class="small">0%</span>
-                    </div>
-                    {% endfor %}
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span>Silence</span>
-                        <div class="flex-grow-1 mx-2">
-                            <div class="progress" style="height: 15px;">
-                                <div id="prob-silence" class="progress-bar bg-secondary" 
-                                     style="width: 0%"></div>
-                            </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="fas fa-exclamation-triangle fa-3x text-warning mb-3"></i>
+                            <h5 class="text-muted">No Active P300 Models</h5>
+                            <p class="text-muted mb-3">You need an active P300 model to start prediction sessions.</p>
+                            <a href="{% url 'bci:p300_training' %}" class="btn btn-info">
+                                <i class="fas fa-cogs me-1"></i>Train P300 Model
+                            </a>
                         </div>
-                        <span id="prob-silence-text" class="small">0%</span>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- EEG Status -->
-        <div class="card mb-4">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-wifi me-2"></i>EEG Status
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <div id="eeg-status-indicator" class="rounded-circle me-3 eeg-status" 
-                         style="width: 20px; height: 20px; background-color: #dc3545;"></div>
-                    <div>
-                        <div id="eeg-status-text">Disconnected</div>
-                        <small id="eeg-status-detail" class="text-muted">Click "Test EEG Connection" to check device</small>
-                    </div>
-                </div>
-                
-                <hr>
-                
-                <div class="row text-center">
-                    <div class="col-6">
-                        <div class="text-muted small">Data Rate</div>
-                        <div id="data-rate" class="fw-bold">0 Hz</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="text-muted small">Buffer</div>
-                        <div id="buffer-status" class="fw-bold">0%</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <!-- Session Statistics -->
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-chart-bar me-2"></i>Session Statistics
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row text-center">
-                    <div class="col-6 mb-3">
-                        <div class="text-muted small">Total Predictions</div>
-                        <div id="total-predictions" class="h5 text-primary">0</div>
-                    </div>
-                    <div class="col-6 mb-3">
-                        <div class="text-muted small">High Confidence</div>
-                        <div id="high-confidence" class="h5 text-success">0</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="text-muted small">Average Confidence</div>
-                        <div id="avg-confidence" class="h5 text-info">0%</div>
-                    </div>
-                    <div class="col-6">
-                        <div class="text-muted small">Session Time</div>
-                        <div id="session-time" class="h5 text-warning">00:00</div>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Prediction Modes -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-cog me-2"></i>Prediction Modes
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="row">
-                    {% for mode in prediction_modes %}
-                    <div class="col-md-6 mb-3">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h6 class="card-title">{{ mode.name }}</h6>
-                                <p class="card-text">{{ mode.description }}</p>
-                                <button class="btn btn-outline-primary prediction-mode-btn" 
-                                        data-mode="{{ mode.value }}">
-                                    Select {{ mode.name }}
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    {% endfor %}
+    <!-- Prediction Setup Modal -->
+    <div class="modal fade" id="predictionSetupModal" tabindex="-1" aria-labelledby="predictionSetupModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="predictionSetupModalLabel">
+                        <i class="fas fa-cogs me-2"></i>P300 Prediction Setup
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Recent Predictions History -->
-<div class="row mt-4">
-    <div class="col-12">
-        <div class="card">
-            <div class="card-header">
-                <h5 class="card-title mb-0">
-                    <i class="fas fa-history me-2"></i>Recent Predictions
-                </h5>
-            </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-sm" id="predictions-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>Predicted Word</th>
-                                <th>Confidence</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="predictions-tbody">
-                            <tr>
-                                <td colspan="4" class="text-center text-muted">No predictions yet</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-{% endif %}
-{% endblock %}
-
-{% block extra_js %}
-<script>
-class P300PredictionInterface {
-    constructor() {
-        this.isTrialRunning = false;
-        this.currentWordIndex = 0;
-        this.targetWords = {{ target_words|safe }};
-        this.sessionStartTime = null;
-        this.predictionCount = 0;
-        this.highConfidenceCount = 0;
-        this.totalConfidence = 0;
-        
-        this.initializeInterface();
-        this.bindEvents();
-        this.startStatusUpdates();
-    }
-    
-    initializeInterface() {
-        this.wordDisplay = document.getElementById('word-display');
-        this.currentWordElement = document.getElementById('current-word');
-        this.startBtn = document.getElementById('start-trial-btn');
-        this.stopBtn = document.getElementById('stop-trial-btn');
-        this.testEEGBtn = document.getElementById('test-eeg-btn');
-        this.progressContainer = document.getElementById('trial-progress-container');
-        this.progressBar = document.getElementById('trial-progress-bar');
-        this.trialTimer = document.getElementById('trial-timer');
-        
-        // Prediction elements
-        this.predictedWordElement = document.getElementById('predicted-word');
-        this.confidenceBadge = document.getElementById('confidence-badge');
-        this.confidenceFill = document.getElementById('confidence-fill');
-        
-        // Status elements
-        this.eegStatusIndicator = document.getElementById('eeg-status-indicator');
-        this.eegStatusText = document.getElementById('eeg-status-text');
-        this.eegStatusDetail = document.getElementById('eeg-status-detail');
-        
-        // Statistics elements
-        this.totalPredictionsElement = document.getElementById('total-predictions');
-        this.highConfidenceElement = document.getElementById('high-confidence');
-        this.avgConfidenceElement = document.getElementById('avg-confidence');
-        this.sessionTimeElement = document.getElementById('session-time');
-        
-        console.log('P300 Prediction Interface initialized');
-    }
-    
-    bindEvents() {
-        this.startBtn.addEventListener('click', () => this.startTrial());
-        this.stopBtn.addEventListener('click', () => this.stopTrial());
-        this.testEEGBtn.addEventListener('click', () => this.testEEGConnection());
-        
-        // Prediction mode buttons
-        document.querySelectorAll('.prediction-mode-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const mode = e.target.dataset.mode;
-                this.setPredictionMode(mode);
-            });
-        });
-        
-        // Word buttons for manual testing
-        document.querySelectorAll('.word-btn').forEach(btn => {
-            btn.addEventListener('click', (e) => {
-                const word = e.target.dataset.word;
-                this.simulateWordPresentation(word);
-            });
-        });
-    }
-    
-    async startTrial() {
-        try {
-            this.isTrialRunning = true;
-            this.sessionStartTime = new Date();
-            this.currentWordIndex = 0;
-            
-            this.startBtn.disabled = true;
-            this.stopBtn.disabled = false;
-            this.progressContainer.style.display = 'block';
-            
-            console.log('Starting P300 trial...');
-            
-            // Start EEG prediction session
-            const response = await fetch(`/bci/p300/prediction/start/{{ session.pk }}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    mode: 'single_trial'
-                })
-            });
-            
-            if (response.ok) {
-                this.showSuccess('P300 trial started successfully');
-                this.startWordPresentation();
-            } else {
-                throw new Error('Failed to start prediction session');
-            }
-            
-        } catch (error) {
-            console.error('Error starting trial:', error);
-            this.showError('Failed to start P300 trial: ' + error.message);
-            this.stopTrial();
-        }
-    }
-    
-    async stopTrial() {
-        try {
-            this.isTrialRunning = false;
-            
-            this.startBtn.disabled = false;
-            this.stopBtn.disabled = true;
-            this.progressContainer.style.display = 'none';
-            
-            // Reset display
-            this.updateWordDisplay('Ready', 'silence');
-            this.updateProgress(0, 'Trial stopped');
-            
-            console.log('Stopping P300 trial...');
-            
-            // Stop EEG prediction session
-            await fetch(`/bci/p300/prediction/stop/{{ session.pk }}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
-                }
-            });
-            
-            this.showInfo('P300 trial stopped');
-            
-        } catch (error) {
-            console.error('Error stopping trial:', error);
-            this.showError('Error stopping trial: ' + error.message);
-        }
-    }
-    
-    async testEEGConnection() {
-        try {
-            this.testEEGBtn.disabled = true;
-            this.testEEGBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Testing...';
-            
-            const response = await fetch('/bci/api/system-status/');
-            const data = await response.json();
-            
-            if (data.eeg_connected) {
-                this.updateEEGStatus(true, 'Connected', 'EEG device is connected and ready');
-                this.showSuccess('EEG device connected successfully');
-            } else {
-                this.updateEEGStatus(false, 'Disconnected', 'EEG device not found or not responding');
-                this.showWarning('EEG device not connected');
-            }
-            
-        } catch (error) {
-            console.error('Error testing EEG connection:', error);
-            this.updateEEGStatus(false, 'Error', 'Failed to test connection');
-            this.showError('Failed to test EEG connection');
-        } finally {
-            this.testEEGBtn.disabled = false;
-            this.testEEGBtn.innerHTML = '<i class="fas fa-brain me-2"></i>Test EEG Connection';
-        }
-    }
-    
-    startWordPresentation() {
-        if (!this.isTrialRunning) return;
-        
-        const presentNextWord = () => {
-            if (!this.isTrialRunning || this.currentWordIndex >= this.targetWords.length) {
-                if (this.isTrialRunning) {
-                    this.completeTrial();
-                }
-                return;
-            }
-            
-            const word = this.targetWords[this.currentWordIndex];
-            this.updateWordDisplay(word.charAt(0).toUpperCase() + word.slice(1), word);
-            
-            const progress = ((this.currentWordIndex + 1) / this.targetWords.length) * 100;
-            this.updateProgress(progress, `${this.currentWordIndex + 1} / ${this.targetWords.length} words`);
-            
-            this.currentWordIndex++;
-            
-            // Schedule next word (2 seconds per word + 1 second rest)
-            setTimeout(presentNextWord, 3000);
-        };
-        
-        presentNextWord();
-    }
-    
-    completeTrial() {
-        this.updateWordDisplay('Trial Complete!', 'silence');
-        this.showSuccess('P300 trial completed successfully');
-        
-        setTimeout(() => {
-            this.stopTrial();
-        }, 2000);
-    }
-    
-    updateWordDisplay(text, colorClass) {
-        this.currentWordElement.textContent = text;
-        this.wordDisplay.className = `word-display word-${colorClass}`;
-    }
-    
-    updateProgress(percentage, text) {
-        this.progressBar.style.width = percentage + '%';
-        this.trialTimer.textContent = text;
-    }
-    
-    updateEEGStatus(connected, status, detail) {
-        this.eegStatusIndicator.style.backgroundColor = connected ? '#28a745' : '#dc3545';
-        this.eegStatusText.textContent = status;
-        this.eegStatusDetail.textContent = detail;
-    }
-    
-    updatePrediction(word, confidence, probabilities) {
-        this.predictedWordElement.textContent = word.charAt(0).toUpperCase() + word.slice(1);
-        this.confidenceBadge.textContent = `Confidence: ${Math.round(confidence * 100)}%`;
-        this.confidenceFill.style.width = (confidence * 100) + '%';
-        
-        // Update word probabilities
-        if (probabilities) {
-            const allWords = [...this.targetWords, 'silence'];
-            allWords.forEach((w, index) => {
-                const prob = probabilities[index] || 0;
-                const probElement = document.getElementById(`prob-${w}`);
-                const probTextElement = document.getElementById(`prob-${w}-text`);
-                
-                if (probElement && probTextElement) {
-                    probElement.style.width = (prob * 100) + '%';
-                    probTextElement.textContent = Math.round(prob * 100) + '%';
-                }
-            });
-        }
-        
-        // Update statistics
-        this.predictionCount++;
-        this.totalConfidence += confidence;
-        
-        if (confidence >= 0.8) {
-            this.highConfidenceCount++;
-        }
-        
-        this.updateStatistics();
-        this.addPredictionToHistory(word, confidence);
-    }
-    
-    updateStatistics() {
-        this.totalPredictionsElement.textContent = this.predictionCount;
-        this.highConfidenceElement.textContent = this.highConfidenceCount;
-        
-        const avgConfidence = this.predictionCount > 0 ? 
-            (this.totalConfidence / this.predictionCount) * 100 : 0;
-        this.avgConfidenceElement.textContent = Math.round(avgConfidence) + '%';
-        
-        // Update session time
-        if (this.sessionStartTime) {
-            const elapsed = Math.floor((new Date() - this.sessionStartTime) / 1000);
-            const minutes = Math.floor(elapsed / 60);
-            const seconds = elapsed % 60;
-            this.sessionTimeElement.textContent = 
-                `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-        }
-    }
-    
-    addPredictionToHistory(word, confidence) {
-        const tbody = document.getElementById('predictions-tbody');
-        
-        // Remove "no predictions" message
-        if (tbody.children.length === 1 && 
-            tbody.children[0].children[0].getAttribute('colspan') === '4') {
-            tbody.innerHTML = '';
-        }
-        
-        const time = new Date().toLocaleTimeString();
-        const confidencePercent = Math.round(confidence * 100);
-        const status = confidence >= 0.8 ? 'High' : confidence >= 0.6 ? 'Medium' : 'Low';
-        const statusClass = confidence >= 0.8 ? 'success' : confidence >= 0.6 ? 'warning' : 'danger';
-        
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${time}</td>
-            <td class="text-capitalize">${word}</td>
-            <td>${confidencePercent}%</td>
-            <td><span class="badge bg-${statusClass}">${status}</span></td>
-        `;
-        
-        tbody.insertBefore(row, tbody.firstChild);
-        
-        // Keep only last 10 predictions
-        if (tbody.children.length > 10) {
-            tbody.removeChild(tbody.lastChild);
-        }
-    }
-    
-    startStatusUpdates() {
-        // Update status every 2 seconds
-        setInterval(async () => {
-            if (this.isTrialRunning) {
-                try {
-                    const response = await fetch(`/bci/p300/prediction/status/{{ session.pk }}/`);
-                    const data = await response.json();
-                    
-                    if (data.prediction) {
-                        this.updatePrediction(
-                            data.prediction.word,
-                            data.prediction.confidence,
-                            data.prediction.probabilities
-                        );
-                    }
-                    
-                    // Update data rate and buffer status
-                    document.getElementById('data-rate').textContent = 
-                        (data.data_rate || 0) + ' Hz';
-                    document.getElementById('buffer-status').textContent = 
-                        Math.round((data.buffer_fill || 0) * 100) + '%';
+                <div class="modal-body">
+                    <form id="predictionSetupForm">
+                        <input type="hidden" id="selectedModelId" name="model_id">
                         
-                } catch (error) {
-                    console.error('Error updating status:', error);
-                }
-            }
-        }, 2000);
-        
-        // Update session time every second
-        setInterval(() => {
-            this.updateStatistics();
-        }, 1000);
-    }
+                        <!-- Target Word Selection -->
+                        <div class="mb-4">
+                            <label class="form-label">
+                                <i class="fas fa-target me-1"></i>Target Word Selection
+                            </label>
+                            <div class="alert alert-info">
+                                <i class="fas fa-info-circle me-2"></i>
+                                <strong>Optional:</strong> Choose the word you plan to focus on during the trial. 
+                                This won't affect the model's decision but helps with documentation and analysis.
+                            </div>
+                            
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="target_word" id="target_auto" value="auto" checked>
+                                        <label class="form-check-label" for="target_auto">
+                                            <strong>Let Model Decide</strong><br>
+                                            <small class="text-muted">Model will predict which word you focus on</small>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="target_word" id="target_manual" value="manual">
+                                        <label class="form-check-label" for="target_manual">
+                                            <strong>Choose Target Word</strong><br>
+                                            <small class="text-muted">Select the word you plan to focus on</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Target Word Selection (hidden by default) -->
+                            <div id="wordSelectionDiv" class="mt-3" style="display: none;">
+                                <label class="form-label">Target Word:</label>
+                                <div class="row">
+                                    {% for word in target_words %}
+                                    <div class="col-6 col-md-4 mb-2">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="radio" name="selected_word" id="word_{{ word }}" value="{{ word }}">
+                                            <label class="form-check-label" for="word_{{ word }}">
+                                                <span class="badge bg-primary">{{ word|title }}</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Trial Configuration -->
+                        <div class="mb-4">
+                            <label class="form-label">
+                                <i class="fas fa-stopwatch me-1"></i>Trial Configuration
+                            </label>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <label for="word_display_duration" class="form-label">Word Display Duration</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="word_display_duration" 
+                                               name="word_display_duration" value="3000" min="1500" max="5000" step="100">
+                                        <span class="input-group-text">ms</span>
+                                    </div>
+                                    <div class="form-text">How long each word is highlighted (1.5-5 seconds)</div>
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="rest_duration" class="form-label">Rest Duration</label>
+                                    <div class="input-group">
+                                        <input type="number" class="form-control" id="rest_duration" 
+                                               name="rest_duration" value="1500" min="500" max="3000" step="100">
+                                        <span class="input-group-text">ms</span>
+                                    </div>
+                                    <div class="form-text">Rest time between words (0.5-3 seconds)</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Trial Instructions -->
+                        <div class="alert alert-warning">
+                            <h6><i class="fas fa-exclamation-triangle me-2"></i>Trial Instructions</h6>
+                            <ol class="mb-0">
+                                <li>All 5 words will appear on screen <strong>blurred</strong></li>
+                                <li>One word will become <strong>unblurred and bold</strong> at a time</li>
+                                <li><strong>Focus on and think about</strong> the highlighted word when it appears</li>
+                                <li>If you selected a target word, <strong>only focus when that specific word</strong> is highlighted</li>
+                                <li>Stay relaxed during rest periods when all words are blurred</li>
+                                <li>The model will detect your P300 response and predict which word you focused on</li>
+                            </ol>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-info" onclick="startPredictionTrial()">
+                        <i class="fas fa-play me-1"></i>Start P300 Trial
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Prediction Sessions -->
+    {% if prediction_sessions %}
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-play-circle me-2"></i>Active Prediction Sessions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Model</th>
+                                    <th>Target Word</th>
+                                    <th>Status</th>
+                                    <th>Started</th>
+                                    <th>Predictions</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for session in prediction_sessions %}
+                                <tr>
+                                    <td>{{ session.model.name }}</td>
+                                    <td>
+                                        {% if session.target_word %}
+                                            <span class="badge bg-primary">{{ session.target_word|title }}</span>
+                                        {% else %}
+                                            <span class="text-muted">Auto-detect</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if session.status == 'running' %}
+                                            <span class="badge bg-success">Running</span>
+                                        {% elif session.status == 'completed' %}
+                                            <span class="badge bg-primary">Completed</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ session.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ session.created_at|timesince }} ago</td>
+                                    <td>{{ session.total_predictions }}</td>
+                                    <td>
+                                        {% if session.status == 'running' %}
+                                            <a href="{% url 'bci:p300_trial_run' session.pk %}" class="btn btn-sm btn-primary">
+                                                <i class="fas fa-eye me-1"></i>View Trial
+                                            </a>
+                                            <button class="btn btn-sm btn-danger" onclick="stopPrediction('{{ session.pk }}')">
+                                                <i class="fas fa-stop me-1"></i>Stop
+                                            </button>
+                                        {% else %}
+                                            <a href="{% url 'bci:p300_trial_results' session.pk %}" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas fa-chart-line me-1"></i>Results
+                                            </a>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Recent Results -->
+    {% if recent_results %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-line me-2"></i>Recent Prediction Results
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Model</th>
+                                    <th>Target Word</th>
+                                    <th>Predicted Word</th>
+                                    <th>Confidence</th>
+                                    <th>Result</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for result in recent_results %}
+                                <tr>
+                                    <td>{{ result.created_at|date:"M d, H:i" }}</td>
+                                    <td>{{ result.model.name }}</td>
+                                    <td>
+                                        {% if result.target_word %}
+                                            <span class="badge bg-primary">{{ result.target_word|title }}</span>
+                                        {% else %}
+                                            <span class="text-muted">Auto</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if result.predicted_word %}
+                                            <span class="badge bg-info">{{ result.predicted_word|title }}</span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if result.confidence %}
+                                            <span class="badge {% if result.confidence >= 0.8 %}bg-success{% elif result.confidence >= 0.6 %}bg-warning{% else %}bg-danger{% endif %}">
+                                                {{ result.confidence|floatformat:2 }}
+                                            </span>
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if result.target_word and result.predicted_word %}
+                                            {% if result.target_word == result.predicted_word %}
+                                                <span class="badge bg-success"><i class="fas fa-check"></i> Correct</span>
+                                            {% else %}
+                                                <span class="badge bg-danger"><i class="fas fa-times"></i> Incorrect</span>
+                                            {% endif %}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{% url 'bci:p300_trial_results' result.pk %}" class="btn btn-sm btn-outline-primary">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+// P300 Prediction Management
+let selectedModelId = null;
+
+function startPredictionWithModel(modelId) {
+    selectedModelId = modelId;
+    document.getElementById('selectedModelId').value = modelId;
     
-    simulateWordPresentation(word) {
-        if (!this.isTrialRunning) {
-            this.updateWordDisplay(word.charAt(0).toUpperCase() + word.slice(1), word);
-            setTimeout(() => {
-                this.updateWordDisplay('Ready', 'silence');
-            }, 2000);
+    // Show the setup modal
+    const modal = new bootstrap.Modal(document.getElementById('predictionSetupModal'));
+    modal.show();
+}
+
+// Handle target word selection toggle
+document.addEventListener('DOMContentLoaded', function() {
+    const autoRadio = document.getElementById('target_auto');
+    const manualRadio = document.getElementById('target_manual');
+    const wordSelectionDiv = document.getElementById('wordSelectionDiv');
+    
+    function toggleWordSelection() {
+        if (manualRadio.checked) {
+            wordSelectionDiv.style.display = 'block';
+        } else {
+            wordSelectionDiv.style.display = 'none';
+            // Clear any selected word
+            document.querySelectorAll('input[name="selected_word"]').forEach(input => {
+                input.checked = false;
+            });
         }
     }
     
-    setPredictionMode(mode) {
-        console.log('Setting prediction mode:', mode);
-        // TODO: Implement mode switching
-        this.showInfo(`Prediction mode set to: ${mode}`);
+    autoRadio.addEventListener('change', toggleWordSelection);
+    manualRadio.addEventListener('change', toggleWordSelection);
+});
+
+function startPredictionTrial() {
+    if (!selectedModelId) {
+        alert('Please select a model first.');
+        return;
     }
     
-    // Utility methods for notifications
-    showSuccess(message) {
-        this.showToast(message, 'success');
+    // Get form data
+    const formData = new FormData(document.getElementById('predictionSetupForm'));
+    const targetWordType = formData.get('target_word');
+    let targetWord = null;
+    
+    if (targetWordType === 'manual') {
+        targetWord = formData.get('selected_word');
+        if (!targetWord) {
+            alert('Please select a target word or choose "Let Model Decide".');
+            return;
+        }
     }
     
-    showError(message) {
-        this.showToast(message, 'danger');
+    const wordDisplayDuration = formData.get('word_display_duration');
+    const restDuration = formData.get('rest_duration');
+    
+    // Create prediction session
+    const sessionData = {
+        model_id: selectedModelId,
+        target_word: targetWord,
+        word_display_duration: parseInt(wordDisplayDuration),
+        rest_duration: parseInt(restDuration),
+        csrfmiddlewaretoken: document.querySelector('[name=csrfmiddlewaretoken]').value
+    };
+    
+    // Show loading
+    const modal = bootstrap.Modal.getInstance(document.getElementById('predictionSetupModal'));
+    modal.hide();
+    
+    showLoadingModal('Creating P300 prediction session...');
+    
+    // Create session via AJAX
+    fetch('{% url "bci:create_p300_prediction_session" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': sessionData.csrfmiddlewaretoken
+        },
+        body: JSON.stringify(sessionData)
+    })
+    .then(response => response.json())
+    .then(data => {
+        hideLoadingModal();
+        
+        if (data.status === 'success') {
+            // Redirect to the trial run page
+            window.location.href = `/bci/p300/prediction/trial/${data.session_id}/`;
+        } else {
+            alert('Error creating prediction session: ' + data.message);
+        }
+    })
+    .catch(error => {
+        hideLoadingModal();
+        console.error('Error:', error);
+        alert('Error creating prediction session. Please try again.');
+    });
+}
+
+function stopPrediction(sessionId) {
+    if (!confirm('Are you sure you want to stop this prediction session?')) {
+        return;
     }
     
-    showWarning(message) {
-        this.showToast(message, 'warning');
+    fetch(`{% url 'bci:stop_p300_prediction' '00000000-0000-0000-0000-000000000000' %}`.replace('00000000-0000-0000-0000-000000000000', sessionId), {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.status === 'success') {
+            location.reload();
+        } else {
+            alert('Error stopping prediction: ' + data.message);
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        alert('Error stopping prediction. Please try again.');
+    });
+}
+
+function showLoadingModal(message) {
+    // Create loading modal if it doesn't exist
+    let loadingModal = document.getElementById('loadingModal');
+    if (!loadingModal) {
+        loadingModal = document.createElement('div');
+        loadingModal.id = 'loadingModal';
+        loadingModal.className = 'modal fade';
+        loadingModal.setAttribute('data-bs-backdrop', 'static');
+        loadingModal.innerHTML = `
+            <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                    <div class="modal-body text-center">
+                        <div class="spinner-border text-primary mb-3" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p id="loadingMessage">${message}</p>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(loadingModal);
+    } else {
+        document.getElementById('loadingMessage').textContent = message;
     }
     
-    showInfo(message) {
-        this.showToast(message, 'info');
+    const modal = new bootstrap.Modal(loadingModal);
+    modal.show();
+}
+
+function hideLoadingModal() {
+    const loadingModal = document.getElementById('loadingModal');
+    if (loadingModal) {
+        const modal = bootstrap.Modal.getInstance(loadingModal);
+        if (modal) {
+            modal.hide();
+        }
     }
-    
-    showToast(message, type) {
-        // Simple toast notification
-        const toast = document.createElement('div');
-        toast.className = `alert alert-${type} position-fixed`;
-        toast.style.cssText = 'top:
+}
+</script>
+
+<!-- Hidden CSRF token for AJAX requests -->
+<form style="display: none;">
+    {% csrf_token %}
+</form>
+
+{% endblock %}

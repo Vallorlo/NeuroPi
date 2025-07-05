@@ -1,0 +1,772 @@
+<!-- bci/templates/bci/p300/trial_run.html -->
+{% extends 'bci/base.html' %}
+
+{% block title %}P300 Prediction Trial - BCI{% endblock %}
+
+{% block extra_css %}
+<style>
+    body {
+        background: #000;
+        color: #fff;
+        overflow: hidden;
+    }
+    
+    .trial-container {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .trial-header {
+        background: rgba(0, 0, 0, 0.8);
+        padding: 10px 20px;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        border-bottom: 1px solid #333;
+    }
+    
+    .word-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 60px;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 40px;
+        height: 100vh;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .word-item {
+        padding: 40px 30px;
+        border: 3px solid #333;
+        border-radius: 15px;
+        background: rgba(20, 20, 20, 0.8);
+        transition: all 0.4s ease;
+        min-height: 150px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(10px);
+    }
+    
+    .word-text {
+        font-size: 3rem;
+        font-weight: 600;
+        transition: all 0.4s ease;
+        text-align: center;
+        letter-spacing: 2px;
+    }
+    
+    .word-item.blurred .word-text {
+        filter: blur(8px);
+        color: #666;
+        opacity: 0.4;
+        transform: scale(0.9);
+    }
+    
+    .word-item.focused {
+        border-color: #00d4ff;
+        background: linear-gradient(135deg, #00d4ff, #0099cc);
+        transform: scale(1.1);
+        box-shadow: 
+            0 0 30px rgba(0, 212, 255, 0.5),
+            0 0 60px rgba(0, 212, 255, 0.3),
+            0 20px 40px rgba(0, 0, 0, 0.3);
+        z-index: 10;
+        position: relative;
+    }
+    
+    .word-item.focused .word-text {
+        filter: none;
+        color: #fff;
+        font-weight: 700;
+        font-size: 3.5rem;
+        text-shadow: 
+            2px 2px 4px rgba(0,0,0,0.5),
+            0 0 20px rgba(255,255,255,0.3);
+        transform: scale(1);
+    }
+    
+    .word-item.rest {
+        opacity: 0.3;
+        transform: scale(0.95);
+    }
+    
+    .word-item.rest .word-text {
+        filter: blur(12px);
+        color: #444;
+        opacity: 0.3;
+    }
+    
+    .start-screen, .completion-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        animation: fadeIn 0.5s ease-in;
+    }
+    
+    .start-content, .completion-content {
+        text-align: center;
+        max-width: 600px;
+        padding: 40px;
+    }
+    
+    .countdown-display {
+        font-size: 8rem;
+        font-weight: 700;
+        color: #00d4ff;
+        text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+        margin: 20px 0;
+    }
+    
+    .status-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: rgba(0, 0, 0, 0.9);
+        padding: 15px 20px;
+        z-index: 1000;
+        border-top: 1px solid #333;
+    }
+    
+    .progress-info {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+    }
+    
+    .trial-progress {
+        height: 6px;
+        background: #333;
+        border-radius: 3px;
+        overflow: hidden;
+    }
+    
+    .trial-progress-bar {
+        height: 100%;
+        background: linear-gradient(90deg, #00d4ff, #0099cc);
+        transition: width 0.3s ease;
+        border-radius: 3px;
+    }
+    
+    .prediction-display {
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 15px 20px;
+        border-radius: 10px;
+        border: 1px solid #333;
+        min-width: 200px;
+        backdrop-filter: blur(10px);
+    }
+    
+    .prediction-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+    }
+    
+    .prediction-item:last-child {
+        margin-bottom: 0;
+    }
+    
+    .confidence-bar {
+        width: 60px;
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+        overflow: hidden;
+        margin-left: 10px;
+    }
+    
+    .confidence-fill {
+        height: 100%;
+        background: linear-gradient(90deg, #ff6b6b, #00d4ff);
+        transition: width 0.3s ease;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(30px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    
+    @keyframes pulse {
+        0% { transform: scale(1.1); }
+        50% { transform: scale(1.15); }
+        100% { transform: scale(1.1); }
+    }
+    
+    .word-item.focused {
+        animation: pulse 1.5s ease-in-out infinite;
+    }
+    
+    .eeg-status {
+        position: fixed;
+        top: 80px;
+        left: 20px;
+        background: rgba(0, 0, 0, 0.8);
+        padding: 10px 15px;
+        border-radius: 8px;
+        border: 1px solid #333;
+        backdrop-filter: blur(10px);
+    }
+    
+    .eeg-indicator {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        margin-right: 8px;
+    }
+    
+    .eeg-connected {
+        background: #28a745;
+        box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
+    }
+    
+    .eeg-disconnected {
+        background: #dc3545;
+        box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
+    }
+    
+    .target-word-indicator {
+        position: fixed;
+        top: 50%;
+        left: 20px;
+        transform: translateY(-50%);
+        background: rgba(0, 212, 255, 0.1);
+        border: 2px solid #00d4ff;
+        padding: 20px;
+        border-radius: 10px;
+        backdrop-filter: blur(10px);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="trial-container">
+    <!-- Trial Header -->
+    <div class="trial-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <strong>P300 Prediction Trial</strong> - {{ session.model.name }}
+                {% if session.target_word %}
+                    <span class="badge bg-info ms-2">Target: {{ session.target_word|title }}</span>
+                {% else %}
+                    <span class="badge bg-secondary ms-2">Auto-detect</span>
+                {% endif %}
+            </div>
+            <div>
+                <span id="trial-status">Initializing...</span>
+            </div>
+            <div>
+                <button id="stop-trial-btn" class="btn btn-sm btn-danger" onclick="stopTrial()">
+                    <i class="fas fa-stop"></i> Stop Trial
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- EEG Status Indicator -->
+    <div class="eeg-status">
+        <div id="eeg-status-indicator">
+            <span class="eeg-indicator eeg-disconnected" id="eeg-indicator"></span>
+            <span id="eeg-status-text">Connecting to EEG...</span>
+        </div>
+    </div>
+
+    <!-- Target Word Indicator (only shown if target word is selected) -->
+    {% if session.target_word %}
+    <div class="target-word-indicator">
+        <div class="text-center">
+            <div class="text-muted small">Your Target Word</div>
+            <div class="h4 mt-2 mb-0 text-info">{{ session.target_word|title }}</div>
+            <div class="text-muted small mt-1">Focus only when this word is highlighted</div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Real-time Predictions Display -->
+    <div class="prediction-display" id="prediction-display" style="display: none;">
+        <div class="h6 mb-3 text-center">Live Predictions</div>
+        <div id="prediction-list">
+            <!-- Predictions will be populated here -->
+        </div>
+    </div>
+
+    <!-- Start Screen -->
+    <div id="start-screen" class="start-screen">
+        <div class="start-content">
+            <h1 class="display-3 text-info mb-4">P300 Trial Ready</h1>
+            {% if session.target_word %}
+                <p class="lead mb-4">Focus on "<strong class="text-info">{{ session.target_word|title }}</strong>" when it becomes highlighted</p>
+                <p class="text-muted mb-4">
+                    Only think about the target word when it's unblurred and bold.<br>
+                    Ignore other words when they're highlighted.
+                </p>
+            {% else %}
+                <p class="lead mb-4">Think about any word when it becomes highlighted</p>
+                <p class="text-muted mb-4">
+                    Focus on whichever word you choose when it appears unblurred.<br>
+                    The model will detect which word you focused on.
+                </p>
+            {% endif %}
+            
+            <div class="alert alert-warning text-dark">
+                <h6><i class="fas fa-brain me-2"></i>P300 Instructions</h6>
+                <ul class="mb-0 text-start">
+                    <li>Sit comfortably and stay relaxed</li>
+                    <li>Look at the center of the screen</li>
+                    <li>When a word becomes clear and bold, think about that word</li>
+                    <li>Stay still during word presentations</li>
+                    <li>The trial will run automatically</li>
+                </ul>
+            </div>
+            
+            <button id="start-trial-btn" class="btn btn-lg btn-info" onclick="startTrial()">
+                <i class="fas fa-play me-2"></i>Start P300 Trial
+            </button>
+        </div>
+    </div>
+
+    <!-- Word Display Grid -->
+    <div class="word-grid" id="word-grid" style="display: none;">
+        <div class="word-item blurred" data-word="green">
+            <div class="word-text">GREEN</div>
+        </div>
+        <div class="word-item blurred" data-word="purple">
+            <div class="word-text">PURPLE</div>
+        </div>
+        <div class="word-item blurred" data-word="yellow">
+            <div class="word-text">YELLOW</div>
+        </div>
+        <div class="word-item blurred" data-word="red">
+            <div class="word-text">RED</div>
+        </div>
+        <div class="word-item blurred" data-word="blue">
+            <div class="word-text">BLUE</div>
+        </div>
+    </div>
+
+    <!-- Countdown Display -->
+    <div id="countdown-screen" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 3000; display: flex; align-items: center; justify-content: center;">
+        <div class="text-center">
+            <div class="countdown-display" id="countdown-number">3</div>
+            <div class="h4 text-muted">Get Ready...</div>
+        </div>
+    </div>
+
+    <!-- Completion Screen -->
+    <div id="completion-screen" class="completion-screen" style="display: none;">
+        <div class="completion-content">
+            <h1 class="display-4 text-success mb-4">
+                <i class="fas fa-check-circle me-3"></i>Trial Complete!
+            </h1>
+            <p class="lead mb-4">P300 prediction trial has been completed successfully.</p>
+            
+            <div id="final-results" class="alert alert-info mb-4">
+                <h6>Trial Results:</h6>
+                <div id="results-summary">Processing results...</div>
+            </div>
+            
+            <div class="mt-4">
+                <a href="{% url 'bci:p300_prediction' %}" class="btn btn-lg btn-primary me-3">
+                    <i class="fas fa-arrow-left me-2"></i>Back to Prediction
+                </a>
+                <a href="{% url 'bci:p300_trial_results' session.pk %}" class="btn btn-lg btn-outline-info">
+                    <i class="fas fa-chart-line me-2"></i>View Detailed Results
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+        <div class="progress-info">
+            <div>
+                <span id="current-word-display">Waiting to start...</span>
+            </div>
+            <div>
+                <span id="progress-text">0 / 0 presentations</span>
+            </div>
+            <div>
+                <span id="time-remaining">--:--</span>
+            </div>
+        </div>
+        <div class="trial-progress">
+            <div class="trial-progress-bar" id="progress-bar" style="width: 0%;"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+class P300Trial {
+    constructor() {
+        // Session configuration
+        this.sessionId = '{{ session.pk }}';
+        this.targetWord = '{{ session.target_word|default:"" }}';
+        this.wordDisplayDuration = {{ session.word_display_duration|default:3000 }};
+        this.restDuration = {{ session.rest_duration|default:1500 }};
+        
+        // Word presentation order (configurable)
+        this.wordOrder = ['green', 'red', 'blue', 'yellow', 'purple', 'green', 'purple', 'yellow', 'red', 'blue'];
+        
+        // Trial state
+        this.currentIndex = 0;
+        this.isRunning = false;
+        this.startTime = null;
+        this.predictions = [];
+        this.eegConnected = false;
+        
+        // DOM elements
+        this.wordGrid = document.getElementById('word-grid');
+        this.startScreen = document.getElementById('start-screen');
+        this.completionScreen = document.getElementById('completion-screen');
+        this.countdownScreen = document.getElementById('countdown-screen');
+        
+        this.initializeElements();
+        this.connectToBackend();
+    }
+    
+    initializeElements() {
+        // Initialize all DOM references
+        this.progressBar = document.getElementById('progress-bar');
+        this.progressText = document.getElementById('progress-text');
+        this.currentWordDisplay = document.getElementById('current-word-display');
+        this.timeRemaining = document.getElementById('time-remaining');
+        this.trialStatus = document.getElementById('trial-status');
+        this.predictionDisplay = document.getElementById('prediction-display');
+        this.predictionList = document.getElementById('prediction-list');
+        
+        // Update initial progress
+        this.updateProgress();
+    }
+    
+    async connectToBackend() {
+        try {
+            // Check EEG connection
+            const response = await fetch(`/bci/p300/prediction/status/${this.sessionId}/`);
+            const data = await response.json();
+            
+            if (data.eeg_connected) {
+                this.setEEGStatus(true);
+            } else {
+                this.setEEGStatus(false);
+                // Try to connect
+                setTimeout(() => this.connectToBackend(), 2000);
+            }
+        } catch (error) {
+            console.error('Backend connection error:', error);
+            this.setEEGStatus(false);
+            setTimeout(() => this.connectToBackend(), 5000);
+        }
+    }
+    
+    setEEGStatus(connected) {
+        this.eegConnected = connected;
+        const indicator = document.getElementById('eeg-indicator');
+        const statusText = document.getElementById('eeg-status-text');
+        
+        if (connected) {
+            indicator.className = 'eeg-indicator eeg-connected';
+            statusText.textContent = 'EEG Connected';
+        } else {
+            indicator.className = 'eeg-indicator eeg-disconnected';
+            statusText.textContent = 'EEG Disconnected';
+        }
+    }
+    
+    async startTrial() {
+        if (!this.eegConnected) {
+            alert('EEG device is not connected. Please check your connection.');
+            return;
+        }
+        
+        // Hide start screen and show countdown
+        this.startScreen.style.display = 'none';
+        this.countdownScreen.style.display = 'flex';
+        
+        // Countdown
+        await this.showCountdown();
+        
+        // Start the actual trial
+        this.countdownScreen.style.display = 'none';
+        this.wordGrid.style.display = 'grid';
+        this.predictionDisplay.style.display = 'block';
+        
+        this.isRunning = true;
+        this.startTime = Date.now();
+        this.trialStatus.textContent = 'Trial Running';
+        
+        // Start EEG recording
+        await this.startEEGRecording();
+        
+        // Begin word presentations
+        this.runWordPresentations();
+    }
+    
+    async showCountdown() {
+        const countdownNumber = document.getElementById('countdown-number');
+        
+        for (let i = 3; i > 0; i--) {
+            countdownNumber.textContent = i;
+            await this.sleep(1000);
+        }
+    }
+    
+    async startEEGRecording() {
+        try {
+            const response = await fetch(`/bci/p300/prediction/start/${this.sessionId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCSRFToken(),
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            if (data.status !== 'success') {
+                throw new Error(data.message || 'Failed to start EEG recording');
+            }
+        } catch (error) {
+            console.error('Error starting EEG recording:', error);
+            alert('Failed to start EEG recording: ' + error.message);
+        }
+    }
+    
+    async runWordPresentations() {
+        for (let i = 0; i < this.wordOrder.length; i++) {
+            if (!this.isRunning) break;
+            
+            this.currentIndex = i;
+            const word = this.wordOrder[i];
+            
+            // Update status
+            this.currentWordDisplay.textContent = `Presenting: ${word.toUpperCase()}`;
+            this.updateProgress();
+            
+            // Show word
+            await this.presentWord(word);
+            
+            // Rest period (except after last word)
+            if (i < this.wordOrder.length - 1) {
+                this.currentWordDisplay.textContent = 'Rest period...';
+                await this.restPeriod();
+            }
+        }
+        
+        // Trial complete
+        this.completeTrial();
+    }
+    
+    async presentWord(word) {
+        // Blur all words first
+        this.blurAllWords();
+        
+        // Wait a moment
+        await this.sleep(200);
+        
+        // Focus on the target word
+        const wordElement = document.querySelector(`[data-word="${word}"]`);
+        if (wordElement) {
+            wordElement.classList.remove('blurred');
+            wordElement.classList.add('focused');
+        }
+        
+        // Wait for presentation duration
+        await this.sleep(this.wordDisplayDuration);
+        
+        // Blur the word again
+        if (wordElement) {
+            wordElement.classList.remove('focused');
+            wordElement.classList.add('blurred');
+        }
+        
+        // Poll for predictions during word presentation
+        this.pollPredictions();
+    }
+    
+    async restPeriod() {
+        // Set all words to rest state
+        const wordItems = document.querySelectorAll('.word-item');
+        wordItems.forEach(item => {
+            item.classList.remove('focused', 'blurred');
+            item.classList.add('rest');
+        });
+        
+        await this.sleep(this.restDuration);
+    }
+    
+    blurAllWords() {
+        const wordItems = document.querySelectorAll('.word-item');
+        wordItems.forEach(item => {
+            item.classList.remove('focused', 'rest');
+            item.classList.add('blurred');
+        });
+    }
+    
+    async pollPredictions() {
+        try {
+            const response = await fetch(`/bci/p300/prediction/results/${this.sessionId}/`);
+            const data = await response.json();
+            
+            if (data.predictions && data.predictions.length > 0) {
+                this.updatePredictionDisplay(data.predictions);
+            }
+        } catch (error) {
+            console.error('Error polling predictions:', error);
+        }
+    }
+    
+    updatePredictionDisplay(predictions) {
+        // Get latest predictions
+        const latestPredictions = predictions.slice(-5); // Show last 5
+        
+        this.predictionList.innerHTML = '';
+        
+        latestPredictions.forEach(pred => {
+            const predItem = document.createElement('div');
+            predItem.className = 'prediction-item';
+            
+            const confidence = pred.confidence || 0;
+            const confidencePercent = Math.round(confidence * 100);
+            
+            predItem.innerHTML = `
+                <div>
+                    <span class="badge bg-info">${pred.predicted_word || 'Unknown'}</span>
+                </div>
+                <div class="d-flex align-items-center">
+                    <small class="text-muted me-2">${confidencePercent}%</small>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" style="width: ${confidencePercent}%"></div>
+                    </div>
+                </div>
+            `;
+            
+            this.predictionList.appendChild(predItem);
+        });
+    }
+    
+    updateProgress() {
+        const progress = (this.currentIndex / this.wordOrder.length) * 100;
+        this.progressBar.style.width = `${progress}%`;
+        this.progressText.textContent = `${this.currentIndex} / ${this.wordOrder.length} presentations`;
+        
+        if (this.startTime) {
+            const elapsed = Date.now() - this.startTime;
+            const totalDuration = this.wordOrder.length * (this.wordDisplayDuration + this.restDuration);
+            const remaining = Math.max(0, totalDuration - elapsed);
+            
+            const minutes = Math.floor(remaining / 60000);
+            const seconds = Math.floor((remaining % 60000) / 1000);
+            this.timeRemaining.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+        }
+    }
+    
+    async completeTrial() {
+        this.isRunning = false;
+        this.trialStatus.textContent = 'Trial Complete';
+        
+        // Stop EEG recording
+        await this.stopEEGRecording();
+        
+        // Get final results
+        await this.getFinalResults();
+        
+        // Show completion screen
+        this.wordGrid.style.display = 'none';
+        this.predictionDisplay.style.display = 'none';
+        this.completionScreen.style.display = 'flex';
+    }
+    
+    async stopEEGRecording() {
+        try {
+            await fetch(`/bci/p300/prediction/stop/${this.sessionId}/`, {
+                method: 'POST',
+                headers: {
+                    'X-CSRFToken': this.getCSRFToken()
+                }
+            });
+        } catch (error) {
+            console.error('Error stopping EEG recording:', error);
+        }
+    }
+    
+    async getFinalResults() {
+        try {
+            const response = await fetch(`/bci/p300/prediction/results/${this.sessionId}/`);
+            const data = await response.json();
+            
+            const resultsDiv = document.getElementById('results-summary');
+            
+            if (data.final_prediction) {
+                const pred = data.final_prediction;
+                const accuracy = this.targetWord && pred.predicted_word === this.targetWord ? 'Correct' : 'Incorrect';
+                
+                resultsDiv.innerHTML = `
+                    <strong>Predicted Word:</strong> ${pred.predicted_word || 'None'}<br>
+                    <strong>Confidence:</strong> ${Math.round((pred.confidence || 0) * 100)}%<br>
+                    ${this.targetWord ? `<strong>Accuracy:</strong> ${accuracy}` : ''}
+                `;
+            } else {
+                resultsDiv.innerHTML = 'No predictions were made during the trial.';
+            }
+        } catch (error) {
+            console.error('Error getting final results:', error);
+            document.getElementById('results-summary').innerHTML = 'Error retrieving results.';
+        }
+    }
+    
+    async stopTrial() {
+        if (!confirm('Are you sure you want to stop the trial?')) return;
+        
+        this.isRunning = false;
+        await this.stopEEGRecording();
+        window.location.href = '{% url "bci:p300_prediction" %}';
+    }
+    
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    }
+    
+    getCSRFToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]').value;
+    }
+}
+
+// Global functions
+function startTrial() {
+    window.p300Trial.startTrial();
+}
+
+function stopTrial() {
+    window.p300Trial.stopTrial();
+}
+
+// Initialize trial when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    window.p300Trial = new P300Trial();
+});
+</script>
+
+<!-- Hidden CSRF token -->
+<form style="display: none;">
+    {% csrf_token %}
+</form>
+
+{% endblock %}

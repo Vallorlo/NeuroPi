@@ -56,10 +56,14 @@ urlpatterns = [
         
         # P300 specific endpoints
         path('training/start/', views.start_p300_training, name='start_p300_training'),
+        path('prediction/session/create/', views.create_p300_prediction_session, name='create_p300_prediction_session'),
+        path('prediction/trial/<uuid:session_pk>/', views.p300_trial_run, name='p300_trial_run'),
         path('prediction/start/<uuid:session_pk>/', views.start_p300_prediction, name='start_p300_prediction'),
         path('prediction/stop/<uuid:session_pk>/', views.stop_p300_prediction, name='stop_p300_prediction'),
         path('prediction/status/<uuid:session_pk>/', views.p300_prediction_status, name='p300_prediction_status'),
-        path('prediction/results/<uuid:session_pk>/', views.p300_trial_results, name='p300_trial_results'),
+        path('prediction/results/<uuid:session_pk>/', views.p300_prediction_results, name='p300_prediction_results'),
+        path('prediction/trial-results/<uuid:session_pk>/', views.p300_trial_results, name='p300_trial_results'),
+        path('cleanup-sessions/', views.cleanup_p300_sessions, name='cleanup_p300_sessions'),
     ])),
     
     # API endpoints for AJAX

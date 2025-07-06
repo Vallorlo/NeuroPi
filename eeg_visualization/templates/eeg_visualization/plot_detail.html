@@ -1,0 +1,363 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    {{ title }} - MNE Visualization
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="plot-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="display-5 text-white mb-2">{{ title }}</h1>
+                        <p class="lead text-white-50 mb-0">{{ description }}</p>
+                    </div>
+                    <div class="header-actions">
+                        <a href="{% url 'eeg_visualization:home' %}" class="btn btn-outline-light">
+                            <i class="bi bi-arrow-left"></i> Back
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="row">
+        <!-- Control Panel -->
+        <div class="col-lg-3 mb-4">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-gear"></i> Visualization Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">MNE Function</label>
+                        <div class="code-block">
+                            <code>{{ mne_function }}</code>
+                        </div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Data Type</label>
+                        <select class="form-select" id="dataType">
+                            <option value="raw">Raw Data</option>
+                            <option value="epochs">Epochs</option>
+                            <option value="evoked">Evoked Responses</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Channels</label>
+                        <select class="form-select" id="channels">
+                            <option value="all">All Channels</option>
+                            <option value="eeg">EEG Channels Only</option>
+                            <option value="frontal">Frontal Channels</option>
+                            <option value="central">Central Channels</option>
+                            <option value="parietal">Parietal Channels</option>
+                            <option value="occipital">Occipital Channels</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Time Range (seconds)</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <input type="number" class="form-control" placeholder="From" value="0" step="0.1">
+                            </div>
+                            <div class="col-6">
+                                <input type="number" class="form-control" placeholder="To" value="10" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary w-100 mb-2" onclick="generatePlot()">
+                        <i class="bi bi-play-circle"></i> Generate Plot
+                    </button>
+
+                    <button class="btn btn-success w-100 mb-2" onclick="exportPlot()">
+                        <i class="bi bi-download"></i> Export Plot
+                    </button>
+
+                    <button class="btn btn-warning w-100" onclick="resetPlot()">
+                        <i class="bi bi-arrow-clockwise"></i> Reset
+                    </button>
+                </div>
+            </div>
+
+            <!-- Features List -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-list-check"></i> Available Features</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="feature-list">
+                        {% for feature in features %}
+                        <li><i class="bi bi-check-circle text-success"></i> {{ feature }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Visualization Area -->
+        <div class="col-lg-9">
+            <div class="card shadow">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Visualization Area</h5>
+                    <div class="plot-controls">
+                        <button class="btn btn-sm btn-outline-primary" onclick="zoomIn()">
+                            <i class="bi bi-zoom-in"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="zoomOut()">
+                            <i class="bi bi-zoom-out"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="fullscreen()">
+                            <i class="bi bi-fullscreen"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="plotArea" class="plot-container">
+                        {% if plot_image %}
+                            <!-- Display actual plot -->
+                            <div class="actual-plot">
+                                <img src="data:image/png;base64,{{ plot_image }}"
+                                     class="img-fluid"
+                                     alt="{{ title }}"
+                                     style="max-width: 100%; height: auto;">
+                            </div>
+                        {% else %}
+                            <!-- Placeholder when no data -->
+                            <div class="plot-placeholder">
+                                <div class="text-center">
+                                    <div class="plot-icon mb-3">
+                                        {% if plot_type == 'interactive' %}
+                                            <i class="bi bi-graph-up-arrow"></i>
+                                        {% elif plot_type == 'topographic' %}
+                                            <i class="bi bi-globe"></i>
+                                        {% elif plot_type == 'timefreq' %}
+                                            <i class="bi bi-soundwave"></i>
+                                        {% elif plot_type == '3d' %}
+                                            <i class="bi bi-box"></i>
+                                        {% elif plot_type == 'ica' %}
+                                            <i class="bi bi-diagram-2"></i>
+                                        {% elif plot_type == 'stats' %}
+                                            <i class="bi bi-bar-chart-line"></i>
+                                        {% elif plot_type == 'connectivity' %}
+                                            <i class="bi bi-share"></i>
+                                        {% elif plot_type == 'psd' %}
+                                            <i class="bi bi-activity"></i>
+                                        {% endif %}
+                                    </div>
+                                    <h4 class="text-muted">{{ title }}</h4>
+                                    <p class="text-muted">Upload CSV data to generate visualization</p>
+                        {% endif %}
+                                <div class="demo-info">
+                                    <small class="text-info">
+                                        <i class="bi bi-info-circle"></i>
+                                        This is a demo example - will be connected to real EEG data using MNE library
+                                    </small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Code Example -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-code-slash"></i> Code Example</h5>
+                </div>
+                <div class="card-body">
+                    <pre class="code-example"><code id="codeExample">
+# Example usage of {{ mne_function }}
+import mne
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Load data
+{% if plot_type == 'interactive' %}
+raw = mne.io.read_raw_fif('sample_data.fif', preload=True)
+raw.plot()  # Interactive plot
+{% elif plot_type == 'topographic' %}
+evoked = mne.read_evokeds('sample_data-ave.fif')[0]
+evoked.plot_topomap(times=[0.1, 0.2, 0.3], ch_type='eeg')
+{% elif plot_type == 'timefreq' %}
+epochs = mne.read_epochs('sample_data-epo.fif')
+freqs = np.arange(4, 40, 2)
+tfr = mne.time_frequency.tfr_morlet(epochs, freqs, n_cycles=2)
+tfr.plot(picks='Cz', baseline=(-0.5, 0))
+{% elif plot_type == '3d' %}
+raw = mne.io.read_raw_fif('sample_data.fif')
+fig = mne.viz.plot_alignment(raw.info, subject='sample',
+                            surfaces='head-dense')
+{% elif plot_type == 'ica' %}
+ica = mne.preprocessing.ICA(n_components=20)
+ica.fit(raw)
+ica.plot_components()
+{% elif plot_type == 'stats' %}
+from mne.stats import spatio_temporal_cluster_test
+cluster_stats = spatio_temporal_cluster_test([X1, X2])
+{% elif plot_type == 'connectivity' %}
+from mne_connectivity.viz import plot_connectivity_circle
+plot_connectivity_circle(con, node_names, title='Brain Connectivity')
+{% elif plot_type == 'psd' %}
+raw.plot_psd(fmax=50, picks='eeg')
+{% endif %}
+
+plt.show()
+                    </code></pre>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.plot-header {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 2rem;
+    border-radius: 15px;
+    margin-bottom: 1rem;
+}
+
+.code-block {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 0.5rem;
+    font-family: 'Courier New', monospace;
+}
+
+.plot-container {
+    min-height: 500px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    position: relative;
+}
+
+.plot-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 500px;
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+}
+
+.plot-icon {
+    font-size: 4rem;
+    color: #6c757d;
+}
+
+.feature-list {
+    list-style: none;
+    padding: 0;
+}
+
+.feature-list li {
+    padding: 0.5rem 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.feature-list li:last-child {
+    border-bottom: none;
+}
+
+.code-example {
+    background: #2d3748;
+    color: #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem;
+    margin: 0;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+
+.demo-info {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: rgba(13, 202, 240, 0.1);
+    border-radius: 8px;
+    border-left: 4px solid #0dcaf0;
+}
+
+@media (max-width: 768px) {
+    .plot-header {
+        padding: 1.5rem 1rem;
+    }
+    
+    .plot-container {
+        min-height: 300px;
+    }
+    
+    .plot-placeholder {
+        height: 300px;
+    }
+}
+</style>
+
+<script>
+function generatePlot() {
+    const plotArea = document.getElementById('plotArea');
+    plotArea.innerHTML = `
+        <div class="d-flex align-items-center justify-content-center h-100">
+            <div class="text-center">
+                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h5 class="text-primary">Generating plot...</h5>
+                <p class="text-muted">Preparing {{ title }} visualization</p>
+            </div>
+        </div>
+    `;
+
+    setTimeout(() => {
+        plotArea.innerHTML = `
+            <div class="d-flex align-items-center justify-content-center h-100">
+                <div class="text-center text-success">
+                    <i class="bi bi-check-circle" style="font-size: 4rem;"></i>
+                    <h4 class="mt-3">Plot generated successfully!</h4>
+                    <p class="text-muted">{{ title }} ready for display</p>
+                    <div class="mt-3">
+                        <span class="badge bg-success me-2">{{ mne_function }}</span>
+                        <span class="badge bg-info">MNE-Python</span>
+                    </div>
+                    <small class="text-muted d-block mt-2">
+                        In the real application, interactive plot will appear here using MNE library
+                    </small>
+                </div>
+            </div>
+        `;
+    }, 2000);
+}
+
+function exportPlot() {
+    alert('Plot will be exported in PNG/SVG/PDF format');
+}
+
+function resetPlot() {
+    location.reload();
+}
+
+function zoomIn() {
+    alert('Zoom in plot');
+}
+
+function zoomOut() {
+    alert('Zoom out plot');
+}
+
+function fullscreen() {
+    const plotArea = document.getElementById('plotArea');
+    if (plotArea.requestFullscreen) {
+        plotArea.requestFullscreen();
+    }
+}
+</script>
+{% endblock %}

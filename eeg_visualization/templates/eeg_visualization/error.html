@@ -1,0 +1,93 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Error - EEG Visualization
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow-lg border-danger">
+                <div class="card-header bg-danger text-white">
+                    <h4 class="mb-0"><i class="bi bi-exclamation-triangle"></i> An Error Occurred</h4>
+                </div>
+                <div class="card-body text-center py-5">
+                    <div class="error-icon mb-4">
+                        <i class="bi bi-bug"></i>
+                    </div>
+
+                    <h3 class="text-danger mb-3">Data Processing Error</h3>
+                    <p class="lead text-muted mb-4">
+                        An error occurred while applying {{ plot_type }} visualization to the data
+                    </p>
+
+                    <div class="alert alert-danger text-start">
+                        <strong>Error Details:</strong><br>
+                        <code>{{ error }}</code>
+                    </div>
+
+                    <div class="action-buttons mt-4">
+                        <a href="{% url 'eeg_visualization:upload_csv' %}" class="btn btn-primary btn-lg me-3">
+                            <i class="bi bi-arrow-clockwise"></i> Try Again
+                        </a>
+                        <a href="{% url 'eeg_visualization:home' %}" class="btn btn-outline-secondary btn-lg">
+                            <i class="bi bi-arrow-left"></i> Back to Home
+                        </a>
+                    </div>
+
+                    <div class="mt-5 p-4 bg-light rounded">
+                        <h5 class="text-primary mb-3">💡 Suggested Solutions:</h5>
+                        <div class="row text-start">
+                            <div class="col-md-6">
+                                <ul class="list-unstyled">
+                                    <li><i class="bi bi-check-circle text-success"></i> Check CSV file format</li>
+                                    <li><i class="bi bi-check-circle text-success"></i> Ensure required columns exist</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <ul class="list-unstyled">
+                                    <li><i class="bi bi-check-circle text-success"></i> Use Rizk default data</li>
+                                    <li><i class="bi bi-check-circle text-success"></i> Check file size</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.error-icon {
+    font-size: 6rem;
+    color: #dc3545;
+}
+
+.action-buttons .btn {
+    transition: all 0.3s ease;
+}
+
+.action-buttons .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.card {
+    border-radius: 15px;
+}
+
+@media (max-width: 768px) {
+    .error-icon {
+        font-size: 4rem;
+    }
+    
+    .action-buttons .btn {
+        display: block;
+        width: 100%;
+        margin-bottom: 1rem;
+    }
+}
+</style>
+{% endblock %}

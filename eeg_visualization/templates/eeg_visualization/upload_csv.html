@@ -1,0 +1,454 @@
+{% extends "layout.html" %}
+{% load eeg_filters %}
+
+{% block title %}
+    Upload CSV Files - EEG Visualization
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="upload-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="display-5 text-white mb-2">📁 Upload EEG Data Files</h1>
+                        <p class="lead text-white-50 mb-0">Upload CSV file to apply various MNE visualizations</p>
+                    </div>
+                    <div class="header-actions">
+                        <a href="{% url 'eeg_visualization:home' %}" class="btn btn-outline-light">
+                            <i class="bi bi-arrow-left"></i> Back
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Upload Section -->
+        <div class="col-lg-8 mb-4">
+            {% if upload_success %}
+            <!-- Success Message -->
+            <div class="alert alert-success alert-dismissible fade show" role="alert">
+                <i class="bi bi-check-circle-fill"></i>
+                <strong>File uploaded successfully!</strong> You can now apply different visualizations to the data.
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+
+            <!-- File Info Card -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-spreadsheet"></i> Uploaded File Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <p><strong>File Name:</strong> {{ file_info.name }}</p>
+                            <p><strong>File Size:</strong> {{ file_info.size|filesizeformat }}</p>
+                            <p><strong>Number of Rows:</strong> {{ file_info.rows|floatformat:0 }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Number of Columns:</strong> {{ file_info.columns|length }}</p>
+                            <p><strong>EEG Channels:</strong> {{ file_info.eeg_channels|length }}</p>
+                            <p><strong>Channels:</strong> {{ file_info.eeg_channels|join:", " }}</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Sample Data -->
+                    <h6 class="mt-3 mb-2">Data Sample:</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm table-striped">
+                            <thead class="table-dark">
+                                <tr>
+                                    {% for col in file_info.columns %}
+                                    <th>{{ col }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for row in file_info.sample_data %}
+                                <tr>
+                                    {% for col in file_info.columns %}
+                                    <td>{{ row|lookup:col }}</td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Visualization Options -->
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-graph-up"></i> Apply Visualizations</h5>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted mb-3">Choose the type of visualization you want to apply to the uploaded data:</p>
+
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <a href="{% url 'eeg_visualization:plot_with_data' 'interactive' %}" class="btn btn-outline-primary w-100">
+                                <i class="bi bi-graph-up-arrow"></i><br>Interactive Plots
+                            </a>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="{% url 'eeg_visualization:plot_with_data' 'topographic' %}" class="btn btn-outline-success w-100">
+                                <i class="bi bi-globe"></i><br>Topographic Maps
+                            </a>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="{% url 'eeg_visualization:plot_with_data' 'timefreq' %}" class="btn btn-outline-warning w-100">
+                                <i class="bi bi-soundwave"></i><br>Time-Frequency Analysis
+                            </a>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="{% url 'eeg_visualization:plot_with_data' '3d' %}" class="btn btn-outline-info w-100">
+                                <i class="bi bi-box"></i><br>3D Visualization
+                            </a>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="{% url 'eeg_visualization:plot_with_data' 'ica' %}" class="btn btn-outline-danger w-100">
+                                <i class="bi bi-diagram-2"></i><br>Independent Components
+                            </a>
+                        </div>
+                        <div class="col-md-4">
+                            <a href="{% url 'eeg_visualization:plot_with_data' 'psd' %}" class="btn btn-outline-secondary w-100">
+                                <i class="bi bi-activity"></i><br>Power Spectral Density
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            {% elif upload_error %}
+            <!-- Error Message -->
+            <div class="alert alert-danger" role="alert">
+                <i class="bi bi-exclamation-triangle-fill"></i>
+                <strong>File upload error:</strong> {{ upload_error }}
+            </div>
+            {% endif %}
+
+            <!-- Upload Form -->
+            <div class="card shadow">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-cloud-upload"></i> Upload New CSV File</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data" id="uploadForm">
+                        {% csrf_token %}
+                        <div class="mb-3">
+                            <label for="csv_file" class="form-label">Choose CSV File</label>
+                            <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
+                            <div class="form-text">File must be in CSV format and contain EEG data</div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <button type="button" class="btn btn-success me-md-2" onclick="loadDefaultData()">
+                                <i class="bi bi-download"></i> Use Rizk Data (Default)
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-upload"></i> Upload File
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Sidebar -->
+        <div class="col-lg-4">
+            <!-- Sample File Info -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-info-circle"></i> File Structure Example</h5>
+                </div>
+                <div class="card-body">
+                    <h6>{{ sample_file_info.name }}</h6>
+                    <p class="text-muted small">User: <strong>{{ sample_file_info.user }}</strong></p>
+                    <p>{{ sample_file_info.description }}</p>
+
+                    <h6 class="mt-3">Required Columns:</h6>
+                    <div class="row">
+                        <div class="col-12">
+                            {% for col in sample_file_info.columns %}
+                            <span class="badge bg-secondary me-1 mb-1">{{ col }}</span>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="mt-3 p-3 bg-light rounded">
+                        <h6 class="text-primary">📋 File Requirements:</h6>
+                        <ul class="small mb-0">
+                            <li>CSV format with comma separator</li>
+                            <li>Contains EEG channels (14 channels)</li>
+                            <li>Timestamp column for time</li>
+                            <li>word column for events</li>
+                            <li>COUNTER column for numbering</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Instructions -->
+            <div class="card shadow">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="bi bi-lightbulb"></i> Usage Instructions</h5>
+                </div>
+                <div class="card-body">
+                    <ol class="small">
+                        <li><strong>Upload CSV file</strong> containing EEG data</li>
+                        <li><strong>Ensure required columns exist</strong> in the file</li>
+                        <li><strong>Choose visualization type</strong> you want to apply</li>
+                        <li><strong>Enjoy interactive visualizations</strong> of your data</li>
+                    </ol>
+
+                    <div class="mt-3 p-2 bg-success bg-opacity-10 rounded">
+                        <small class="text-success">
+                            <i class="bi bi-check-circle"></i>
+                            <strong>Tip:</strong> You can use Rizk default data for quick testing
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- File Format Documentation -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0"><i class="bi bi-file-text"></i> Detailed Explanation of Required File Structure</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-lg-8">
+                            <h6 class="text-primary mb-3">📋 Example of Required Data:</h6>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>COUNTER</th>
+                                            <th>F3</th>
+                                            <th>FC5</th>
+                                            <th>AF3</th>
+                                            <th>F7</th>
+                                            <th>...</th>
+                                            <th>F4</th>
+                                            <th>Timestamp</th>
+                                            <th>word</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <td>28</td>
+                                            <td>8171</td>
+                                            <td>8160</td>
+                                            <td>8123</td>
+                                            <td>8114</td>
+                                            <td>...</td>
+                                            <td>9671</td>
+                                            <td>0.0067</td>
+                                            <td>XXXXX</td>
+                                        </tr>
+                                        <tr>
+                                            <td>29</td>
+                                            <td>8116</td>
+                                            <td>8135</td>
+                                            <td>8175</td>
+                                            <td>8166</td>
+                                            <td>...</td>
+                                            <td>9617</td>
+                                            <td>0.0131</td>
+                                            <td>XXXXX</td>
+                                        </tr>
+                                        <tr>
+                                            <td>30</td>
+                                            <td>8139</td>
+                                            <td>8140</td>
+                                            <td>8145</td>
+                                            <td>8145</td>
+                                            <td>...</td>
+                                            <td>9641</td>
+                                            <td>0.0213</td>
+                                            <td>touch</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <div class="mt-4">
+                                <h6 class="text-success mb-3">✅ File Requirements:</h6>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <ul class="list-group list-group-flush">
+                                            <li class="list-group-item"><strong>Format:</strong> CSV with comma (,)</li>
+                                            <li class="list-group-item"><strong>Encoding:</strong> UTF-8</li>
+                                            <li class="list-group-item"><strong>Max Size:</strong> 50 MB</li>
+                                        </ul>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <ul class="list-group list-group-flush">
+                                            <li class="list-group-item"><strong>First Row:</strong> Column names</li>
+                                            <li class="list-group-item"><strong>Data:</strong> Numbers only for channels</li>
+                                            <li class="list-group-item"><strong>Events:</strong> Text in word column</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-4">
+                            <h6 class="text-info mb-3">🧠 EEG Channels Explanation:</h6>
+                            <div class="eeg-channels-info">
+                                <div class="channel-group mb-3">
+                                    <h6 class="text-primary">Frontal Region:</h6>
+                                    <span class="badge bg-primary me-1">F3</span>
+                                    <span class="badge bg-primary me-1">F4</span>
+                                    <span class="badge bg-primary me-1">F7</span>
+                                    <span class="badge bg-primary me-1">F8</span>
+                                </div>
+
+                                <div class="channel-group mb-3">
+                                    <h6 class="text-success">Central Region:</h6>
+                                    <span class="badge bg-success me-1">FC5</span>
+                                    <span class="badge bg-success me-1">FC6</span>
+                                </div>
+
+                                <div class="channel-group mb-3">
+                                    <h6 class="text-warning">Temporal Region:</h6>
+                                    <span class="badge bg-warning me-1">T7</span>
+                                    <span class="badge bg-warning me-1">T8</span>
+                                </div>
+
+                                <div class="channel-group mb-3">
+                                    <h6 class="text-info">Parietal Region:</h6>
+                                    <span class="badge bg-info me-1">P7</span>
+                                    <span class="badge bg-info me-1">P8</span>
+                                </div>
+
+                                <div class="channel-group mb-3">
+                                    <h6 class="text-danger">Occipital Region:</h6>
+                                    <span class="badge bg-danger me-1">O1</span>
+                                    <span class="badge bg-danger me-1">O2</span>
+                                </div>
+
+                                <div class="channel-group">
+                                    <h6 class="text-secondary">Others:</h6>
+                                    <span class="badge bg-secondary me-1">AF3</span>
+                                    <span class="badge bg-secondary me-1">AF4</span>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 p-3 bg-info bg-opacity-10 rounded">
+                                <h6 class="text-info">📊 Additional Information:</h6>
+                                <small>
+                                    <strong>COUNTER:</strong> Sample number<br>
+                                    <strong>Timestamp:</strong> Time in seconds<br>
+                                    <strong>word:</strong> Event or stimulus<br>
+                                    <strong>Values:</strong> In microvolts (μV)
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.upload-header {
+    background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+    padding: 2rem;
+    border-radius: 15px;
+    margin-bottom: 1rem;
+}
+
+.btn-outline-primary:hover,
+.btn-outline-success:hover,
+.btn-outline-warning:hover,
+.btn-outline-info:hover,
+.btn-outline-danger:hover,
+.btn-outline-secondary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.card {
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+#uploadForm {
+    position: relative;
+}
+
+.form-control:focus {
+    border-color: #28a745;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+@media (max-width: 768px) {
+    .upload-header {
+        padding: 1.5rem 1rem;
+    }
+    
+    .btn {
+        margin-bottom: 0.5rem;
+    }
+}
+</style>
+
+<script>
+function loadDefaultData() {
+    if (confirm('Do you want to load Rizk default data?')) {
+        fetch('{% url "eeg_visualization:load_default" %}', {
+            method: 'POST',
+            headers: {
+                'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                'Content-Type': 'application/json',
+            },
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred while loading data');
+        });
+    }
+}
+
+// File upload validation
+document.getElementById('csv_file').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        if (!file.name.toLowerCase().endsWith('.csv')) {
+            alert('Please select CSV file only');
+            e.target.value = '';
+            return;
+        }
+        
+        if (file.size > 50 * 1024 * 1024) { // 50MB limit
+            alert('File size is too large. Maximum 50 MB');
+            e.target.value = '';
+            return;
+        }
+    }
+});
+</script>
+{% endblock %}

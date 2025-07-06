@@ -73,7 +73,7 @@
         <!-- Feature Cards -->
         <div class="row g-4">
             <!-- Data Collection card -->
-            <div class="col-12 col-sm-6 col-md-3">
+            <div class="col-12 col-sm-6 col-lg-3">
                 <div class="feature-card" data-color="blue">
                     <div class="feature-icon">
                         <i class="bi bi-collection"></i>
@@ -85,7 +85,7 @@
             </div>
 
             <!-- BCI Analysis card -->
-            <div class="col-12 col-sm-6 col-md-3">
+            <div class="col-12 col-sm-6 col-lg-3">
                 <div class="feature-card" data-color="purple">
                     <div class="feature-icon">
                         <i class="bi bi-cpu"></i>
@@ -96,20 +96,29 @@
                 </div>
             </div>
 
-            <!-- Visualization card -->
-            <div class="col-12 col-sm-6 col-md-3">
-                <div class="feature-card" data-color="green">
+            <!-- EEG Visualization card -->
+            <div class="col-12 col-sm-6 col-lg-3">
+                <div class="feature-card" data-color="teal">
                     <div class="feature-icon">
-                        <i class="bi bi-graph-up"></i>
+                        <i class="bi bi-graph-up-arrow"></i>
                     </div>
-                    <h3>Visualization</h3>
-                    <p>Interactive EEG data visualization with customizable plots, channel comparisons, and event analysis.</p>
-                    <a href="{% url 'eeg_view' %}" class="card-link">Visualize Data <i class="bi bi-arrow-right"></i></a>
+                    <h3>EEG Visualization</h3>
+                    <p>Advanced EEG signal visualization with interactive plots, real-time monitoring, frequency analysis, and brain activity mapping.</p>
+
+                    <!-- Dual buttons container -->
+                    <div class="dual-buttons-container">
+                        <a href="{% url 'eeg_view' %}" class="btn btn-primary btn-sm me-2">
+                            <i class="bi bi-graph-up"></i> Basic Plots
+                        </a>
+                        <a href="/eeg-visualization/" class="btn btn-success btn-sm">
+                            <i class="bi bi-activity"></i> Advanced
+                        </a>
+                    </div>
                 </div>
             </div>
 
-            <!-- Completed Trials card -->
-            <div class="col-12 col-sm-6 col-md-3">
+            <!-- Trial Management card -->
+            <div class="col-12 col-sm-6 col-lg-3">
                 <div class="feature-card" data-color="orange">
                     <div class="feature-icon">
                         <i class="bi bi-clipboard-check"></i>
@@ -399,6 +408,10 @@
     background: linear-gradient(90deg, #fd7e14, #ffc107);
 }
 
+.feature-card[data-color="teal"]::before {
+    background: linear-gradient(90deg, #20c997, #0dcaf0);
+}
+
 .feature-card:hover {
     transform: translateY(-10px);
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.15);
@@ -432,6 +445,10 @@
 
 .feature-card[data-color="orange"] .feature-icon {
     background: linear-gradient(135deg, #fd7e14, #ffc107);
+}
+
+.feature-card[data-color="teal"] .feature-icon {
+    background: linear-gradient(135deg, #20c997, #0dcaf0);
 }
 
 .feature-card h3 {
@@ -656,6 +673,58 @@
     }
 }
 
+/* Dual Buttons Styling */
+.dual-buttons-container {
+    display: flex;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+}
+
+.dual-buttons-container .btn {
+    flex: 1;
+    min-width: 100px;
+    font-size: 0.875rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 8px;
+    transition: all 0.3s ease;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+}
+
+.dual-buttons-container .btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Ensure all cards have consistent height and layout */
+.feature-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.feature-card .dual-buttons-container {
+    margin-top: auto;
+}
+
+/* Ensure equal height cards on large screens */
+@media (min-width: 992px) {
+    .row.g-4 {
+        display: flex;
+        align-items: stretch;
+    }
+
+    .feature-card {
+        min-height: 320px;
+    }
+}
+
 /* Existing Styles */
 @media (min-width: 575px) and (max-width: 767.98px) {
     .custom-layout {
@@ -667,6 +736,23 @@
     }
     .custom-layout .btn:nth-child(3) {
         flex: 0 0 51%;
+    }
+
+    .dual-buttons-container {
+        flex-direction: column;
+        gap: 0.25rem;
+    }
+
+    .dual-buttons-container .btn {
+        min-width: auto;
+        font-size: 0.8rem;
+    }
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 991.98px) {
+    .feature-card {
+        margin-bottom: 1.5rem;
     }
 }
 </style>

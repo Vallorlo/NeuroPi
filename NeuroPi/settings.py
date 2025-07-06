@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     'accounts',
     'motor_imagery',
     'bci',
+    'eeg_visualization',
 ]
 
 

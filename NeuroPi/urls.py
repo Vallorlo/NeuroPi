@@ -17,11 +17,12 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.homepage, name='home'),
     path('about/', views.about, name='about'),
-    path('trials/', include('trials.urls')),           
-    path('plot/', include('plot.urls')),         
-    path('bci/', include('bci.urls')),                 
-    path('motor_imagery/', include('motor_imagery.urls')), 
+    path('trials/', include('trials.urls')),
+    path('plot/', include('plot.urls')),
+    path('bci/', include('bci.urls')),
+    path('motor_imagery/', include('motor_imagery.urls')),
     path('accounts/', include('accounts.urls')),
+    path('eeg-visualization/', include('eeg_visualization.urls')),
 ]
 
 if settings.DEBUG:

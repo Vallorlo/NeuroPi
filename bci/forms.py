@@ -96,11 +96,11 @@ class MultipleSessionUploadForm(forms.Form):
 
 
 class TrainingConfigForm(forms.ModelForm):
-    """Form for configuring model training - FINAL FIXED VERSION"""
+    """Form for configuring model training - FIXED VERSION"""
     
     class Meta:
         model = TrainedModel
-        fields = ['name', 'description', 'approach']  # REMOVED model_config and training_sessions
+        fields = ['name', 'description', 'approach']
         widgets = {
             'name': forms.TextInput(attrs={
                 'class': 'form-control',
@@ -198,9 +198,83 @@ class TrainingConfigForm(forms.ModelForm):
         if not training_sessions:
             raise forms.ValidationError("Please select at least one training session.")
         
+        # Additional validation: check if sessions have required data
+        for session in training_sessions:
+            if not session.session_file:
+                raise forms.ValidationError(f"Session '{session.name}' has no data file.")
+            
+            if not session.classes:
+                raise forms.ValidationError(f"Session '{session.name}' has no class information.")
+        
         return training_sessions
 
+    def clean_name(self):
+        """Validate model name uniqueness for the user"""
+        name = self.cleaned_data.get('name')
+        user = getattr(self.instance, 'user', None)
+        
+        if user and name:
+            # Check if another model with this name exists for this user
+            existing = TrainedModel.objects.filter(user=user, name=name)
+            if self.instance.pk:
+                existing = existing.exclude(pk=self.instance.pk)
+            
+            if existing.exists():
+                raise forms.ValidationError("A model with this name already exists.")
+        
+        return name
+
+    def _extract_session_metadata(self, training_sessions):
+        """Extract n_classes, class_labels, and channels from training sessions"""
+        all_classes = set()
+        all_channels = set()
+        
+        for session in training_sessions:
+            # Extract classes
+            if session.classes:
+                if isinstance(session.classes, list):
+                    all_classes.update(session.classes)
+                elif isinstance(session.classes, dict):
+                    if 'class_names' in session.classes:
+                        all_classes.update(session.classes['class_names'])
+                    elif 'labels' in session.classes:
+                        all_classes.update(session.classes['labels'])
+                    elif 'unique_classes' in session.classes:
+                        all_classes.update(session.classes['unique_classes'])
+                    else:
+                        # Try to extract from keys or values
+                        if all(isinstance(k, str) for k in session.classes.keys()):
+                            all_classes.update(session.classes.keys())
+            
+            # Extract channels
+            if session.channels:
+                if isinstance(session.channels, list):
+                    all_channels.update(session.channels)
+                elif isinstance(session.channels, dict):
+                    if 'channel_names' in session.channels:
+                        all_channels.update(session.channels['channel_names'])
+                    elif 'names' in session.channels:
+                        all_channels.update(session.channels['names'])
+        
+        return all_classes, all_channels
+
+    def _get_default_metadata(self, approach):
+        """Get default metadata for approach if sessions don't provide it"""
+        if approach == 'p300':
+            return (
+                {'silence', 'green', 'purple', 'yellow', 'red', 'blue'},
+                ['Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'P3', 'P4', 
+                 'O1', 'O2', 'F7', 'F8', 'T7', 'T8']
+            )
+        else:  # motor_imagery
+            return (
+                {'left_hand', 'right_hand', 'rest'},
+                ['Fp1', 'Fp2', 'F3', 'F4', 'C3', 'C4', 'P3', 'P4', 
+                 'O1', 'O2', 'F7', 'F8', 'T7', 'T8']
+            )
+
     def save(self, commit=True):
+        """FIXED save method that properly sets all required fields"""
         # Create instance but don't save to DB yet
         instance = super().save(commit=False)
         
@@ -229,6 +303,42 @@ class TrainingConfigForm(forms.ModelForm):
         # Set the model_config
         instance.model_config = model_config
         
+        # Get training sessions to calculate required fields
+        training_sessions = self.cleaned_data.get('training_sessions', [])
+        
+        if training_sessions:
+            # Extract metadata from sessions
+            all_classes, all_channels = self._extract_session_metadata(training_sessions)
+            
+            # Use defaults if extraction failed
+            if not all_classes or not all_channels:
+                default_classes, default_channels = self._get_default_metadata(instance.approach)
+                all_classes = all_classes or default_classes
+                all_channels = all_channels or default_channels
+            
+            # Convert to sorted lists for consistency
+            class_labels = sorted(list(all_classes))
+            channels = list(all_channels) if isinstance(all_channels, (list, set)) else []
+            
+            # Set the required fields
+            instance.n_classes = len(class_labels)
+            instance.class_labels = class_labels
+            instance.channels = channels
+            
+            print(f"✅ Calculated from sessions:")
+            print(f"   n_classes: {instance.n_classes}")
+            print(f"   class_labels: {instance.class_labels}")
+            print(f"   channels: {len(instance.channels)} channels")
+            
+        else:
+            # Fallback: Set default values
+            default_classes, default_channels = self._get_default_metadata(instance.approach)
+            instance.n_classes = len(default_classes)
+            instance.class_labels = sorted(list(default_classes))
+            instance.channels = default_channels
+            
+            print(f"⚠️ Used fallback values for {instance.approach}")
+        
         print(f"✅ Built model_config: {model_config}")
         print(f"✅ Instance user before save: {instance.user}")
         print(f"✅ Instance approach: {instance.approach}")
@@ -238,18 +348,21 @@ class TrainingConfigForm(forms.ModelForm):
             if not instance.user:
                 raise ValueError("User must be set before saving TrainedModel")
             
-            # Save the instance first
-            instance.save()
-            
-            # Then save the many-to-many relationship
-            training_sessions = self.cleaned_data.get('training_sessions', [])
-            if training_sessions:
-                instance.training_sessions.set(training_sessions)
-            
-            print(f"✅ Saved model with {len(training_sessions)} training sessions")
+            try:
+                # Save the instance first
+                instance.save()
+                
+                # Then save the many-to-many relationship
+                if training_sessions:
+                    instance.training_sessions.set(training_sessions)
+                
+                print(f"✅ Saved model with {len(training_sessions)} training sessions")
+                
+            except Exception as e:
+                print(f"❌ Error saving model: {e}")
+                raise forms.ValidationError(f"Failed to save model: {e}")
         
         return instance
-
 
 class PredictionSessionForm(forms.ModelForm):
     """Form for creating prediction sessions - UNIFIED FOR ALL APPROACHES"""

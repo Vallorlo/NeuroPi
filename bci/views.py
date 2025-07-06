@@ -44,9 +44,10 @@ from .ml_models.motor_imagery.trainer import MotorImageryTrainer
 from .ml_models.motor_imagery.predictor import MotorImageryPredictor
 
 from .ml_models.p300.trainer import P300Trainer
-from .ml_models.p300.predictor import P300Predictor,P300Simulator
+from .ml_models.p300.predictor import P300Predictor
+from trials.visual_data_collection import VisualTrialDataCollector
+from trials import visual_data_collection
 
-# Global prediction managers
 prediction_manager = {}
 p300_prediction_manager = {}
 class DashboardView(LoginRequiredMixin, TemplateView):
@@ -81,7 +82,6 @@ class DashboardView(LoginRequiredMixin, TemplateView):
         return context
 
 
-# Session Management Views
 class SessionListView(LoginRequiredMixin, ListView):
     """List all sessions for the user"""
     model = SessionData
@@ -1170,9 +1170,6 @@ def start_p300_training(request):
     
     return JsonResponse({'status': 'error', 'message': 'Invalid request'}, status=400)
 
-
-
-
 class P300PredictionView(PredictionDashboardView):
     """P300 prediction dashboard view - FIXED VERSION"""
     template_name = 'bci/p300/prediction.html'
@@ -1224,53 +1221,6 @@ class P300PredictionView(PredictionDashboardView):
         )[:10]
         
         return context
-
-
-@login_required
-def p300_trial_run(request, session_pk):
-    """P300 trial run view - FIXED to handle configuration properly"""
-    try:
-        # Get the prediction session
-        session = get_object_or_404(
-            PredictionSession, 
-            pk=session_pk, 
-            user=request.user
-        )
-        
-        # Ensure it's a P300 session
-        if session.model.approach != 'p300':
-            messages.error(request, 'This is not a P300 prediction session.')
-            return redirect('bci:p300_prediction')
-        
-        # FIXED: Handle session configuration properly
-        # The original database model doesn't have configuration field, 
-        # so we need to work with what exists
-        
-        # For now, use default values or pass parameters through URL
-        target_word = request.GET.get('target_word', None)
-        word_display_duration = int(request.GET.get('word_display_duration', 3000))
-        rest_duration = int(request.GET.get('rest_duration', 1500))
-        
-        # Update session status to running when accessed
-        if session.status in ['stopped', 'created']:
-            session.status = 'running' 
-            session.started_at = timezone.now()
-            session.save()
-            
-        context = {
-            'session': session,
-            'target_word': target_word,
-            'word_display_duration': word_display_duration,
-            'rest_duration': rest_duration,
-            'word_order': ['green', 'red', 'blue', 'yellow', 'purple', 'green', 'purple', 'yellow', 'red', 'blue']
-        }
-        
-        return render(request, 'bci/p300/trial_run.html', context)
-        
-    except Exception as e:
-        print(f"Error in P300 trial run: {e}")
-        messages.error(request, 'An error occurred while loading the trial.')
-        return redirect('bci:p300_prediction')
 
 
 @login_required
@@ -1369,147 +1319,6 @@ def create_p300_prediction_session(request):
             'message': 'An error occurred while creating the prediction session.'
         }, status=500)
 
-
-@login_required
-def p300_prediction_status(request, session_pk):
-    """Get P300 prediction status - SIMPLIFIED VERSION"""
-    try:
-        session = get_object_or_404(
-            PredictionSession, 
-            pk=session_pk, 
-            user=request.user
-        )
-        
-        # For demo purposes, always return success
-        # In real implementation, this would check actual EEG device status
-        return JsonResponse({
-            'status': 'success',
-            'session_status': session.status,
-            'eeg_connected': True,  # Simulate connection for demo
-            'is_running': session.status == 'running',
-            'started_at': session.started_at.isoformat() if session.started_at else None,
-            'message': 'P300 session status retrieved successfully'
-        })
-        
-    except Exception as e:
-        print(f"Error getting P300 status: {e}")
-        return JsonResponse({
-            'status': 'error',
-            'message': str(e),
-            'eeg_connected': False,
-            'is_running': False
-        }, status=500)
-
-
-
-@login_required
-@require_http_methods(["POST"])
-def start_p300_prediction(request, session_pk):
-    """Start P300 prediction for a session"""
-    try:
-        # Get the prediction session
-        session = get_object_or_404(
-            PredictionSession, 
-            pk=session_pk, 
-            user=request.user
-        )
-        
-        # Check if prediction is already running
-        if str(session_pk) in p300_prediction_manager:
-            return JsonResponse({
-                'status': 'info',
-                'message': 'P300 prediction is already running for this session.'
-            })
-        
-        # Create and start P300 predictor
-        try:
-            predictor = P300Predictor(session)
-            predictor.load_model()
-            
-            # Store in global manager
-            p300_prediction_manager[str(session_pk)] = predictor
-            
-            # Start data collection
-            predictor.start_data_collection()
-            
-            # Update session status
-            session.status = 'running'
-            session.started_at = timezone.now()
-            session.save()
-            
-            return JsonResponse({
-                'status': 'success',
-                'message': 'P300 prediction started successfully.'
-            })
-            
-        except Exception as e:
-            print(f"Error starting P300 predictor: {e}")
-            
-            # Try using simulator as fallback
-            simulator = P300Simulator(session)
-            p300_prediction_manager[str(session_pk)] = simulator
-            simulator.start_simulation()
-            
-            session.status = 'running'
-            session.started_at = timezone.now()
-            session.save()
-            
-            return JsonResponse({
-                'status': 'success',
-                'message': 'P300 prediction started in simulation mode.',
-                'simulation_mode': True
-            })
-        
-    except Exception as e:
-        print(f"Error starting P300 prediction: {e}")
-        return JsonResponse({
-            'status': 'error',
-            'message': f'Failed to start P300 prediction: {str(e)}'
-        }, status=500)
-
-
-@login_required
-@require_http_methods(["POST"])
-def stop_p300_prediction(request, session_pk):
-    """Stop P300 prediction for a session"""
-    try:
-        # Get the prediction session
-        session = get_object_or_404(
-            PredictionSession, 
-            pk=session_pk, 
-            user=request.user
-        )
-        
-        # Stop predictor if running
-        session_key = str(session_pk)
-        if session_key in p300_prediction_manager:
-            predictor = p300_prediction_manager[session_key]
-            
-            # Stop data collection
-            if hasattr(predictor, 'stop_data_collection'):
-                predictor.stop_data_collection()
-            elif hasattr(predictor, 'stop_simulation'):
-                predictor.stop_simulation()
-            
-            # Remove from manager
-            del p300_prediction_manager[session_key]
-        
-        # Update session status
-        session.status = 'completed'
-        session.completed_at = timezone.now()
-        session.save()
-        
-        return JsonResponse({
-            'status': 'success',
-            'message': 'P300 prediction stopped successfully.'
-        })
-        
-    except Exception as e:
-        print(f"Error stopping P300 prediction: {e}")
-        return JsonResponse({
-            'status': 'error',
-            'message': f'Failed to stop P300 prediction: {str(e)}'
-        }, status=500)
 
 @login_required
 def p300_prediction_results(request, session_pk):
@@ -1655,55 +1464,276 @@ def p300_trial_results(request, session_pk):
         messages.error(request, 'An error occurred while loading the trial results.')
         return redirect('bci:p300_prediction')
 
-
-# Cleanup function to stop inactive sessions
+# Cleanup function to stop orphaned P300 predictors
 @login_required
 def cleanup_p300_sessions(request):
-    """Cleanup inactive P300 prediction sessions"""
+    """Clean up orphaned P300 prediction sessions"""
     try:
-        # Find sessions that have been running for more than 1 hour
-        cutoff_time = timezone.now() - timedelta(hours=1)
+        cleaned_count = 0
         
-        inactive_sessions = PredictionSession.objects.filter(
+        # Stop all running P300 predictors using existing methods
+        for session_id, predictor in list(p300_prediction_manager.items()):
+            try:
+                print(f"Cleaning up P300 predictor for session {session_id}")
+                
+                # Use existing stop methods
+                if hasattr(predictor, 'stop_data_collection'):
+                    predictor.stop_data_collection()
+                elif hasattr(predictor, 'stop_simulation'):
+                    predictor.stop_simulation()
+                elif hasattr(predictor, 'stop'):
+                    predictor.stop()
+                
+                del p300_prediction_manager[session_id]
+                cleaned_count += 1
+                
+            except Exception as e:
+                print(f"Error cleaning up P300 predictor {session_id}: {e}")
+        
+        # Update database sessions
+        orphaned_sessions = PredictionSession.objects.filter(
+            user=request.user,
+            model__approach='p300',
             status='running',
-            started_at__lt=cutoff_time,
-            model__approach='p300'
+            started_at__lt=timezone.now() - timedelta(hours=1)  # Running for more than 1 hour
         )
         
-        cleaned_count = 0
-        for session in inactive_sessions:
-            session_key = str(session.id)
-            
-            # Stop predictor if running
-            if session_key in p300_prediction_manager:
-                predictor = p300_prediction_manager[session_key]
-                
-                try:
-                    if hasattr(predictor, 'stop_data_collection'):
-                        predictor.stop_data_collection()
-                    elif hasattr(predictor, 'stop_simulation'):
-                        predictor.stop_simulation()
-                except Exception as e:
-                    print(f"Error stopping predictor for session {session_key}: {e}")
-                
-                del p300_prediction_manager[session_key]
-            
-            # Update session status
-            session.status = 'timeout'
+        for session in orphaned_sessions:
+            session.status = 'stopped'
             session.completed_at = timezone.now()
             session.save()
-            
             cleaned_count += 1
         
         return JsonResponse({
             'status': 'success',
-            'cleaned_sessions': cleaned_count,
-            'message': f'Cleaned up {cleaned_count} inactive P300 sessions.'
+            'message': f'Cleaned up {cleaned_count} P300 sessions'
         })
         
     except Exception as e:
-        print(f"Error during P300 cleanup: {e}")
         return JsonResponse({
             'status': 'error',
             'message': str(e)
         }, status=500)
+    
+
+
+    # bci/views.py - Complete P300 prediction views to ADD to your existing file
+
+
+
+
+
+@login_required
+def p300_trial_run(request, session_pk):
+    """P300 trial run view - Uses visual trial pattern"""
+    try:
+        session = get_object_or_404(PredictionSession, pk=session_pk, user=request.user)
+        
+        if session.model.approach != 'p300':
+            messages.error(request, 'This is not a P300 prediction session.')
+            return redirect('bci:p300_prediction')
+        
+        # Get configuration from URL parameters
+        target_word = request.GET.get('target_word', None)
+        word_display_duration = int(request.GET.get('word_display_duration', 3000))
+        rest_duration = int(request.GET.get('rest_duration', 1500))
+        
+        # Validate target word
+        valid_words = ['green', 'purple', 'yellow', 'red', 'blue']
+        if target_word and target_word not in valid_words:
+            target_word = None
+        
+        # Don't set session to running here - wait for actual start
+        if session.status not in ['stopped', 'created', 'running']:
+            session.status = 'created'
+            session.save()
+        
+        # Fixed word order for trial
+        word_order = ['green', 'red', 'blue', 'yellow', 'purple', 'green', 'purple', 'yellow', 'red', 'blue']
+            
+        context = {
+            'session': session,
+            'target_word': target_word,
+            'word_display_duration': word_display_duration,
+            'rest_duration': rest_duration,
+            'word_order': json.dumps(word_order)
+        }
+        
+        return render(request, 'bci/p300/trial_run.html', context)
+        
+    except Exception as e:
+        print(f"Error in P300 trial run: {e}")
+        messages.error(request, 'An error occurred while loading the trial.')
+        return redirect('bci:p300_prediction')
+
+
+@login_required
+@require_http_methods(["POST"])
+def start_p300_prediction(request, session_pk):
+    """Start P300 prediction - Uses visual trial data collection"""
+    try:
+        session = get_object_or_404(PredictionSession, pk=session_pk, user=request.user)
+        
+        if session.model.approach != 'p300':
+            return JsonResponse({'status': 'error', 'message': 'Not a P300 session'}, status=400)
+        
+        session_id = str(session.pk)
+        if session_id in p300_prediction_manager:
+            return JsonResponse({'status': 'error', 'message': 'P300 prediction already running'}, status=400)
+        
+        try:
+            print(f"Starting P300 prediction for session {session_pk}")
+            
+            # Create P300 predictor using the REAL class name
+            predictor = P300Predictor(session)
+            
+            # Start data collection using visual trial system
+            if predictor.start_data_collection():
+                p300_prediction_manager[session_id] = predictor
+                
+                session.status = 'running'
+                session.started_at = timezone.now()
+                session.save()
+                
+                print(f"✅ P300 prediction started successfully")
+                
+                return JsonResponse({
+                    'status': 'success',
+                    'message': 'P300 prediction started successfully',
+                    'session_id': str(session.pk)
+                })
+            else:
+                return JsonResponse({'status': 'error', 'message': 'Failed to start EEG collection'}, status=500)
+                
+        except Exception as e:
+            print(f"❌ Error starting P300 predictor: {e}")
+            return JsonResponse({'status': 'error', 'message': f'Failed to start P300 prediction: {str(e)}'}, status=500)
+        
+    except Exception as e:
+        print(f"Error in start_p300_prediction: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def stop_p300_prediction(request, session_pk):
+    """Stop P300 prediction"""
+    try:
+        session = get_object_or_404(PredictionSession, pk=session_pk, user=request.user)
+        
+        session_id = str(session.pk)
+        if session_id in p300_prediction_manager:
+            try:
+                predictor = p300_prediction_manager[session_id]
+                predictor.stop_data_collection()
+                del p300_prediction_manager[session_id]
+                print(f"✅ P300 predictor stopped")
+            except Exception as e:
+                print(f"❌ Error stopping P300 predictor: {e}")
+        
+        session.status = 'stopped'
+        session.completed_at = timezone.now()
+        session.save()
+        
+        return JsonResponse({'status': 'success', 'message': 'P300 prediction stopped successfully'})
+        
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+def p300_prediction_status(request, session_pk):
+    """Get P300 prediction status"""
+    try:
+        session = get_object_or_404(PredictionSession, pk=session_pk, user=request.user)
+        
+        session_id = str(session.pk)
+        eeg_connected = False
+        predictor_running = False
+        
+        if session_id in p300_prediction_manager:
+            predictor = p300_prediction_manager[session_id]
+            eeg_connected = predictor.data_collector.is_collecting if hasattr(predictor, 'data_collector') else False
+            predictor_running = predictor.running
+        
+        return JsonResponse({
+            'status': 'success',
+            'session_status': session.status,
+            'eeg_connected': eeg_connected,
+            'predictor_running': predictor_running,
+            'predictions_count': session.predictions.count()
+        })
+        
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def p300_set_current_word(request, session_pk):
+    """Set current word being displayed"""
+    try:
+        session = get_object_or_404(PredictionSession, pk=session_pk, user=request.user)
+        
+        data = json.loads(request.body)
+        word = data.get('word')
+        
+        session_id = str(session.pk)
+        if session_id in p300_prediction_manager:
+            predictor = p300_prediction_manager[session_id]
+            predictor.set_current_word(word)
+            print(f"✅ P300: Set current word to '{word}'")
+        
+        return JsonResponse({'status': 'success', 'word': word, 'timestamp': timezone.now().isoformat()})
+        
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+@require_http_methods(["POST"])
+def p300_mark_trial_start(request, session_pk):
+    """Mark the start of P300 trial"""
+    try:
+        session = get_object_or_404(PredictionSession, pk=session_pk, user=request.user)
+        
+        session_id = str(session.pk)
+        if session_id in p300_prediction_manager:
+            predictor = p300_prediction_manager[session_id]
+            predictor.mark_trial_start()
+            print(f"✅ P300: Trial start marked")
+        
+        return JsonResponse({'status': 'success', 'message': 'Trial start marked', 'timestamp': timezone.now().isoformat()})
+        
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+
+@login_required
+def p300_prediction_data(request, session_pk):
+    """Get real-time P300 prediction data"""
+    try:
+        session = get_object_or_404(PredictionSession, pk=session_pk, user=request.user)
+        
+        # Get recent predictions
+        recent_time = timezone.now() - timedelta(seconds=30)
+        recent_predictions = session.predictions.filter(timestamp__gte=recent_time).order_by('-timestamp')[:10]
+        
+        predictions_data = []
+        for pred in recent_predictions:
+            predictions_data.append({
+                'timestamp': pred.timestamp.isoformat(),
+                'predicted_label': pred.predicted_label,
+                'confidence': pred.confidence,
+                'probabilities': pred.probabilities,
+            })
+        
+        return JsonResponse({
+            'status': 'success',
+            'predictions': predictions_data,
+            'session_status': session.status,
+            'total_predictions': session.predictions.count()
+        })
+        
+    except Exception as e:
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)

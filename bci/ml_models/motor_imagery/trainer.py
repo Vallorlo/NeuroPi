@@ -324,7 +324,7 @@ class MotorImageryTrainer(BCITrainer):
             optimizer = optim.Adam(final_model.parameters(), lr=self.learning_rate, weight_decay=1e-4)
             
             final_model.train()
-            for epoch in range(50):  # Fewer epochs for final training
+            for epoch in range(150):  # Fewer epochs for final training
                 train_loss = 0
                 correct = 0
                 total = 0

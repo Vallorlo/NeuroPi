@@ -1,796 +1,690 @@
 <!-- bci/templates/bci/p300/trial_run.html -->
-{% extends 'bci/base.html' %}
+{% extends "bci/base.html" %}
 
-{% block title %}P300 Prediction Trial - BCI{% endblock %}
-
-{% block extra_css %}
-<style>
-    body {
-        background: #000;
-        color: #fff;
-        overflow: hidden;
-    }
-    
-    .trial-container {
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .trial-header {
-        background: rgba(0, 0, 0, 0.8);
-        padding: 10px 20px;
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        z-index: 1000;
-        border-bottom: 1px solid #333;
-    }
-    
-    .word-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-        gap: 60px;
-        max-width: 1000px;
-        margin: 0 auto;
-        padding: 40px;
-        height: 100vh;
-        align-items: center;
-        justify-content: center;
-    }
-    
-    .word-item {
-        padding: 40px 30px;
-        border: 3px solid #333;
-        border-radius: 15px;
-        background: rgba(20, 20, 20, 0.8);
-        transition: all 0.4s ease;
-        min-height: 150px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        backdrop-filter: blur(10px);
-    }
-    
-    .word-text {
-        font-size: 3rem;
-        font-weight: 600;
-        transition: all 0.4s ease;
-        text-align: center;
-        letter-spacing: 2px;
-    }
-    
-    .word-item.blurred .word-text {
-        filter: blur(8px);
-        color: #666;
-        opacity: 0.4;
-        transform: scale(0.9);
-    }
-    
-    .word-item.focused {
-        border-color: #00d4ff;
-        background: linear-gradient(135deg, #00d4ff, #0099cc);
-        transform: scale(1.1);
-        box-shadow: 
-            0 0 30px rgba(0, 212, 255, 0.5),
-            0 0 60px rgba(0, 212, 255, 0.3),
-            0 20px 40px rgba(0, 0, 0, 0.3);
-        z-index: 10;
-        position: relative;
-    }
-    
-    .word-item.focused .word-text {
-        filter: none;
-        color: #fff;
-        font-weight: 700;
-        font-size: 3.5rem;
-        text-shadow: 
-            2px 2px 4px rgba(0,0,0,0.5),
-            0 0 20px rgba(255,255,255,0.3);
-        transform: scale(1);
-    }
-    
-    .word-item.rest {
-        opacity: 0.3;
-        transform: scale(0.95);
-    }
-    
-    .word-item.rest .word-text {
-        filter: blur(12px);
-        color: #444;
-        opacity: 0.3;
-    }
-    
-    .start-screen, .completion-screen {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background: linear-gradient(135deg, #1a1a1a, #2d2d2d);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 2000;
-        animation: fadeIn 0.5s ease-in;
-    }
-    
-    .start-content, .completion-content {
-        text-align: center;
-        max-width: 600px;
-        padding: 40px;
-    }
-    
-    .countdown-display {
-        font-size: 8rem;
-        font-weight: 700;
-        color: #00d4ff;
-        text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
-        margin: 20px 0;
-    }
-    
-    .status-bar {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
-        background: rgba(0, 0, 0, 0.9);
-        padding: 15px 20px;
-        z-index: 1000;
-        border-top: 1px solid #333;
-    }
-    
-    .progress-info {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 10px;
-    }
-    
-    .trial-progress {
-        height: 6px;
-        background: #333;
-        border-radius: 3px;
-        overflow: hidden;
-    }
-    
-    .trial-progress-bar {
-        height: 100%;
-        background: linear-gradient(90deg, #00d4ff, #0099cc);
-        transition: width 0.3s ease;
-        border-radius: 3px;
-    }
-    
-    .prediction-display {
-        position: fixed;
-        top: 80px;
-        right: 20px;
-        background: rgba(0, 0, 0, 0.8);
-        padding: 15px 20px;
-        border-radius: 10px;
-        border: 1px solid #333;
-        min-width: 200px;
-        backdrop-filter: blur(10px);
-    }
-    
-    .prediction-item {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 8px;
-    }
-    
-    .prediction-item:last-child {
-        margin-bottom: 0;
-    }
-    
-    .confidence-bar {
-        width: 60px;
-        height: 4px;
-        background: #333;
-        border-radius: 2px;
-        overflow: hidden;
-        margin-left: 10px;
-    }
-    
-    .confidence-fill {
-        height: 100%;
-        background: linear-gradient(90deg, #ff6b6b, #00d4ff);
-        transition: width 0.3s ease;
-    }
-    
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(30px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    
-    @keyframes pulse {
-        0% { transform: scale(1.1); }
-        50% { transform: scale(1.15); }
-        100% { transform: scale(1.1); }
-    }
-    
-    .word-item.focused {
-        animation: pulse 1.5s ease-in-out infinite;
-    }
-    
-    .eeg-status {
-        position: fixed;
-        top: 80px;
-        left: 20px;
-        background: rgba(0, 0, 0, 0.8);
-        padding: 10px 15px;
-        border-radius: 8px;
-        border: 1px solid #333;
-        backdrop-filter: blur(10px);
-    }
-    
-    .eeg-indicator {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-        margin-right: 8px;
-    }
-    
-    .eeg-connected {
-        background: #28a745;
-        box-shadow: 0 0 10px rgba(40, 167, 69, 0.5);
-    }
-    
-    .eeg-disconnected {
-        background: #dc3545;
-        box-shadow: 0 0 10px rgba(220, 53, 69, 0.5);
-    }
-    
-    .target-word-indicator {
-        position: fixed;
-        top: 50%;
-        left: 20px;
-        transform: translateY(-50%);
-        background: rgba(0, 212, 255, 0.1);
-        border: 2px solid #00d4ff;
-        padding: 20px;
-        border-radius: 10px;
-        backdrop-filter: blur(10px);
-    }
-</style>
-{% endblock %}
+{% block title %}
+    P300 Prediction Trial - {{ session.model.name }}
+{% endblock title %}
 
 {% block content %}
-<div class="trial-container">
-    <!-- Trial Header -->
-    <div class="trial-header">
-        <div class="d-flex justify-content-between align-items-center">
-            <div>
-                <strong>P300 Prediction Trial</strong> - {{ session.model.name }}
-                {% if session.target_word %}
-                    <span class="badge bg-info ms-2">Target: {{ session.target_word|title }}</span>
-                {% else %}
-                    <span class="badge bg-secondary ms-2">Auto-detect</span>
-                {% endif %}
-            </div>
-            <div>
-                <span id="trial-status">Initializing...</span>
-            </div>
-            <div>
-                <button id="stop-trial-btn" class="btn btn-sm btn-danger" onclick="stopTrial()">
-                    <i class="fas fa-stop"></i> Stop Trial
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- EEG Status Indicator -->
-    <div class="eeg-status">
-        <div id="eeg-status-indicator">
-            <span class="eeg-indicator eeg-disconnected" id="eeg-indicator"></span>
-            <span id="eeg-status-text">Connecting to EEG...</span>
-        </div>
-    </div>
-
-    <!-- Target Word Indicator (only shown if target word is selected) -->
-    {% if session.target_word %}
-    <div class="target-word-indicator">
-        <div class="text-center">
-            <div class="text-muted small">Your Target Word</div>
-            <div class="h4 mt-2 mb-0 text-info">{{ session.target_word|title }}</div>
-            <div class="text-muted small mt-1">Focus only when this word is highlighted</div>
-        </div>
-    </div>
-    {% endif %}
-
-    <!-- Real-time Predictions Display -->
-    <div class="prediction-display" id="prediction-display" style="display: none;">
-        <div class="h6 mb-3 text-center">Live Predictions</div>
-        <div id="prediction-list">
-            <!-- Predictions will be populated here -->
-        </div>
-    </div>
-
-    <!-- Start Screen -->
-    <div id="start-screen" class="start-screen">
-        <div class="start-content">
-            <h1 class="display-3 text-info mb-4">P300 Trial Ready</h1>
-            {% if session.target_word %}
-                <p class="lead mb-4">Focus on "<strong class="text-info">{{ session.target_word|title }}</strong>" when it becomes highlighted</p>
-                <p class="text-muted mb-4">
-                    Only think about the target word when it's unblurred and bold.<br>
-                    Ignore other words when they're highlighted.
-                </p>
-            {% else %}
-                <p class="lead mb-4">Think about any word when it becomes highlighted</p>
-                <p class="text-muted mb-4">
-                    Focus on whichever word you choose when it appears unblurred.<br>
-                    The model will detect which word you focused on.
-                </p>
-            {% endif %}
-            
-            <div class="alert alert-warning text-dark">
-                <h6><i class="fas fa-brain me-2"></i>P300 Instructions</h6>
-                <ul class="mb-0 text-start">
-                    <li>Sit comfortably and stay relaxed</li>
-                    <li>Look at the center of the screen</li>
-                    <li>When a word becomes clear and bold, think about that word</li>
-                    <li>Stay still during word presentations</li>
-                    <li>The trial will run automatically</li>
-                </ul>
-            </div>
-            
-            <button id="start-trial-btn" class="btn btn-lg btn-info" onclick="startTrial()">
-                <i class="fas fa-play me-2"></i>Start P300 Trial
-            </button>
-        </div>
-    </div>
-
-    <!-- Word Display Grid -->
-    <div class="word-grid" id="word-grid" style="display: none;">
-        <div class="word-item blurred" data-word="green">
-            <div class="word-text">GREEN</div>
-        </div>
-        <div class="word-item blurred" data-word="purple">
-            <div class="word-text">PURPLE</div>
-        </div>
-        <div class="word-item blurred" data-word="yellow">
-            <div class="word-text">YELLOW</div>
-        </div>
-        <div class="word-item blurred" data-word="red">
-            <div class="word-text">RED</div>
-        </div>
-        <div class="word-item blurred" data-word="blue">
-            <div class="word-text">BLUE</div>
-        </div>
-    </div>
-
-    <!-- Countdown Display -->
-    <div id="countdown-screen" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); z-index: 3000; display: flex; align-items: center; justify-content: center;">
-        <div class="text-center">
-            <div class="countdown-display" id="countdown-number">3</div>
-            <div class="h4 text-muted">Get Ready...</div>
-        </div>
-    </div>
-
-    <!-- Completion Screen -->
-    <div id="completion-screen" class="completion-screen" style="display: none;">
-        <div class="completion-content">
-            <h1 class="display-4 text-success mb-4">
-                <i class="fas fa-check-circle me-3"></i>Trial Complete!
-            </h1>
-            <p class="lead mb-4">P300 prediction trial has been completed successfully.</p>
-            
-            <div id="final-results" class="alert alert-info mb-4">
-                <h6>Trial Results:</h6>
-                <div id="results-summary">Processing results...</div>
-            </div>
-            
-            <div class="mt-4">
-                <a href="{% url 'bci:p300_prediction' %}" class="btn btn-lg btn-primary me-3">
-                    <i class="fas fa-arrow-left me-2"></i>Back to Prediction
-                </a>
-                <a href="{% url 'bci:p300_trial_results' session.pk %}" class="btn btn-lg btn-outline-info">
-                    <i class="fas fa-chart-line me-2"></i>View Detailed Results
-                </a>
+<div class="container-fluid vh-100 d-flex flex-column">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>P300 Prediction</strong> - {{ session.model.name }}
+                            {% if target_word %}
+                                <span class="badge bg-info ms-2">Target: {{ target_word|title }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary ms-2">Auto-detect</span>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <span id="progress-text">Ready to start...</span>
+                        </div>
+                        <div>
+                            <button id="stop-trial-btn" class="btn btn-sm btn-danger" style="display: none;" onclick="stopTrial()">
+                                <i class="bi bi-stop-fill"></i> Stop Trial
+                            </button>
+                        </div>
+                    </div>
+                    <div class="progress mt-2" style="height: 8px;">
+                        <div id="progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-    <!-- Status Bar -->
-    <div class="status-bar">
-        <div class="progress-info">
-            <div>
-                <span id="current-word-display">Waiting to start...</span>
-            </div>
-            <div>
-                <span id="progress-text">0 / 0 presentations</span>
-            </div>
-            <div>
-                <span id="time-remaining">--:--</span>
+    <div class="row flex-grow-1">
+        <div class="col-12 d-flex align-items-center justify-content-center">
+            <div class="text-center">
+                <div id="start-screen" class="start-screen">
+                    <h1 class="display-3 text-primary mb-4">Ready to Begin</h1>
+                    {% if target_word %}
+                        <p class="lead mb-4">Focus on "<strong class="text-primary">{{ target_word|title }}</strong>" when it becomes clear and bold</p>
+                        <p class="text-muted mb-4">
+                            Only think about the target word when it's unblurred and bold.<br>
+                            Ignore other words when they're highlighted.
+                        </p>
+                    {% else %}
+                        <p class="lead mb-4">Focus on the word that becomes clear and bold</p>
+                        <p class="text-muted mb-4">
+                            Think about the highlighted word during its presentation.<br>
+                            The model will detect which word you focused on.
+                        </p>
+                    {% endif %}
+                    <div class="mb-4">
+                        <button id="debug-eeg-btn" class="btn btn-outline-info me-3">
+                            <i class="bi bi-bug me-2"></i>Debug EEG
+                        </button>
+                        <button id="check-eeg-btn" class="btn btn-outline-primary me-3">
+                            <i class="bi bi-activity me-2"></i>Check EEG Connection
+                        </button>
+                        <button id="start-eeg-btn" class="btn btn-success me-3">
+                            <i class="bi bi-record-circle me-2"></i>Start EEG Recording
+                        </button>
+                    </div>
+                    <button id="start-btn" class="btn btn-lg btn-success" disabled onclick="startTrial()">
+                        <i class="bi bi-play-circle-fill me-2"></i>Start Trial
+                    </button>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            EEG recording will automatically initialize if needed
+                        </small>
+                    </div>
+                    <div id="eeg-status" class="mt-3"></div>
+                </div>
+
+                <div id="word-display" class="word-display" style="display: none;">
+                    <div class="word-grid">
+                        <div class="word-item blurred" data-word="green">
+                            <span class="word-text">GREEN</span>
+                        </div>
+                        <div class="word-item blurred" data-word="purple">
+                            <span class="word-text">PURPLE</span>
+                        </div>
+                        <div class="word-item blurred" data-word="yellow">
+                            <span class="word-text">YELLOW</span>
+                        </div>
+                        <div class="word-item blurred" data-word="red">
+                            <span class="word-text">RED</span>
+                        </div>
+                        <div class="word-item blurred" data-word="blue">
+                            <span class="word-text">BLUE</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="status-display" class="status-display mt-4" style="display: none;">
+                    <div id="current-status" class="h4 text-muted">Preparing...</div>
+                    <div id="countdown" class="display-4 text-primary" style="display: none;"></div>
+                </div>
+
+                <div id="completion-screen" class="completion-screen" style="display: none;">
+                    <h1 class="display-3 text-success mb-4">
+                        <i class="bi bi-check-circle-fill"></i> Trial Complete!
+                    </h1>
+                    <p class="lead">Excellent work! P300 prediction trial completed successfully.</p>
+                    
+                    <!-- Final Results Display -->
+                    <div id="final-results" class="alert alert-success mb-4" style="max-width: 600px; margin: 0 auto;">
+                        <h6><i class="bi bi-brain me-2"></i>P300 Prediction Results:</h6>
+                        <div id="results-summary">Processing results...</div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{% url 'bci:p300_prediction' %}" class="btn btn-lg btn-primary me-3">
+                            <i class="bi bi-arrow-left"></i> Back to Prediction
+                        </a>
+                        <a href="{% url 'bci:p300_trial_results' session.pk %}" class="btn btn-lg btn-outline-success">
+                            <i class="bi bi-chart-line"></i> View Detailed Results
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="trial-progress">
-            <div class="trial-progress-bar" id="progress-bar" style="width: 0%;"></div>
+    </div>
+
+    <div id="data-collection-status" style="display: none;">
+        <div class="position-fixed bottom-0 start-0 p-3">
+            <div class="alert alert-info alert-sm mb-0">
+                <i class="bi bi-activity"></i> EEG Recording Active
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+    .word-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 45px;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .word-item {
+        padding: 20px;
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        background: #f8f9fa;
+        transition: all 0.3s ease;
+        min-height: 100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .word-text {
+        font-size: 2rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .word-item.blurred .word-text {
+        filter: blur(2px);
+        color: #8c8c8c;
+        opacity: 0.7;
+    }
+
+    .word-item.focused {
+        border-color: #0d6efd;
+        background: linear-gradient(135deg, #0d6efd, #6610f2);
+        transform: scale(1.05);
+        box-shadow: 0 10px 25px rgba(13, 110, 253, 0.3);
+    }
+
+    .word-item.focused .word-text {
+        filter: none;
+        color: white;
+        font-weight: bold;
+        font-size: 2.5rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .word-item.rest .word-text {
+        filter: blur(3px);
+        color: #bbb;
+        opacity: 0.4;
+    }
+
+    .start-screen, .completion-screen {
+        animation: fadeIn 0.5s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+
+    .word-item.focused {
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    .status-display {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 10px 15px;
+        border-radius: 15px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        backdrop-filter: blur(10px);
+        min-width: 150px;
+        z-index: 1000;
+    }
+
+    #current-status {
+        font-size: 0.9rem;
+        margin-bottom: 5px;
+    }
+
+    #countdown {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        font-size: 1.8rem;
+    }
+</style>
+
 <script>
-class P300Trial {
-    constructor() {
-        // Session configuration
-        this.sessionId = '{{ session.pk }}';
-        this.targetWord = '{{ target_word|default:"" }}';
-        this.wordDisplayDuration = {{ word_display_duration|default:3000 }};
-        this.restDuration = {{ rest_duration|default:1500 }};
-        
-        // Word presentation order (configurable)
-        this.wordOrder = ['green', 'red', 'blue', 'yellow', 'purple', 'green', 'purple', 'yellow', 'red', 'blue'];
-        
-        // Trial state
-        this.currentIndex = 0;
-        this.isRunning = false;
-        this.startTime = null;
-        this.predictions = [];
-        this.eegConnected = false;
-        
-        // DOM elements
-        this.wordGrid = document.getElementById('word-grid');
-        this.startScreen = document.getElementById('start-screen');
-        this.completionScreen = document.getElementById('completion-screen');
-        this.countdownScreen = document.getElementById('countdown-screen');
-        
-        this.initializeElements();
-        this.connectToBackend();
-        
-        console.log('P300Trial initialized with session:', this.sessionId);
-    }
-    
-    initializeElements() {
-        // Initialize all DOM references
-        this.progressBar = document.getElementById('progress-bar');
-        this.progressText = document.getElementById('progress-text');
-        this.currentWordDisplay = document.getElementById('current-word-display');
-        this.timeRemaining = document.getElementById('time-remaining');
-        this.trialStatus = document.getElementById('trial-status');
-        this.predictionDisplay = document.getElementById('prediction-display');
-        this.predictionList = document.getElementById('prediction-list');
-        
-        // Update initial progress
-        this.updateProgress();
-    }
-    
-    async connectToBackend() {
-        try {
-            console.log('Connecting to backend...');
-            // Check EEG connection status
-            const response = await fetch(`/bci/p300/prediction/status/${this.sessionId}/`);
-            const data = await response.json();
+    class P300Trial {
+        constructor() {
+            this.session = {
+                id: '{{ session.pk }}',
+                targetWord: '{{ target_word|default:"" }}',
+                wordDisplayDuration: {{ word_display_duration|default:3000 }},
+                restDuration: {{ rest_duration|default:1500 }},
+            };
+            this.currentWordIndex = 0;
+            this.isRunning = false;
+            this.currentTimeout = null;
+            this.countdownInterval = null;
+            this.wordOrder = {{ word_order|safe }};
             
-            console.log('Backend status:', data);
+            this.initializeElements();
+            this.bindEvents();
+        }
+        
+        initializeElements() {
+            this.startBtn = document.getElementById('start-btn');
+            this.stopBtn = document.getElementById('stop-trial-btn');
+            this.startScreen = document.getElementById('start-screen');
+            this.wordDisplay = document.getElementById('word-display');
+            this.statusDisplay = document.getElementById('status-display');
+            this.completionScreen = document.getElementById('completion-screen');
+            this.progressBar = document.getElementById('progress-bar');
+            this.progressText = document.getElementById('progress-text');
+            this.currentStatus = document.getElementById('current-status');
+            this.countdown = document.getElementById('countdown');
+            this.dataCollectionStatus = document.getElementById('data-collection-status');
             
-            if (data.status === 'success') {
-                this.setEEGStatus(data.eeg_connected || false);
+            this.wordItems = document.querySelectorAll('.word-item');
+        }
+        
+        bindEvents() {
+            const debugEEGBtn = document.getElementById('debug-eeg-btn');
+            const checkEEGBtn = document.getElementById('check-eeg-btn');
+            const startEEGBtn = document.getElementById('start-eeg-btn');
+            
+            if (debugEEGBtn) {
+                debugEEGBtn.addEventListener('click', () => this.debugEEG());
+            }
+            
+            if (checkEEGBtn) {
+                checkEEGBtn.addEventListener('click', () => this.checkEEGConnection());
+            }
+            
+            if (startEEGBtn) {
+                startEEGBtn.addEventListener('click', () => this.startEEGRecording());
+            }
+        }
+        
+        async debugEEG() {
+            const statusDiv = document.getElementById('eeg-status');
+            const debugBtn = document.getElementById('debug-eeg-btn');
+            
+            debugBtn.disabled = true;
+            debugBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Debugging...';
+            
+            try {
+                // Call a debug endpoint on your backend
+                statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>Running EEG diagnostics...</div>';
                 
-                // If not connected, simulate connection for demo
-                if (!data.eeg_connected) {
-                    console.log('EEG not connected, will simulate...');
-                    setTimeout(() => {
-                        this.setEEGStatus(true);
-                        console.log('EEG simulation connected');
-                    }, 2000);
-                }
-            } else {
-                this.setEEGStatus(false);
-                console.error('Backend connection error:', data.message);
-                setTimeout(() => this.connectToBackend(), 5000);
+                // Add a small delay to show the debug is running
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>EEG Debug completed - check console logs</div>';
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="alert alert-danger">Failed to run EEG debug</div>';
+            } finally {
+                debugBtn.disabled = false;
+                debugBtn.innerHTML = '<i class="bi bi-bug me-2"></i>Debug EEG';
             }
-        } catch (error) {
-            console.error('Backend connection error:', error);
-            this.setEEGStatus(false);
-            // For demo purposes, simulate connection after 3 seconds
-            setTimeout(() => {
-                this.setEEGStatus(true);
-                console.log('Using simulated EEG connection');
-            }, 3000);
         }
-    }
-    
-    setEEGStatus(connected) {
-        this.eegConnected = connected;
-        const indicator = document.getElementById('eeg-indicator');
-        const statusText = document.getElementById('eeg-status-text');
-        
-        if (connected) {
-            indicator.className = 'eeg-indicator eeg-connected';
-            statusText.textContent = 'EEG Connected';
-        } else {
-            indicator.className = 'eeg-indicator eeg-disconnected';  
-            statusText.textContent = 'EEG Disconnected';
-        }
-    }
-    
-    async startTrial() {
-        console.log('Starting P300 trial...');
-        
-        if (!this.eegConnected) {
-            if (!confirm('EEG device appears disconnected. Continue with simulation?')) {
-                return;
+
+        async checkEEGConnection() {
+            const statusDiv = document.getElementById('eeg-status');
+            const checkBtn = document.getElementById('check-eeg-btn');
+            const startEEGBtn = document.getElementById('start-eeg-btn');
+            
+            checkBtn.disabled = true;
+            checkBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Checking...';
+            
+            try {
+                // Simple connection check
+                statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>Checking EEG connection...</div>';
+                
+                // Add a small delay to show checking
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>EEG connection verified!</div>';
+                startEEGBtn.disabled = false;
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>EEG Warning: Could not verify connection<br><small>You can still try to start recording.</small></div>';
+            } finally {
+                checkBtn.disabled = false;
+                checkBtn.innerHTML = '<i class="bi bi-activity me-2"></i>Check EEG Connection';
             }
         }
         
-        try {
-            // Start EEG data collection in backend
-            console.log('Starting EEG data collection...');
-            const startResponse = await fetch(`/bci/p300/prediction/start/${this.sessionId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': this.getCSRFToken(),
-                    'Content-Type': 'application/json'
-                }
-            });
-            
-            const startData = await startResponse.json();
-            console.log('Start response:', startData);
-            
-            if (startData.status !== 'success') {
-                console.error('Failed to start prediction:', startData.message);
-                alert('Failed to start EEG data collection: ' + startData.message);
-                return;
-            }
-            
-            // Hide start screen and show countdown
+        async startTrial() {
+            this.isRunning = true;
             this.startScreen.style.display = 'none';
-            this.showCountdown();
+            this.wordDisplay.style.display = 'block';
+            this.statusDisplay.style.display = 'block';
+            this.dataCollectionStatus.style.display = 'block';
+            this.stopBtn.style.display = 'inline-block';
             
-        } catch (error) {
-            console.error('Error starting trial:', error);
-            alert('Error starting trial: ' + error.message);
-        }
-    }
-    
-    async showCountdown() {
-        this.countdownScreen.style.display = 'flex';
-        const countdownNumber = document.getElementById('countdown-number');
-        
-        for (let i = 3; i > 0; i--) {
-            countdownNumber.textContent = i;
-            await this.sleep(1000);
+            await this.showInitialCountdown();
+            
+            if (!this.isRunning) return;
+            
+            await this.runTrialLoop();
         }
         
-        this.countdownScreen.style.display = 'none';
-        this.beginWordPresentation();
-    }
-    
-    async beginWordPresentation() {
-        console.log('Beginning word presentation...');
-        
-        this.isRunning = true;
-        this.startTime = Date.now();
-        this.currentIndex = 0;
-        
-        // Show word grid and prediction display
-        this.wordGrid.style.display = 'grid';
-        this.predictionDisplay.style.display = 'block';
-        
-        // Update status
-        this.trialStatus.textContent = 'Trial Running';
-        
-        // Start word presentation loop
-        await this.presentWords();
-    }
-    
-    async presentWords() {
-        for (let i = 0; i < this.wordOrder.length; i++) {
-            if (!this.isRunning) break;
-            
-            this.currentIndex = i;
-            const word = this.wordOrder[i];
-            
-            console.log(`Presenting word ${i + 1}/${this.wordOrder.length}: ${word}`);
-            
-            // Update progress
-            this.updateProgress();
-            this.currentWordDisplay.textContent = `Presenting: ${word.toUpperCase()}`;
-            
-            // Highlight the word
-            this.highlightWord(word);
-            
-            // Display word for specified duration
-            await this.sleep(this.wordDisplayDuration);
-            
-            // Clear highlight (rest period)
-            this.clearHighlight();
-            this.currentWordDisplay.textContent = 'Rest period...';
-            
-            // Rest period
-            await this.sleep(this.restDuration);
-            
-            // Simulate prediction (for demo purposes)
-            this.simulatePrediction(word, i);
-        }
-        
-        if (this.isRunning) {
-            await this.completeTrial();
-        }
-    }
-    
-    highlightWord(word) {
-        // Clear all highlights
-        document.querySelectorAll('.word-item').forEach(item => {
-            item.classList.remove('highlighted');
-            item.classList.add('blurred');
-        });
-        
-        // Highlight target word
-        const targetItem = document.querySelector(`[data-word="${word}"]`);
-        if (targetItem) {
-            targetItem.classList.remove('blurred');
-            targetItem.classList.add('highlighted');
-        }
-    }
-    
-    clearHighlight() {
-        document.querySelectorAll('.word-item').forEach(item => {
-            item.classList.remove('highlighted');
-            item.classList.add('blurred');
-        });
-    }
-    
-    simulatePrediction(word, index) {
-        // Simulate a prediction result
-        const isTargetWord = this.targetWord && word === this.targetWord;
-        const baseConfidence = isTargetWord ? 0.8 : 0.3;
-        const confidence = baseConfidence + (Math.random() * 0.2 - 0.1); // Add some variance
-        
-        const prediction = {
-            word: word,
-            confidence: Math.max(0.1, Math.min(0.95, confidence)),
-            timestamp: new Date().toISOString()
-        };
-        
-        this.predictions.push(prediction);
-        this.addPredictionToDisplay(prediction);
-        
-        console.log(`Simulated prediction: ${word} (${(prediction.confidence * 100).toFixed(1)}%)`);
-    }
-    
-    addPredictionToDisplay(prediction) {
-        const predictionHtml = `
-            <div class="prediction-item mb-2 p-2 border-start border-3 ${prediction.confidence > 0.7 ? 'border-success bg-light' : 'border-secondary'}">
-                <div class="d-flex justify-content-between">
-                    <strong>${prediction.word.toUpperCase()}</strong>
-                    <span class="badge ${prediction.confidence > 0.7 ? 'bg-success' : 'bg-secondary'}">${(prediction.confidence * 100).toFixed(1)}%</span>
-                </div>
-                <small class="text-muted">${new Date(prediction.timestamp).toLocaleTimeString()}</small>
-            </div>
-        `;
-        
-        this.predictionList.insertAdjacentHTML('afterbegin', predictionHtml);
-        
-        // Keep only last 10 predictions visible
-        const items = this.predictionList.children;
-        while (items.length > 10) {
-            items[items.length - 1].remove();
-        }
-    }
-    
-    updateProgress() {
-        const progress = (this.currentIndex / this.wordOrder.length) * 100;
-        this.progressBar.style.width = `${progress}%`;
-        this.progressText.textContent = `${this.currentIndex} / ${this.wordOrder.length} presentations`;
-        
-        if (this.startTime) {
-            const elapsed = Date.now() - this.startTime;
-            const totalDuration = this.wordOrder.length * (this.wordDisplayDuration + this.restDuration);
-            const remaining = Math.max(0, totalDuration - elapsed);
-            
-            const minutes = Math.floor(remaining / 60000);
-            const seconds = Math.floor((remaining % 60000) / 1000);
-            this.timeRemaining.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-        }
-    }
-    
-    async completeTrial() {
-        console.log('Completing trial...');
-        
-        this.isRunning = false;
-        this.trialStatus.textContent = 'Trial Complete';
-        
-        // Stop EEG recording
-        await this.stopEEGRecording();
-        
-        // Show final results
-        this.showFinalResults();
-        
-        // Show completion screen
-        this.wordGrid.style.display = 'none';
-        this.predictionDisplay.style.display = 'none';
-        this.completionScreen.style.display = 'flex';
-    }
-    
-    showFinalResults() {
-        const resultsDiv = document.getElementById('results-summary');
-        
-        if (this.predictions.length > 0) {
-            // Find highest confidence prediction
-            const bestPrediction = this.predictions.reduce((max, pred) => 
-                pred.confidence > max.confidence ? pred : max
-            );
-            
-            const accuracy = this.targetWord && bestPrediction.word === this.targetWord ? 'Correct' : 'Incorrect';
-            const avgConfidence = this.predictions.reduce((sum, pred) => sum + pred.confidence, 0) / this.predictions.length;
-            
-            resultsDiv.innerHTML = `
-                <strong>Best Prediction:</strong> ${bestPrediction.word.toUpperCase()}<br>
-                <strong>Confidence:</strong> ${(bestPrediction.confidence * 100).toFixed(1)}%<br>
-                <strong>Average Confidence:</strong> ${(avgConfidence * 100).toFixed(1)}%<br>
-                ${this.targetWord ? `<strong>Accuracy:</strong> ${accuracy}` : ''}
-            `;
-        } else {
-            resultsDiv.innerHTML = 'No predictions were recorded during the trial.';
-        }
-    }
-    
-    async stopEEGRecording() {
-        try {
-            console.log('Stopping EEG recording...');
-            await fetch(`/bci/p300/prediction/stop/${this.sessionId}/`, {
-                method: 'POST',
-                headers: {
-                    'X-CSRFToken': this.getCSRFToken()
-                }
+        async showInitialCountdown() {
+            return new Promise((resolve) => {
+                this.wordItems.forEach(item => {
+                    item.classList.remove('focused', 'rest');
+                    item.classList.add('blurred');
+                });
+                
+                this.currentStatus.textContent = 'Get Ready';
+                
+                let count = 3;
+                this.countdown.style.display = 'block';
+                this.countdown.textContent = count;
+                
+                const countdownInterval = setInterval(() => {
+                    count--;
+                    if (count > 0) {
+                        this.countdown.textContent = count;
+                    } else {
+                        this.countdown.textContent = 'START!';
+                        setTimeout(async () => {
+                            clearInterval(countdownInterval);
+                            this.countdown.style.display = 'none';
+                            
+                            await this.markTrialStart();
+                            
+                            resolve();
+                        }, 500);
+                    }
+                }, 1000);
             });
-        } catch (error) {
-            console.error('Error stopping EEG recording:', error);
+        }
+        
+        async markTrialStart() {
+            try {
+                const response = await fetch(`/bci/p300/prediction/mark-start/${this.session.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.status) {
+                    console.log('Trial start marked successfully');
+                } else {
+                    console.error('Failed to mark trial start:', data.error);
+                }
+            } catch (error) {
+                console.error('Error marking trial start:', error);
+            }
+        }
+        
+        async runTrialLoop() {
+            for (let i = 0; i < this.wordOrder.length; i++) {
+                if (!this.isRunning) return;
+                
+                const word = this.wordOrder[i];
+                this.currentWordIndex = i;
+                
+                const progress = ((i + 1) / this.wordOrder.length) * 100;
+                this.progressBar.style.width = `${progress}%`;
+                this.progressText.textContent = `${i + 1} / ${this.wordOrder.length}`;
+                
+                // Show the word FIRST
+                await this.showWord(word, this.session.wordDisplayDuration);
+                
+                // Then show rest period AFTER the word (if rest duration > 0)
+                if (this.session.restDuration > 0 && this.isRunning) {
+                    await this.showRestPeriod(this.session.restDuration);
+                }
+                
+                if (!this.isRunning) return;
+            }
+            
+            if (this.isRunning) {
+                this.completeTrial();
+            }
+        }
+        
+        async showRestPeriod(duration) {
+            // First, tell the backend we're in rest period
+            try {
+                await fetch(`/bci/p300/prediction/set-word/${this.session.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ word: 'XXXXX' })
+                });
+            } catch (error) {
+                console.error('Failed to set rest period:', error);
+            }
+            
+            return new Promise((resolve) => {
+                this.wordItems.forEach(item => {
+                    item.classList.remove('focused');
+                    item.classList.add('rest');
+                });
+                
+                this.currentStatus.textContent = 'Rest Period';
+                this.showCountdown(duration, resolve);
+            });
+        }
+        
+        async showWord(word, duration) {
+            // First, tell the backend we're displaying this word NOW
+            try {
+                await fetch(`/bci/p300/prediction/set-word/${this.session.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ word: word })
+                });
+            } catch (error) {
+                console.error('Failed to set current word:', error);
+            }
+            
+            return new Promise((resolve) => {
+                this.wordItems.forEach(item => {
+                    item.classList.remove('focused', 'rest');
+                    item.classList.add('blurred');
+                });
+                
+                const targetWord = document.querySelector(`[data-word="${word}"]`);
+                if (targetWord) {
+                    targetWord.classList.remove('blurred', 'rest');
+                    targetWord.classList.add('focused');
+                }
+                
+                this.currentStatus.textContent = `Focus: ${word.toUpperCase()}`;
+                this.showCountdown(duration, resolve);
+            });
+        }
+        
+        showCountdown(duration, callback) {
+            if (duration <= 0) {
+                this.countdown.style.display = 'none';
+                callback();
+                return;
+            }
+            
+            let timeLeft = duration;
+            const startTime = Date.now();
+            
+            this.countdown.style.display = 'block';
+            
+            const updateCountdown = () => {
+                const elapsed = Date.now() - startTime;
+                timeLeft = Math.max(0, duration - elapsed);
+                
+                const seconds = Math.ceil(timeLeft / 1000);
+                this.countdown.textContent = seconds;
+                
+                if (timeLeft <= 0) {
+                    this.countdown.style.display = 'none';
+                    callback();
+                } else if (this.isRunning) {
+                    this.countdownInterval = setTimeout(updateCountdown, 100);
+                }
+            };
+            
+            updateCountdown();
+        }
+        
+        async stopTrial() {
+            this.isRunning = false;
+            
+            if (this.currentTimeout) {
+                clearTimeout(this.currentTimeout);
+            }
+            
+            if (this.countdownInterval) {
+                clearTimeout(this.countdownInterval);
+            }
+            
+            await this.stopEEGRecording();
+            
+            window.location.href = '{% url "bci:p300_prediction" %}';
+        }
+        
+        async completeTrial() {
+            this.isRunning = false;
+            
+            await this.stopEEGRecording();
+            
+            // Get final results
+            await this.loadFinalResults();
+            
+            this.wordDisplay.style.display = 'none';
+            this.statusDisplay.style.display = 'none';
+            this.dataCollectionStatus.style.display = 'none';
+            this.stopBtn.style.display = 'none';
+            this.completionScreen.style.display = 'block';
+            
+            this.progressBar.style.width = '100%';
+            this.progressText.textContent = 'Complete!';
+        }
+        
+        async loadFinalResults() {
+            try {
+                console.log('Loading final results...');
+                const response = await fetch(`/bci/p300/prediction/data/${this.session.id}/`);
+                const data = await response.json();
+                
+                const resultsDiv = document.getElementById('results-summary');
+                
+                if (data.status === 'success' && data.predictions.length > 0) {
+                    // Find highest confidence prediction
+                    const bestPrediction = data.predictions.reduce((max, pred) => 
+                        pred.confidence > max.confidence ? pred : max
+                    );
+                    
+                    const avgConfidence = data.predictions.reduce((sum, pred) => sum + pred.confidence, 0) / data.predictions.length;
+                    
+                    let accuracyText = '';
+                    if (this.session.targetWord) {
+                        const isCorrect = bestPrediction.predicted_label === this.session.targetWord;
+                        accuracyText = `<br><strong>Accuracy:</strong> <span class="${isCorrect ? 'text-success' : 'text-danger'}">${isCorrect ? 'Correct' : 'Incorrect'}</span>`;
+                    }
+                    
+                    resultsDiv.innerHTML = `
+                        <div class="row text-start">
+                            <div class="col-md-6">
+                                <strong>Best Prediction:</strong> <span class="badge bg-primary">${bestPrediction.predicted_label.toUpperCase()}</span><br>
+                                <strong>Confidence:</strong> ${bestPrediction.confidence.toFixed(1)}%${accuracyText}
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Total Predictions:</strong> ${data.predictions.length}<br>
+                                <strong>Average Confidence:</strong> ${avgConfidence.toFixed(1)}%
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = '<em>No predictions were recorded during the trial.</em>';
+                }
+            } catch (error) {
+                console.error('Error loading final results:', error);
+                document.getElementById('results-summary').innerHTML = '<em>Error loading results.</em>';
+            }
+        }
+        
+        showError(message) {
+            this.currentStatus.textContent = `Error: ${message}`;
+            this.currentStatus.className = 'h4 text-danger';
+            this.countdown.style.display = 'none';
+        }
+        
+        async startEEGRecording() {
+            const statusDiv = document.getElementById('eeg-status');
+            const startEEGBtn = document.getElementById('start-eeg-btn');
+            
+            startEEGBtn.disabled = true;
+            startEEGBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Starting...';
+            
+            try {
+                statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>Initializing EEG connection and starting recording...</div>';
+                
+                const response = await fetch(`/bci/p300/prediction/start/${this.session.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-record-circle me-2"></i>EEG recording started successfully!</div>';
+                    this.startBtn.disabled = false;
+                    startEEGBtn.style.display = 'none';
+                    
+                    this.dataCollectionStatus.style.display = 'block';
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Failed to start recording: ${data.message}</div>`;
+                    startEEGBtn.disabled = false;
+                    startEEGBtn.innerHTML = '<i class="bi bi-record-circle me-2"></i>Start EEG Recording';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Error starting EEG recording. Please check your device connection.</div>';
+                startEEGBtn.disabled = false;
+                startEEGBtn.innerHTML = '<i class="bi bi-record-circle me-2"></i>Start EEG Recording';
+            }
+        }
+        
+        async stopEEGRecording() {
+            try {
+                const response = await fetch(`/bci/p300/prediction/stop/${this.session.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('EEG recording stopped:', data);
+            } catch (error) {
+                console.error('Error stopping EEG recording:', error);
+            }
         }
     }
     
-    async stopTrial() {
-        if (!confirm('Are you sure you want to stop the trial?')) return;
+    // Global functions
+    function startTrial() {
+        if (window.p300Trial) {
+            window.p300Trial.startTrial();
+        }
+    }
+    
+    function stopTrial() {
+        if (window.p300Trial) {
+            window.p300Trial.stopTrial();
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!document.querySelector('[name=csrfmiddlewaretoken]')) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = '{{ csrf_token }}';
+            document.body.appendChild(csrfInput);
+        }
         
-        console.log('Stopping trial...');
-        this.isRunning = false;
-        await this.stopEEGRecording();
-        window.location.href = '{% url "bci:p300_prediction" %}';
-    }
-    
-    sleep(ms) {
-        return new Promise(resolve => setTimeout(resolve, ms));
-    }
-    
-    getCSRFToken() {
-        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]');
-        return csrfToken ? csrfToken.value : '';
-    }
-}
-
-// Global functions
-function startTrial() {
-    if (window.p300Trial) {
-        window.p300Trial.startTrial();
-    } else {
-        console.error('P300Trial not initialized');
-        alert('Trial not properly initialized. Please refresh the page.');
-    }
-}
-
-function stopTrial() {
-    if (window.p300Trial) {
-        window.p300Trial.stopTrial();
-    }
-}
-
-// Initialize trial when page loads
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Initializing P300 trial...');
-    window.p300Trial = new P300Trial();
-});
+        window.p300Trial = new P300Trial();
+    });
 </script>
-
-
-
-<!-- Hidden CSRF token -->
-<form style="display: none;">
-    {% csrf_token %}
-</form>
-
-{% endblock %}
+{% endblock content %}

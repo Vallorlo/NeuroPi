@@ -1,87 +1,67 @@
-# bci/ml_models/p300/predictor.py
+# bci/ml_models/p300/predictor.py - SIMPLE VERSION
 """
-P300 Predictor - Real Implementation Following Motor Imagery Pattern
-Uses the exact same EEG data collection approach as Motor Imagery
+Simple P300 Predictor - Collect raw data, finish trial, preprocess, predict
+No overthinking, just the basics that work
 """
 
 import numpy as np
 import torch
-import torch.nn.functional as F
-from collections import deque
 import time
 import threading
-import queue as Queue
-from datetime import datetime
-from scipy.signal import butter, filtfilt
-from typing import Tuple, Optional, Dict, List
+from typing import Dict, List, Optional, Tuple
 
 from ..base import BCIPredictor
 from .models import create_p300_model
 from .preprocessing import P300Preprocessor
+from ...models import Prediction
 from ...hardware.interface import EPOCPlusInterface
 
 
 class P300Predictor(BCIPredictor):
-    """Real-time P300 predictor for word detection - SAME PATTERN AS MOTOR IMAGERY"""
+    """Simple P300 Predictor - Collect EEG during trial, predict after trial ends"""
     
     def __init__(self, prediction_session_instance):
         super().__init__(prediction_session_instance)
         
-        # P300-specific parameters
-        self.p300_window = 1.0  # 1 second window for P300 detection
-        self.baseline_duration = 0.2  # 200ms baseline
-        self.response_window = 0.8  # 800ms response window
-        
-        # Word presentation parameters
         self.target_words = ['green', 'purple', 'yellow', 'red', 'blue']
-        self.current_word_index = 0
-        self.word_presentation_time = 2.0  # 2 seconds per word
-        self.rest_time = 1.0  # 1 second rest between words
-        
-        # Prediction state
-        self.prediction_mode = 'single_trial'  # 'single_trial' or 'continuous'
-        self.word_probabilities = {}
+        self.class_labels = ['silence'] + self.target_words
+        self.current_word = None
         self.trial_active = False
-        self.current_trial_data = []
-        
-        # Initialize components - EXACTLY SAME AS MOTOR IMAGERY
-        print("Initializing P300 predictor with real EEG...")
-        self.eeg = EPOCPlusInterface()
-        self.preprocessor = P300Preprocessor(self.sampling_rate)
-        
-        # Data collection - SAME APPROACH AS MOTOR IMAGERY
-        self.data_queue = Queue.Queue()
-        self.data_thread = None
-        self.prediction_thread = None
-        
-        # Real-time prediction buffers
-        self.prediction_buffer = deque(maxlen=10)
-        self.confidence_buffer = deque(maxlen=10)
         self.running = False
         
-        # Load model
+        # Simple EEG collection
+        self.eeg_interface = None
+        self.eeg_buffer = []  # Just store raw samples
+        self.word_events = []  # Track word timings
+        
+        # Load model and preprocessor
         self.model = None
+        self.scaler = None
+        self.preprocessor = None
         self.load_model()
         
-        # Prediction results
-        self.last_prediction = None
-        self.prediction_confidence = 0.0
-        
+        print(f"✅ Simple P300Predictor initialized")
+    
     def load_model(self):
-        """Load the trained P300 model - SAME PATTERN AS MOTOR IMAGERY"""
+        """Load the trained P300 model"""
         try:
-            print("Loading trained P300 model...")
+            print("Loading P300 model...")
             
-            # Load model checkpoint
             checkpoint = torch.load(self.model_instance.model_file.path, map_location=self.device)
-            model_config = checkpoint['model_config']
             
-            # Create model instance
+            # Get model config
+            config = checkpoint.get('model_config', {})
+            n_channels = config.get('n_channels', 14)
+            n_classes = config.get('n_classes', 6)
+            model_type = config.get('model_type', 'p300_cnn_lstm_attention')
+            dropout_rate = config.get('dropout_rate', 0.5)
+            
+            # Create model
             self.model = create_p300_model(
-                model_type=model_config['model_type'],
-                n_channels=model_config['n_channels'],
-                n_classes=model_config['n_classes'],
-                dropout_rate=model_config['dropout_rate']
+                model_type=model_type,
+                n_channels=n_channels,
+                n_classes=n_classes,
+                dropout_rate=dropout_rate
             )
             
             # Load weights
@@ -89,403 +69,324 @@ class P300Predictor(BCIPredictor):
             self.model.to(self.device)
             self.model.eval()
             
-            # Store class labels
+            # Load class labels and scaler
             if 'class_labels' in checkpoint:
                 self.class_labels = checkpoint['class_labels']
-            else:
-                self.class_labels = ['silence', 'green', 'purple', 'yellow', 'red', 'blue']
             
-            print(f"✅ P300 model loaded successfully")
-            print(f"🎯 Classes: {self.class_labels}")
-            print(f"🔧 Model type: {model_config['model_type']}")
+            if 'scaler' in checkpoint:
+                self.scaler = checkpoint['scaler']
+                print("✅ Loaded scaler")
+            
+            # Simple preprocessor - only takes sampling_rate
+            self.preprocessor = P300Preprocessor(sampling_rate=128)
+            
+            print(f"✅ P300 model loaded: {model_type}")
             
         except Exception as e:
             print(f"❌ Error loading P300 model: {e}")
             raise
     
     def start_data_collection(self):
-        """Start real-time EEG data collection - EXACTLY SAME AS MOTOR IMAGERY"""
+        """Start collecting EEG data"""
         try:
-            print("🚀 Starting P300 real-time data collection...")
+            print("🚀 Starting P300 data collection...")
             
-            # Connect to EEG device - SAME AS MOTOR IMAGERY
-            if not self.eeg.connect():
-                raise RuntimeError("Failed to connect to EEG device")
+            # Connect to EPOC+
+            self.eeg_interface = EPOCPlusInterface()
             
-            print(f"✅ Connected to EEG device")
-            
-            # Start data collection thread - SAME AS MOTOR IMAGERY
-            self.running = True
-            self.data_thread = threading.Thread(target=self._data_collection_loop)
-            self.data_thread.daemon = True
-            self.data_thread.start()
-            
-            # Start prediction thread
-            self.prediction_thread = threading.Thread(target=self._prediction_loop)
-            self.prediction_thread.daemon = True
-            self.prediction_thread.start()
-            
-            print("✅ P300 data collection and prediction threads started")
-            
+            if self.eeg_interface.connect():
+                self.running = True
+                
+                # Start collection thread
+                self.collection_thread = threading.Thread(target=self._collect_data, daemon=True)
+                self.collection_thread.start()
+                
+                print("✅ P300 data collection started")
+                return True
+            else:
+                print("❌ Failed to connect to EPOC+")
+                return False
+                
         except Exception as e:
-            print(f"❌ Error starting data collection: {e}")
-            raise
+            print(f"❌ Error starting collection: {e}")
+            return False
     
     def stop_data_collection(self):
-        """Stop real-time data collection - SAME AS MOTOR IMAGERY"""
+        """Stop collection and make prediction"""
         try:
-            print("🛑 Stopping P300 data collection...")
+            print("🛑 Stopping collection and making prediction...")
             
             self.running = False
+            self.trial_active = False
             
-            # Wait for threads to finish
-            if self.data_thread and self.data_thread.is_alive():
-                self.data_thread.join(timeout=2.0)
+            # Wait for collection to stop
+            if hasattr(self, 'collection_thread'):
+                self.collection_thread.join(timeout=2)
             
-            if self.prediction_thread and self.prediction_thread.is_alive():
-                self.prediction_thread.join(timeout=2.0)
+            # Make prediction with collected data
+            prediction = self._make_prediction()
             
-            # Disconnect EEG device - SAME AS MOTOR IMAGERY
-            if hasattr(self, 'eeg') and self.eeg:
-                self.eeg.close()
+            # Disconnect
+            if self.eeg_interface:
+                self.eeg_interface.disconnect()
             
-            print("✅ P300 data collection stopped")
+            print("✅ Collection stopped and prediction made")
+            return prediction
             
         except Exception as e:
-            print(f"❌ Error stopping data collection: {e}")
+            print(f"❌ Error stopping collection: {e}")
+            return None
     
-    def _data_collection_loop(self):
-        """Main data collection loop - EXACTLY SAME PATTERN AS MOTOR IMAGERY"""
-        print("📡 Starting P300 data collection loop...")
-        
-        sample_count = 0
-        eeg_buffer = deque(maxlen=self.buffer_size)
+    def _collect_data(self):
+        """Simple data collection - just store samples"""
+        print("📊 Collecting EEG data...")
         
         while self.running:
             try:
-                # Get EEG data - SAME AS MOTOR IMAGERY
-                eeg_data = self.eeg.get_parsed_data()
+                # Get EEG sample
+                eeg_sample = self.eeg_interface.get_parsed_data()
                 
-                if eeg_data is not None and len(eeg_data) == 14:
-                    # Apply filters - SAME AS MOTOR IMAGERY
-                    filtered_data = self.apply_filters(eeg_data)
-                    
-                    # Add to buffer
-                    eeg_buffer.append(filtered_data)
-                    sample_count += 1
-                    
-                    # Put data in queue for prediction
-                    if len(eeg_buffer) >= self.window_size:
-                        window_data = list(eeg_buffer)[-self.window_size:]
-                        self.data_queue.put(window_data)
+                if eeg_sample is not None and len(eeg_sample) == 14:
+                    # Store with timestamp
+                    self.eeg_buffer.append({
+                        'timestamp': time.time(),
+                        'eeg': eeg_sample,
+                        'word': self.current_word
+                    })
                 
-                # Sleep to control sampling rate - SAME AS MOTOR IMAGERY
-                time.sleep(1.0 / self.sampling_rate)
+                time.sleep(1/128)  # 128 Hz sampling
                 
             except Exception as e:
-                print(f"❌ Data collection error: {e}")
-                if self.running:
-                    time.sleep(0.1)
+                print(f"Error collecting data: {e}")
+                break
         
-        print(f"📡 Data collection loop ended. Collected {sample_count} samples")
+        print(f"📊 Collection finished - {len(self.eeg_buffer)} samples")
     
-    def _prediction_loop(self):
-        """Main prediction loop - SIMILAR TO MOTOR IMAGERY"""
-        print("🧠 Starting P300 prediction loop...")
+    def set_current_word(self, word: str):
+        """Track current word being shown"""
+        self.current_word = word
         
-        prediction_count = 0
+        # Record word event
+        self.word_events.append({
+            'word': word,
+            'timestamp': time.time()
+        })
         
-        while self.running:
-            try:
-                # Get data from queue
-                try:
-                    window_data = self.data_queue.get(timeout=1.0)
-                except Queue.Empty:
-                    continue
-                
-                # Make prediction
-                prediction_result = self._make_prediction(window_data)
-                
-                if prediction_result:
-                    prediction_count += 1
-                    self._process_prediction_result(prediction_result)
-                
-            except Exception as e:
-                print(f"❌ Prediction error: {e}")
-                if self.running:
-                    time.sleep(0.1)
-        
-        print(f"🧠 Prediction loop ended. Made {prediction_count} predictions")
+        print(f"📝 Word: {word}")
     
-    def _make_prediction(self, window_data: List[List[float]]) -> Optional[Dict]:
-        """Make a single prediction from window data - ADAPTED FROM MOTOR IMAGERY"""
+    def mark_trial_start(self):
+        """Mark trial start - clear buffers"""
+        self.trial_active = True
+        self.eeg_buffer = []
+        self.word_events = []
+        print(f"🎯 Trial started")
+    
+    def _make_prediction(self):
+        """Make prediction after trial ends"""
         try:
-            if len(window_data) < self.window_size:
+            print("🧠 Making prediction from collected data...")
+            
+            if not self.eeg_buffer or not self.word_events:
+                print("❌ No data collected")
                 return None
             
-            # Convert to numpy array
-            eeg_array = np.array(window_data, dtype=np.float32)
+            # Extract windows for each word
+            word_predictions = {}
             
-            # Validate data shape
-            if eeg_array.shape != (self.window_size, 14):
+            for event in self.word_events:
+                if event['word'] != 'XXXXX':  # Skip rest periods
+                    word = event['word']
+                    
+                    # Get 3-second window after word start
+                    window = self._extract_window(event['timestamp'], duration=3.0)
+                    
+                    if window is not None and len(window) > 50:  # Need minimum samples
+                        # Preprocess and predict
+                        prediction = self._predict_window(window)
+                        
+                        if prediction is not None:
+                            word_predictions[word] = prediction
+                            print(f"📊 {word}: {prediction['predicted_word']} ({prediction['confidence']:.1f}%)")
+            
+            if not word_predictions:
+                print("❌ No valid predictions")
                 return None
             
-            # Preprocess data - SAME APPROACH AS MOTOR IMAGERY
-            processed_data = self._preprocess_for_prediction(eeg_array)
+            # Find best prediction
+            best_word = max(word_predictions.keys(), key=lambda w: word_predictions[w]['confidence'])
+            best_prediction = word_predictions[best_word]
             
-            if processed_data is None:
+            print(f"🏆 PREDICTION: {best_prediction['predicted_word']} ({best_prediction['confidence']:.1f}%)")
+            
+            # Save to database (using correct Prediction model fields)
+            Prediction.objects.create(
+                session=self.session,  # FIXED: was session_instance
+                predicted_class=best_prediction['class'],
+                predicted_label=best_prediction['predicted_word'],
+                confidence=best_prediction['confidence'] / 100.0,  # Convert percentage to decimal
+                probabilities=best_prediction['probabilities'],
+                prediction_time_ms=0.0  # Not using timing for P300
+            )
+            
+            return best_prediction
+            
+        except Exception as e:
+            print(f"❌ Error making prediction: {e}")
+            return None
+    
+    def _extract_window(self, start_time: float, duration: float = 3.0) -> Optional[np.ndarray]:
+        """Extract EEG window for specific time"""
+        try:
+            end_time = start_time + duration
+            
+            # Get samples in time window
+            window_samples = []
+            for sample in self.eeg_buffer:
+                if start_time <= sample['timestamp'] <= end_time:
+                    window_samples.append(sample['eeg'])
+            
+            if len(window_samples) < 50:  # Need minimum data
                 return None
             
-            # Convert to tensor
-            input_tensor = torch.FloatTensor(processed_data).unsqueeze(0).to(self.device)
+            return np.array(window_samples)  # (samples, channels)
             
-            # Make prediction
+        except Exception as e:
+            print(f"Error extracting window: {e}")
+            return None
+    
+    def _predict_window(self, window: np.ndarray) -> Optional[dict]:
+        """Make prediction for EEG window using EXACT training preprocessing"""
+        try:
+            # EXACT same preprocessing as training:
+            # 1. Bandpass filter (0.5-40 Hz)
+            processed = self.preprocessor.bandpass_filter(window, 0.5, 40.0)
+            
+            # 2. Notch filter (50 Hz)  
+            processed = self.preprocessor.notch_filter(processed, 50.0)
+            
+            # 3. Artifact removal (same as training)
+            processed = self.preprocessor.remove_artifacts_statistical(processed, threshold=3.0)
+            
+            # 4. Channel-wise z-score normalization (EXACT same as training)
+            for ch in range(processed.shape[1]):
+                from scipy.stats import zscore
+                processed[:, ch] = zscore(processed[:, ch])
+            
+            # 5. Convert to (channels, samples) format like training
+            processed = processed.T  # (channels, samples)
+            
+            # 6. Apply scaler if available (same as training)
+            if self.scaler is not None:
+                original_shape = processed.shape
+                processed_flat = processed.reshape(-1, processed.shape[-1])
+                processed_flat = self.scaler.transform(processed_flat)
+                processed = processed_flat.reshape(original_shape)
+            
+            # 7. Make prediction
             with torch.no_grad():
-                output = self.model(input_tensor)
-                probabilities = torch.softmax(output, dim=1)
-                confidence, predicted_class = torch.max(probabilities, 1)
+                input_tensor = torch.FloatTensor(processed).unsqueeze(0).to(self.device)
+                outputs = self.model(input_tensor)
+                probabilities = torch.softmax(outputs, dim=1).cpu().numpy()[0]
                 
-                confidence_val = confidence.item()
-                predicted_idx = predicted_class.item()
-            
-            # Validate prediction
-            if 0 <= predicted_idx < len(self.class_labels):
-                predicted_word = self.class_labels[predicted_idx]
+                predicted_class = int(np.argmax(probabilities))
+                predicted_word = self.class_labels[predicted_class]
+                confidence = float(probabilities[predicted_class]) * 100
                 
                 return {
-                    'timestamp': time.time(),
-                    'predicted_class': predicted_idx,
+                    'class': predicted_class,
                     'predicted_word': predicted_word,
-                    'confidence': confidence_val,
-                    'probabilities': probabilities.cpu().numpy()[0]
+                    'confidence': confidence,
+                    'probabilities': probabilities.tolist()
                 }
-            else:
-                return None
                 
         except Exception as e:
-            print(f"❌ Prediction failed: {e}")
+            print(f"Error predicting window: {e}")
             return None
     
-    def _preprocess_for_prediction(self, eeg_data: np.ndarray) -> Optional[np.ndarray]:
-        """Preprocess EEG data for prediction - SAME APPROACH AS MOTOR IMAGERY"""
+    # Required abstract methods from BCIPredictor
+    def predict(self, window_data: np.ndarray) -> Tuple[int, float, np.ndarray]:
+        """Required method - make prediction on window"""
         try:
-            # Apply same preprocessing as training
-            # 1. Bandpass filter (0.5-40 Hz)
-            filtered = self.preprocessor.bandpass_filter(eeg_data, 0.5, 40.0)
+            prediction = self._predict_window(window_data)
+            if prediction is None:
+                return 0, 0.0, np.zeros(len(self.class_labels))
             
-            # 2. Notch filter (50 Hz)
-            filtered = self.preprocessor.notch_filter(filtered, 50.0)
+            return (
+                prediction['class'],
+                prediction['confidence'],
+                np.array(prediction['probabilities'])
+            )
+        except Exception as e:
+            print(f"Error in predict: {e}")
+            return 0, 0.0, np.zeros(len(self.class_labels))
+    
+    def preprocess_window(self, data: np.ndarray) -> np.ndarray:
+        """Required method - preprocess window using EXACT training pipeline"""
+        try:
+            # EXACT same preprocessing as training
+            processed = self.preprocessor.bandpass_filter(data, 0.5, 40.0)
+            processed = self.preprocessor.notch_filter(processed, 50.0)
+            processed = self.preprocessor.remove_artifacts_statistical(processed, threshold=3.0)
             
-            # 3. Artifact removal
-            filtered = self.preprocessor.remove_artifacts_statistical(filtered, threshold=3.0)
-            
-            # 4. Channel-wise normalization
-            from scipy.stats import zscore
-            for ch in range(filtered.shape[1]):
-                filtered[:, ch] = zscore(filtered[:, ch])
-            
-            # 5. Convert to model input format (channels, time)
-            processed = filtered.T
-            
-            # Validate output
-            if np.any(np.isnan(processed)) or np.any(np.isinf(processed)):
-                return None
+            # Channel-wise z-score normalization (same as training)
+            for ch in range(processed.shape[1]):
+                from scipy.stats import zscore
+                processed[:, ch] = zscore(processed[:, ch])
             
             return processed
-            
         except Exception as e:
-            print(f"❌ Preprocessing failed: {e}")
-            return None
-    
-    def _process_prediction_result(self, result: Dict):
-        """Process and store prediction result - ADAPTED FROM MOTOR IMAGERY"""
-        try:
-            # Add to prediction buffer
-            self.prediction_buffer.append(result)
-            self.confidence_buffer.append(result['confidence'])
-            
-            # Update last prediction
-            self.last_prediction = result['predicted_word']
-            self.prediction_confidence = result['confidence']
-            
-            # Check for high-confidence predictions
-            if result['confidence'] >= 0.7:  # High confidence threshold
-                word = result['predicted_word']
-                confidence = result['confidence']
-                
-                # Only report non-silence predictions or very high-confidence silence
-                if result['predicted_class'] != 0 or confidence >= 0.9:
-                    print(f"🎯 P300 DETECTION: '{word}' (confidence: {confidence:.3f})")
-                    
-                    # Update session statistics
-                    self.prediction_session.total_predictions += 1
-                    if confidence >= 0.8:
-                        self.prediction_session.high_confidence_predictions += 1
-                    
-                    self.prediction_session.last_prediction_time = datetime.now()
-                    self.prediction_session.save()
-            
-        except Exception as e:
-            print(f"❌ Error processing prediction result: {e}")
-    
-    def start_single_trial_prediction(self):
-        """Start single-trial P300 prediction mode - SAME AS MOTOR IMAGERY"""
-        try:
-            print("🎯 Starting single-trial P300 prediction...")
-            
-            if not self.model:
-                self.load_model()
-            
-            # Start data collection
-            self.start_data_collection()
-            
-            print(f"✅ Single-trial prediction mode started")
-            print(f"   Monitoring for P300 responses to visual words...")
-            
-        except Exception as e:
-            print(f"❌ Error starting single-trial prediction: {e}")
-            raise
-    
-    def get_prediction_statistics(self) -> Dict:
-        """Get current prediction statistics - SAME AS MOTOR IMAGERY"""
-        try:
-            avg_confidence = (np.mean(list(self.confidence_buffer)) 
-                            if len(self.confidence_buffer) > 0 else 0)
-            
-            return {
-                'total_predictions': len(self.prediction_buffer),
-                'average_confidence': avg_confidence,
-                'last_prediction': self.last_prediction,
-                'last_confidence': self.prediction_confidence,
-                'is_running': self.running,
-                'buffer_size': len(self.confidence_buffer)
-            }
-            
-        except Exception as e:
-            print(f"❌ Error getting statistics: {e}")
-            return {}
-    
-    def predict_batch(self, eeg_data: np.ndarray) -> List[Dict]:
-        """Predict on a batch of EEG data - SAME AS MOTOR IMAGERY"""
-        try:
-            if not self.model:
-                self.load_model()
-            
-            print(f"🔮 Batch prediction on {len(eeg_data)} epochs...")
-            
-            # Preprocess data
-            processed_data = []
-            for epoch in eeg_data:
-                if epoch.ndim == 2:  # (channels, samples)
-                    epoch_data = epoch.T  # Convert to (samples, channels)
-                else:
-                    epoch_data = epoch
-                
-                processed_epoch = self._preprocess_for_prediction(epoch_data)
-                if processed_epoch is not None:
-                    processed_data.append(processed_epoch)
-            
-            if not processed_data:
-                return []
-            
-            # Convert to tensor
-            batch_tensor = torch.FloatTensor(processed_data).to(self.device)
-            
-            # Make predictions
-            results = []
-            with torch.no_grad():
-                outputs = self.model(batch_tensor)
-                probabilities = torch.softmax(outputs, dim=1)
-                confidences, predicted_classes = torch.max(probabilities, 1)
-                
-                for i in range(len(processed_data)):
-                    predicted_idx = predicted_classes[i].item()
-                    confidence_val = confidences[i].item()
-                    
-                    if 0 <= predicted_idx < len(self.class_labels):
-                        predicted_word = self.class_labels[predicted_idx]
-                        
-                        results.append({
-                            'epoch_index': i,
-                            'predicted_class': predicted_idx,
-                            'predicted_word': predicted_word,
-                            'confidence': confidence_val,
-                            'probabilities': probabilities[i].cpu().numpy()
-                        })
-            
-            print(f"✅ Batch prediction completed: {len(results)} results")
-            return results
-            
-        except Exception as e:
-            print(f"❌ Batch prediction failed: {e}")
-            return []
+            print(f"Error in preprocess_window: {e}")
+            return data
 
 
-class P300Simulator:
-    """P300 simulator for testing without real EEG hardware - SAME AS MOTOR IMAGERY"""
+# Simple simulator for testing
+class P300Simulator(P300Predictor):
+    """Simple simulator for testing"""
     
-    def __init__(self, prediction_session):
-        self.prediction_session = prediction_session
-        self.class_labels = ['silence', 'green', 'purple', 'yellow', 'red', 'blue']
-        self.running = False
-        
-        # Simulation parameters
-        self.simulation_words = ['green', 'red', 'blue', 'yellow', 'purple']
-        self.word_duration = 3.0  # 3 seconds per word
-        self.silence_duration = 2.0  # 2 seconds silence between words
-        
-        print("🎭 P300 Simulator initialized")
-        print(f"   Test words: {self.simulation_words}")
-        print(f"   Word duration: {self.word_duration}s")
+    def __init__(self, prediction_session_instance):
+        super().__init__(prediction_session_instance)
+        print("🔧 P300Simulator mode")
     
-    def start_simulation(self):
-        """Start P300 simulation - SAME PATTERN AS MOTOR IMAGERY"""
+    def start_data_collection(self):
+        """Start simulated collection"""
         try:
-            print("🎭 Starting P300 simulation...")
-            
+            print("🚀 Starting P300 simulation...")
             self.running = True
-            simulation_thread = threading.Thread(target=self._simulation_loop)
-            simulation_thread.daemon = True
-            simulation_thread.start()
+            
+            # Start simulation thread
+            self.collection_thread = threading.Thread(target=self._simulate_data, daemon=True)
+            self.collection_thread.start()
             
             print("✅ P300 simulation started")
+            return True
             
         except Exception as e:
             print(f"❌ Error starting simulation: {e}")
-            raise
+            return False
     
-    def stop_simulation(self):
-        """Stop P300 simulation"""
-        self.running = False
-        print("🛑 P300 simulation stopped")
-    
-    def _simulation_loop(self):
-        """Main simulation loop"""
-        word_index = 0
+    def _simulate_data(self):
+        """Generate simulated EEG"""
+        print("🔧 Generating simulated data...")
         
         while self.running:
             try:
-                # Present word
-                current_word = self.simulation_words[word_index % len(self.simulation_words)]
+                # Generate EEG sample (14 channels)
+                eeg_sample = np.random.normal(0, 8, 14)
                 
-                print(f"🎯 Simulating P300 response to: '{current_word}'")
+                # Add P300-like response for words
+                if self.current_word and self.current_word != 'XXXXX':
+                    eeg_sample[5] += np.random.normal(15, 3)  # P7
+                    eeg_sample[8] += np.random.normal(15, 3)  # P8
                 
-                # Simulate P300 detection with some randomness
-                confidence = np.random.uniform(0.7, 0.95)
+                # Store sample
+                self.eeg_buffer.append({
+                    'timestamp': time.time(),
+                    'eeg': eeg_sample.tolist(),
+                    'word': self.current_word
+                })
                 
-                # Simulate realistic delay
-                time.sleep(self.word_duration)
-                
-                if self.running:
-                    print(f"✅ Simulated detection: '{current_word}' (confidence: {confidence:.3f})")
-                    
-                    # Silence period
-                    time.sleep(self.silence_duration)
-                    
-                    word_index += 1
+                time.sleep(1/128)
                 
             except Exception as e:
-                print(f"❌ Simulation error: {e}")
+                print(f"Error in simulation: {e}")
                 break
-        
-        print("🎭 Simulation loop ended")

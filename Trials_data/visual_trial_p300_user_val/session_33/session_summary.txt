@@ -1,0 +1,24 @@
+Visual Trial Session Summary
+============================
+
+Participant: p300_user_val
+Word Set: P300_prediction
+Session ID: 33
+Started: 2025-07-06 00:13:23.667603+00:00
+Completed: None
+Word Display Duration: 3000ms
+Rest Duration: 1500ms
+Repetitions per Word: 1
+
+Data Collection Results:
+Total EEG Samples: 5893
+Duration: 46.43 seconds
+Sampling Rate: 126.92 Hz
+
+Words in dataset:
+  XXXXX: 1966 samples
+  purple: 787 samples
+  green: 786 samples
+  red: 785 samples
+  blue: 785 samples
+  yellow: 784 samples

@@ -54,15 +54,21 @@ urlpatterns = [
         path('training/', views.P300TrainingView.as_view(), name='p300_training'),
         path('prediction/', views.P300PredictionView.as_view(), name='p300_prediction'),
         
-        # P300 specific endpoints
-        path('training/start/', views.start_p300_training, name='start_p300_training'),
+        # P300 prediction endpoints (corrected paths)
         path('prediction/session/create/', views.create_p300_prediction_session, name='create_p300_prediction_session'),
         path('prediction/trial/<uuid:session_pk>/', views.p300_trial_run, name='p300_trial_run'),
         path('prediction/start/<uuid:session_pk>/', views.start_p300_prediction, name='start_p300_prediction'),
         path('prediction/stop/<uuid:session_pk>/', views.stop_p300_prediction, name='stop_p300_prediction'),
         path('prediction/status/<uuid:session_pk>/', views.p300_prediction_status, name='p300_prediction_status'),
+        path('prediction/data/<uuid:session_pk>/', views.p300_prediction_data, name='p300_prediction_data'),
         path('prediction/results/<uuid:session_pk>/', views.p300_prediction_results, name='p300_prediction_results'),
         path('prediction/trial-results/<uuid:session_pk>/', views.p300_trial_results, name='p300_trial_results'),
+        
+        # P300 trial control endpoints
+        path('prediction/set-word/<uuid:session_pk>/', views.p300_set_current_word, name='p300_set_current_word'),
+        path('prediction/mark-start/<uuid:session_pk>/', views.p300_mark_trial_start, name='p300_mark_trial_start'),
+        
+        # P300 cleanup
         path('cleanup-sessions/', views.cleanup_p300_sessions, name='cleanup_p300_sessions'),
     ])),
     

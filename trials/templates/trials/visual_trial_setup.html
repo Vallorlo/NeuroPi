@@ -66,7 +66,7 @@ Visual Word Focus Trial Configuration Template
                             <h5 class="mb-0">Trial Configuration</h5>
                         </div>
                         <div class="card-body">
-                            <form method="post" action="{% url 'start_visual_trial' %}" id="visualConfigForm">
+                            <form method="post" action="{% url 'trials:start_visual_trial' %}" id="visualConfigForm">
                                 {% csrf_token %}
                                 <input type="hidden" name="word_set_id" value="{{ word_set.id }}">
                                 
@@ -123,7 +123,7 @@ Visual Word Focus Trial Configuration Template
                             </form>
                             
                             <div class="mt-3">
-                                <a href="{% url 'start_trial' %}" class="btn btn-outline-secondary">
+                                <a href="{% url 'trials:start_trial' %}" class="btn btn-outline-secondary">
                                     <i class="bi bi-arrow-left"></i> Back to Trial Selection
                                 </a>
                             </div>
@@ -215,7 +215,7 @@ Visual Word Focus Trial Configuration Template
             
             modal.show();
             
-            fetch('{% url "check_eeg_connection" %}')
+            fetch('{% url "trials:check_eeg_connection" %}')
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {

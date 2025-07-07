@@ -1,0 +1,519 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Researcher Dashboard
+{% endblock title %}
+
+{% block content %}
+<div class="container-fluid mt-4 mb-5">
+    <div class="row">
+        <div class="col-lg-3">
+            <div class="card shadow mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Researcher Profile</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <div class="avatar-circle">
+                            <span class="avatar-initials">{{ user.username|slice:":1"|upper }}</span>
+                        </div>
+                        <h4 class="mt-2">{{ user.username }}</h4>
+                        <p class="text-muted">{{ user.email }}</p>
+                        <p class="badge bg-primary">Researcher</p>
+                    </div>
+
+                    <div class="researcher-info mb-3">
+                        <p><strong>Institution:</strong> {{ researcher_profile.institution|default:"Not specified" }}</p>
+                        <p><strong>Department:</strong> {{ researcher_profile.department|default:"Not specified" }}</p>
+                        <p><strong>Position:</strong> {{ researcher_profile.position|default:"Not specified" }}</p>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'user_management:edit_researcher_profile' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-pencil-square"></i> Edit Profile
+                        </a>
+                        <a href="{% url 'user_management:workflow_guide' %}" class="btn btn-outline-info">
+                            <i class="bi bi-journal-text"></i> View Workflow Guide
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Quick Links</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <a href="{% url 'home' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-house-door"></i> Home
+                        </a>
+                        <a href="{% url 'user_management:participant_list' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-people"></i> Manage Participants
+                        </a>
+                        <a href="{% url 'user_management:schedule_session' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-calendar-event"></i> Schedule Sessions
+                        </a>
+                        <a href="{% url 'user_management:researcher_requests' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-inbox"></i> Participation Requests
+                        </a>
+                        <a href="{% url 'user_management:consent_management' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-file-earmark-text"></i> Manage Consent Forms
+                        </a>
+                        <a href="{% url 'user_management:assign_consent_form_general' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-person-plus"></i> Assign Consent to Participant
+                        </a>
+                        <a href="{% url 'trials:start_trial' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-play-circle"></i> Start Trial
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <!-- Enhanced Statistics Cards -->
+            <div class="row mb-4">
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="card shadow h-100 border-left-primary">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                                        Total Participants
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ total_participants }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-users fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="card shadow h-100 border-left-success">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                                        Eligible for Research
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ eligible_participants_count }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-check-circle fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="card shadow h-100 border-left-warning">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                                        Pending Consents
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ pending_assignments_count }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-clock fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-3 col-md-6 mb-3">
+                    <div class="card shadow h-100 border-left-info">
+                        <div class="card-body">
+                            <div class="row no-gutters align-items-center">
+                                <div class="col mr-2">
+                                    <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                                        Signed This Week
+                                    </div>
+                                    <div class="h5 mb-0 font-weight-bold text-gray-800">{{ newly_signed_consents|length }}</div>
+                                </div>
+                                <div class="col-auto">
+                                    <i class="fas fa-signature fa-2x text-gray-300"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Notifications for Newly Signed Consents -->
+            {% if newly_signed_consents %}
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <h5 class="alert-heading">
+                            <i class="fas fa-check-circle"></i> New Consent Forms Signed!
+                        </h5>
+                        <p class="mb-2">The following participants have recently signed consent forms you assigned:</p>
+                        <ul class="mb-0">
+                            {% for assignment in newly_signed_consents %}
+                            <li>
+                                <strong>{{ assignment.participant.user.get_full_name|default:assignment.participant.user.username }}</strong>
+                                signed "{{ assignment.consent_form.title }}"
+                                <small class="text-muted">(recently signed)</small>
+                                <a href="{% url 'user_management:invite_participant_to_study' assignment.participant.participant_id %}" class="btn btn-sm btn-outline-primary ms-2">
+                                    <i class="fas fa-paper-plane"></i> Invite to Study
+                                </a>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Ready for Research Section -->
+            <div class="row mb-4">
+                <div class="col-lg-8">
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="fas fa-user-check"></i> Participants Ready for Research
+                            </h5>
+                            <a href="{% url 'user_management:eligible_participants_view' %}" class="btn btn-light btn-sm">
+                                <i class="fas fa-list"></i> View All
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            {% if eligible_participants %}
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Participant</th>
+                                                <th>Consent Types</th>
+                                                <th>Latest Consent</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {% for participant in eligible_participants %}
+                                            <tr>
+                                                <td>
+                                                    <div>
+                                                        <strong>{{ participant.user.get_full_name|default:participant.user.username }}</strong>
+                                                        <br>
+                                                        <small class="text-muted">{{ participant.user.email }}</small>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    {% if participant.eeg_consent %}
+                                                        <span class="badge bg-primary me-1">EEG</span>
+                                                    {% endif %}
+                                                    {% if participant.audio_consent %}
+                                                        <span class="badge bg-info me-1">Audio</span>
+                                                    {% endif %}
+                                                    {% if participant.data_sharing_consent %}
+                                                        <span class="badge bg-warning me-1">Data Sharing</span>
+                                                    {% endif %}
+                                                    <span class="badge bg-success">{{ participant.consent_count }} Total</span>
+                                                </td>
+                                                <td>
+                                                    <small>{{ participant.latest_consent_date|date:"M d, Y" }}</small>
+                                                </td>
+                                                <td>
+                                                    <a href="{% url 'user_management:invite_participant_to_study' participant.participant_id %}"
+                                                       class="btn btn-sm btn-success">
+                                                        <i class="fas fa-paper-plane"></i> Invite
+                                                    </a>
+                                                    <a href="{% url 'user_management:schedule_session' %}?participant={{ participant.user.username }}"
+                                                       class="btn btn-sm btn-outline-primary">
+                                                        <i class="fas fa-calendar"></i> Schedule
+                                                    </a>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-user-slash fa-3x text-muted mb-3"></i>
+                                    <h5 class="text-muted">No Participants Ready</h5>
+                                    <p class="text-muted">Participants will appear here once they sign consent forms.</p>
+                                    <a href="{% url 'user_management:assign_consent_form_general' %}" class="btn btn-primary">
+                                        <i class="fas fa-paper-plane"></i> Assign Consent Forms
+                                    </a>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-lg-4">
+                    <!-- Quick Actions -->
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-primary text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-bolt"></i> Quick Actions
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-2">
+                                <a href="{% url 'user_management:eligible_participants_view' %}" class="btn btn-success">
+                                    <i class="fas fa-user-check"></i> View Eligible Participants
+                                </a>
+                                <a href="{% url 'user_management:assign_consent_form_general' %}" class="btn btn-warning">
+                                    <i class="fas fa-paper-plane"></i> Assign Consent Forms
+                                </a>
+                                <a href="{% url 'user_management:schedule_session' %}" class="btn btn-info">
+                                    <i class="fas fa-calendar-plus"></i> Schedule Session
+                                </a>
+                                <a href="{% url 'user_management:consent_management' %}" class="btn btn-outline-primary">
+                                    <i class="fas fa-file-alt"></i> Manage Consent Forms
+                                </a>
+                                <a href="{% url 'user_management:researcher_requests' %}" class="btn btn-outline-secondary">
+                                    <i class="fas fa-inbox"></i> Review Requests
+                                    {% if pending_requests %}
+                                        <span class="badge bg-danger">{{ pending_requests }}</span>
+                                    {% endif %}
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow mb-4">
+                <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Upcoming Sessions</h5>
+                    <a href="{% url 'user_management:schedule_session' %}" class="btn btn-light btn-sm">
+                        <i class="bi bi-plus-circle"></i> New Session
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if upcoming_sessions %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Participant</th>
+                                        <th>Date & Time</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for session in upcoming_sessions %}
+                                        <tr>
+                                            <td>{{ session.title }}</td>
+                                            <td>{{ session.participant.username }}</td>
+                                            <td>{{ session.scheduled_start|date:"M d, Y - h:i A" }}</td>
+                                            <td>
+                                                <span class="badge {% if session.status == 'scheduled' %}bg-info{% elif session.status == 'in_progress' %}bg-primary{% endif %}">
+                                                    {{ session.status|title }}
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <a href="{% url 'user_management:schedule_session' %}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-pencil"></i> Edit
+                                                </a>
+                                                <a href="{% url 'trials:start_trial' %}?participant={{ session.participant.username }}" class="btn btn-sm btn-outline-success">
+                                                    <i class="bi bi-play"></i> Start Trial
+                                                </a>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-calendar-x display-4 text-muted"></i>
+                            <p class="mt-3">No upcoming sessions scheduled.</p>
+                            <a href="{% url 'user_management:schedule_session' %}" class="btn btn-primary">
+                                <i class="bi bi-plus-circle"></i> Schedule Session
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Recent Sessions</h5>
+                            <a href="{% url 'user_management:participant_sessions' %}" class="btn btn-light btn-sm">
+                                <i class="bi bi-list"></i> View All
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            {% if recent_sessions %}
+                                <div class="list-group">
+                                    {% for session in recent_sessions %}
+                                        <div class="list-group-item">
+                                            <div class="d-flex w-100 justify-content-between">
+                                                <h6 class="mb-1">{{ session.title }}</h6>
+                                                <small>{{ session.scheduled_start|date:"M d, Y" }}</small>
+                                            </div>
+                                            <p class="mb-1">Participant: {{ session.participant.username }}</p>
+                                            <small class="text-muted">
+                                                Status:
+                                                <span class="badge
+                                                    {% if session.status == 'completed' %}bg-success
+                                                    {% elif session.status == 'cancelled' %}bg-danger
+                                                    {% elif session.status == 'no_show' %}bg-warning
+                                                    {% else %}bg-secondary{% endif %}">
+                                                    {{ session.status|title }}
+                                                </span>
+                                            </small>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="bi bi-calendar-check display-4 text-muted"></i>
+                                    <p class="mt-3">No recent sessions found.</p>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">
+                                <i class="fas fa-file-signature"></i> Recent Consent Assignments
+                            </h5>
+                            <a href="{% url 'user_management:assign_consent_form_general' %}" class="btn btn-light btn-sm">
+                                <i class="fas fa-plus-circle"></i> Assign
+                            </a>
+                        </div>
+                        <div class="card-body">
+                            {% if recent_assignments %}
+                                <div class="list-group">
+                                    {% for assignment in recent_assignments %}
+                                        <div class="list-group-item {% if assignment.status == 'signed' %}list-group-item-success{% elif assignment.status == 'declined' %}list-group-item-danger{% elif assignment.is_overdue %}list-group-item-warning{% endif %}">
+                                            <div class="d-flex w-100 justify-content-between align-items-start">
+                                                <div class="flex-grow-1">
+                                                    <div class="d-flex w-100 justify-content-between">
+                                                        <h6 class="mb-1">{{ assignment.consent_form.title }}</h6>
+                                                        <small>{{ assignment.assigned_at|date:"M d, Y" }}</small>
+                                                    </div>
+                                                    <p class="mb-1">
+                                                        <strong>{{ assignment.participant.user.get_full_name|default:assignment.participant.user.username }}</strong>
+                                                    </p>
+                                                    <div class="d-flex align-items-center gap-2">
+                                                        <span class="badge
+                                                            {% if assignment.status == 'signed' %}bg-success
+                                                            {% elif assignment.status == 'declined' %}bg-danger
+                                                            {% elif assignment.status == 'expired' %}bg-warning
+                                                            {% elif assignment.status == 'viewed' %}bg-info
+                                                            {% else %}bg-secondary{% endif %}">
+                                                            {% if assignment.status == 'signed' %}
+                                                                <i class="fas fa-check"></i> Signed
+                                                            {% elif assignment.status == 'declined' %}
+                                                                <i class="fas fa-times"></i> Declined
+                                                            {% elif assignment.status == 'viewed' %}
+                                                                <i class="fas fa-eye"></i> Viewed
+                                                            {% else %}
+                                                                <i class="fas fa-clock"></i> {{ assignment.status|title }}
+                                                            {% endif %}
+                                                        </span>
+
+                                                        {% if assignment.status == 'signed' %}
+                                                            <small class="text-success">
+                                                                <i class="fas fa-check-circle"></i> Ready for research
+                                                            </small>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+
+                                                <div class="ms-2">
+                                                    {% if assignment.status == 'signed' %}
+                                                        <a href="{% url 'user_management:invite_participant_to_study' assignment.participant.participant_id %}"
+                                                           class="btn btn-sm btn-success" title="Invite to Study">
+                                                            <i class="fas fa-paper-plane"></i>
+                                                        </a>
+                                                    {% endif %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            {% else %}
+                                <div class="text-center py-4">
+                                    <i class="fas fa-file-signature fa-3x text-muted mb-3"></i>
+                                    <h5 class="text-muted">No Consent Assignments</h5>
+                                    <p class="text-muted">Start by assigning consent forms to participants.</p>
+                                    <a href="{% url 'user_management:assign_consent_form_general' %}" class="btn btn-primary">
+                                        <i class="fas fa-paper-plane"></i> Assign Consent Form
+                                    </a>
+                                </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-6">
+                    <div class="card shadow mb-4">
+                        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0">Quick Actions</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="d-grid gap-3">
+                                <a href="{% url 'user_management:schedule_session' %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-calendar-plus"></i> Schedule New Session
+                                </a>
+                                <a href="{% url 'user_management:create_consent_form' %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-file-earmark-plus"></i> Create Consent Form
+                                </a>
+                                <a href="{% url 'user_management:assign_consent_form_general' %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-file-earmark-check"></i> Assign Consent Form
+                                </a>
+                                <a href="{% url 'trials:start_trial' %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-play-circle"></i> Start New Trial
+                                </a>
+                                <a href="{% url 'user_management:participant_list' %}" class="btn btn-outline-primary">
+                                    <i class="bi bi-people"></i> View All Participants
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .avatar-circle {
+        width: 80px;
+        height: 80px;
+        background-color: #007bff;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0 auto;
+    }
+
+    .avatar-initials {
+        color: white;
+        font-size: 32px;
+        font-weight: bold;
+    }
+</style>
+{% endblock content %}

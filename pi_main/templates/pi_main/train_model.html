@@ -369,7 +369,31 @@
         datasetSelect.addEventListener('change', updateWordOptions);
         
         // Handle form submission
+        trainingForm.setAttribute('data-custom-handler', 'true'); // Prevent global handler
+
         trainingForm.addEventListener('submit', function(e) {
+            console.log('Training form submission attempted');
+
+            // Validate required fields
+            const dataset = document.getElementById('id_dataset_path').value;
+            const selectedWords = document.querySelectorAll('input[name="selected_words"]:checked');
+
+            if (!dataset) {
+                console.log('No dataset selected');
+                alert('Please select a dataset.');
+                e.preventDefault();
+                return false;
+            }
+
+            if (selectedWords.length === 0) {
+                console.log('No words selected');
+                alert('Please select at least one word.');
+                e.preventDefault();
+                return false;
+            }
+
+            console.log('Training form validation passed');
+
             // Show loading overlay
             trainingOverlay.classList.remove('d-none');
             submitBtn.disabled = true;

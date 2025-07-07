@@ -607,7 +607,30 @@
     document.addEventListener('DOMContentLoaded', function() {
         // Show overlay on form submission
         const form = document.getElementById('processingForm');
+        form.setAttribute('data-custom-handler', 'true'); // Prevent global handler
+
         form.addEventListener('submit', function(e) {
+            console.log('Preprocessor form submission attempted');
+
+            // Validate form before showing overlay
+            const selectedParticipants = form.querySelectorAll('input[name="selected_participants"]:checked');
+            const selectedWords = form.querySelectorAll('input[name="selected_words"]:checked');
+
+            if (selectedParticipants.length === 0) {
+                console.log('No participants selected');
+                alert('Please select at least one participant.');
+                e.preventDefault();
+                return false;
+            }
+
+            if (selectedWords.length === 0) {
+                console.log('No words selected');
+                alert('Please select at least one word.');
+                e.preventDefault();
+                return false;
+            }
+
+            console.log('Preprocessor form validation passed');
             document.getElementById('processing-overlay').style.display = 'block';
             document.getElementById('submitButton').disabled = true;
         });

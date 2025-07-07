@@ -1,0 +1,173 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Research Participation Requests - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Research Requests</li>
+{% endblock %}
+
+{% block page_content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+            <h1>
+                <i class="fas fa-clipboard-list me-3"></i>
+                Research Participation Requests
+            </h1>
+            <p class="subtitle">Review and manage participant research requests</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'user_management:dashboard' %}" class="action-button">
+                <i class="fas fa-arrow-left"></i>
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Filter Controls -->
+<div class="dashboard-card mb-4">
+    <div class="card-body">
+        <form method="get" class="row g-3">
+            <div class="col-md-4">
+                <label for="status" class="form-label">Filter by Status</label>
+                <select name="status" id="status" class="form-select">
+                    <option value="">All Statuses</option>
+                    {% for value, label in status_choices %}
+                        <option value="{{ value }}" {% if value == status_filter %}selected{% endif %}>
+                            {{ label }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2 d-flex align-items-end">
+                <button type="submit" class="btn btn-modern btn-primary">
+                    <i class="fas fa-filter me-2"></i>
+                    Filter
+                </button>
+            </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Requests List -->
+    {% if page_obj %}
+        <div class="row">
+            {% for request in page_obj %}
+                <div class="col-md-6 mb-4">
+                    <div class="card h-100">
+                        <div class="card-header d-flex justify-content-between align-items-center">
+                            <span class="badge bg-{% if request.status == 'pending' %}warning{% elif request.status == 'approved' %}success{% elif request.status == 'declined' %}danger{% else %}secondary{% endif %}">
+                                {{ request.get_status_display }}
+                            </span>
+                            <small class="text-muted">
+                                {% if request.is_expired %}
+                                    <i class="fas fa-clock text-danger"></i>
+                                    Expired
+                                {% else %}
+                                    <i class="fas fa-clock"></i>
+                                    {{ request.days_until_expiration }} days left
+                                {% endif %}
+                            </small>
+                        </div>
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                <i class="fas fa-user"></i>
+                                {{ request.participant.user.get_full_name|default:request.participant.user.username }}
+                            </h6>
+                            
+                            <div class="mb-2">
+                                <strong>Type:</strong> 
+                                <span class="badge bg-info">{{ request.get_request_type_display }}</span>
+                            </div>
+                            
+                            <div class="mb-2">
+                                <strong>Sessions:</strong> {{ request.preferred_session_count }} 
+                                ({{ request.preferred_duration }} min each)
+                            </div>
+                            
+                            {% if request.participant_message %}
+                                <div class="mb-3">
+                                    <strong>Message:</strong>
+                                    <p class="text-muted small">{{ request.participant_message|truncatewords:20 }}</p>
+                                </div>
+                            {% endif %}
+                            
+                            <div class="mb-2">
+                                <small class="text-muted">
+                                    <i class="fas fa-calendar"></i>
+                                    Created: {{ request.created_at|date:"M d, Y" }}
+                                </small>
+                            </div>
+                        </div>
+                        <div class="card-footer">
+                            {% if request.status == 'pending' and not request.is_expired %}
+                                <a href="{% url 'user_management:respond_to_request' request.id %}" 
+                                   class="btn btn-primary btn-sm">
+                                    <i class="fas fa-reply"></i>
+                                    Respond
+                                </a>
+                            {% elif request.status == 'approved' %}
+                                <button class="btn btn-success btn-sm" disabled>
+                                    <i class="fas fa-check"></i>
+                                    Approved
+                                </button>
+                            {% elif request.status == 'declined' %}
+                                <button class="btn btn-danger btn-sm" disabled>
+                                    <i class="fas fa-times"></i>
+                                    Declined
+                                </button>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+            <nav aria-label="Requests pagination">
+                <ul class="pagination justify-content-center">
+                    {% if page_obj.has_previous %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=1{% if status_filter %}&status={{ status_filter }}{% endif %}">First</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}">Previous</a>
+                        </li>
+                    {% endif %}
+
+                    <li class="page-item active">
+                        <span class="page-link">
+                            Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                        </span>
+                    </li>
+
+                    {% if page_obj.has_next %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if status_filter %}&status={{ status_filter }}{% endif %}">Next</a>
+                        </li>
+                        <li class="page-item">
+                            <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if status_filter %}&status={{ status_filter }}{% endif %}">Last</a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        {% endif %}
+    {% else %}
+        <div class="text-center py-5">
+            <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+            <h4 class="text-muted">No participation requests found</h4>
+            <p class="text-muted">
+                {% if status_filter %}
+                    No requests with status "{{ status_filter }}" found.
+                {% else %}
+                    No participation requests have been submitted yet.
+                {% endif %}
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

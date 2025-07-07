@@ -1,0 +1,181 @@
+{% extends 'layout.html' %}
+{% load static %}
+
+{% block title %}Sign Consent Form - {{ consent_form.title }} - NeuroPi{% endblock %}
+
+{% block extra_css %}
+<style>
+    .consent-form-container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 15px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        overflow: hidden;
+    }
+
+    .consent-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+    }
+
+    .consent-content {
+        padding: 40px;
+        line-height: 1.8;
+    }
+
+    .consent-meta {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+    }
+
+    .meta-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+
+    .meta-item:last-child {
+        border-bottom: none;
+    }
+
+    .meta-label {
+        font-weight: 600;
+        color: #495057;
+    }
+
+    .meta-value {
+        color: #6c757d;
+    }
+
+    .consent-text {
+        font-size: 1.1rem;
+        color: #2d3748;
+    }
+
+    .consent-text h1, .consent-text h2, .consent-text h3 {
+        color: #28a745;
+        margin-top: 30px;
+        margin-bottom: 15px;
+    }
+
+    .consent-text p {
+        margin-bottom: 15px;
+    }
+
+    .consent-text ul, .consent-text ol {
+        margin-bottom: 20px;
+        padding-left: 30px;
+    }
+
+    .consent-text li {
+        margin-bottom: 8px;
+    }
+
+    .action-buttons {
+        padding: 30px;
+        background: #f8f9fa;
+        text-align: center;
+        border-top: 1px solid #e9ecef;
+    }
+
+    .btn-back {
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 50px;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+        margin: 0 10px;
+        transition: all 0.3s ease;
+    }
+
+    .btn-back:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        color: white;
+        text-decoration: none;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="consent-form-container">
+        <div class="consent-header">
+            <h1><i class="bi bi-file-earmark-text"></i> {{ consent_form.title }}</h1>
+            <p class="mb-0">Consent Form Details</p>
+        </div>
+        
+        <div class="consent-content">
+            <div class="consent-meta">
+                <div class="meta-item">
+                    <span class="meta-label"><i class="bi bi-tag"></i> Form Type:</span>
+                    <span class="meta-value">{{ consent_form.get_form_type_display }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label"><i class="bi bi-hash"></i> Version:</span>
+                    <span class="meta-value">{{ consent_form.version }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label"><i class="bi bi-calendar"></i> Created:</span>
+                    <span class="meta-value">{{ consent_form.created_at|date:"F d, Y" }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label"><i class="bi bi-person"></i> Created By:</span>
+                    <span class="meta-value">{{ consent_form.created_by.get_full_name|default:consent_form.created_by.username }}</span>
+                </div>
+                <div class="meta-item">
+                    <span class="meta-label"><i class="bi bi-clock"></i> Expiration Period:</span>
+                    <span class="meta-value">{{ consent_form.expiration_period }} days</span>
+                </div>
+                {% if consent_form.summary %}
+                <div class="meta-item">
+                    <span class="meta-label"><i class="bi bi-info-circle"></i> Summary:</span>
+                    <span class="meta-value">{{ consent_form.summary }}</span>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="consent-text">
+                {{ consent_form.content|safe }}
+            </div>
+        </div>
+        
+        <div class="action-buttons">
+            <a href="{% url 'user_management:dashboard' %}" class="btn-back">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Add any JavaScript for the consent form view here
+    document.addEventListener('DOMContentLoaded', function() {
+        // Smooth scrolling for any internal links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

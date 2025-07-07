@@ -1,0 +1,310 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block title %}Join a Research Study{% endblock %}
+
+{% block content %}
+<!-- Hero Section -->
+<div class="research-hero mb-5">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <div class="hero-content">
+                    <div class="hero-badge mb-3">
+                        <i class="fas fa-search me-2"></i>
+                        Research Participation
+                    </div>
+                    <h1 class="hero-title mb-3">Join a Research Study</h1>
+                    <p class="hero-subtitle mb-4">
+                        Contribute to groundbreaking research and help advance our understanding of the human brain.
+                        Choose how you'd like to participate in cutting-edge neuroscience studies.
+                    </p>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="research-visual">
+                    <div class="research-mockup">
+                        <div class="research-icon">
+                            <i class="fas fa-brain fa-4x"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <div class="dashboard-card">
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <!-- Eligibility Check -->
+                    {% if not profile_complete or not has_valid_consent %}
+                        <div class="alert alert-warning">
+                            <h5><i class="bi bi-exclamation-triangle"></i> Complete Your Setup First</h5>
+                            <p>Before joining research studies, please complete the following:</p>
+                            <ul>
+                                {% if not profile_complete %}
+                                    <li>Complete your participant profile with basic information</li>
+                                {% endif %}
+                                {% if not has_valid_consent %}
+                                    <li>Sign the required consent forms</li>
+                                {% endif %}
+                            </ul>
+                            <div class="mt-3">
+                                {% if not profile_complete %}
+                                    <a href="{% url 'user_management:edit_profile' %}" class="btn btn-warning me-2">
+                                        <i class="bi bi-person-fill"></i> Complete Profile
+                                    </a>
+                                {% endif %}
+                                {% if not has_valid_consent %}
+                                    <a href="{% url 'user_management:dashboard' %}" class="btn btn-info">
+                                        <i class="bi bi-file-earmark-text"></i> View Consent Forms
+                                    </a>
+                                {% endif %}
+                            </div>
+                        </div>
+                    {% else %}
+                        <!-- Research Participation Options -->
+                        <div class="mb-4">
+                            <h4>How would you like to participate in research?</h4>
+                            <p class="text-muted">You can request to join a research study in two ways:</p>
+                        </div>
+
+                        <!-- Option 1: Open to All Researchers -->
+                        <div class="research-option-card mb-4 border-success">
+                            <div class="card-header bg-success">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-broadcast-tower me-2"></i> Option 1: Open to All Researchers
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-3">📡 Be open to join any available study – researchers will see your interest and can invite you.</p>
+                                <div class="alert alert-info">
+                                    <strong>How it works:</strong>
+                                    <ul class="mb-0">
+                                        <li>Your profile becomes visible to verified researchers (no personal details shared)</li>
+                                        <li>Researchers can view your general information and send you invitations</li>
+                                        <li>You'll get notifications and can choose whether to join</li>
+                                        <li>You always have the final say on participation</li>
+                                    </ul>
+                                </div>
+
+                                {% if availability.is_open_to_invitations %}
+                                    <div class="alert alert-success">
+                                        <i class="fas fa-check-circle me-2"></i> You're currently open to research invitations!
+                                    </div>
+                                {% else %}
+                                    <button class="btn btn-modern btn-success" id="open-invitation-btn">
+                                        <i class="fas fa-broadcast-tower me-2"></i> Make Me Available to Researchers
+                                    </button>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Option 2: Specific Researcher -->
+                        <div class="research-option-card mb-4 border-primary">
+                            <div class="card-header bg-primary">
+                                <h5 class="mb-0">
+                                    <i class="fas fa-user-md me-2"></i> Option 2: Request to Join Specific Researcher
+                                </h5>
+                            </div>
+                            <div class="card-body">
+                                <p class="mb-3">🧑‍🔬 Send a request to a specific researcher, if you know their name or have been referred.</p>
+                                
+                                {% if researchers %}
+                                <form id="specific-researcher-form">
+                                    {% csrf_token %}
+                                    <div class="mb-3">
+                                        <label for="researcher-select" class="form-label">Select Researcher:</label>
+                                        <select class="form-select" id="researcher-select" name="researcher_id" required>
+                                            <option value="">Choose a researcher...</option>
+                                            {% for researcher in researchers %}
+                                                <option value="{{ researcher.id }}">
+                                                    {{ researcher.user.first_name|default:researcher.user.username }} {{ researcher.user.last_name }}
+                                                    {% if researcher.institution %}
+                                                        - {{ researcher.institution }}
+                                                    {% endif %}
+                                                </option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="message" class="form-label">Personal Message (Optional):</label>
+                                        <textarea class="form-control" id="message" name="message" rows="3" 
+                                                  placeholder="Tell the researcher why you're interested in their study..."></textarea>
+                                        <div class="form-text">A personalized message increases your chances of acceptance!</div>
+                                    </div>
+                                    
+                                    <button type="submit" class="btn btn-modern btn-primary">
+                                        <i class="fas fa-paper-plane me-2"></i> Send Request
+                                    </button>
+                                </form>
+                                {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle"></i>
+                                    <strong>No Researchers Available</strong><br>
+                                    There are currently no researchers registered in the system. Please try the "Open to All Researchers" option instead, or contact the system administrator.
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Current Requests -->
+                        {% if pending_requests_count > 0 %}
+                            <div class="card">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">
+                                        <i class="bi bi-clock-history"></i> Your Pending Requests
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    {% for request in pending_requests %}
+                                        <div class="d-flex justify-content-between align-items-center border-bottom py-2">
+                                            <div>
+                                                <strong>
+                                                    {% if request.researcher %}
+                                                        {{ request.researcher.user.first_name|default:request.researcher.user.username }} {{ request.researcher.user.last_name }}
+                                                    {% else %}
+                                                        Open Invitation
+                                                    {% endif %}
+                                                </strong>
+                                                <br>
+                                                <small class="text-muted">
+                                                    {{ request.get_request_type_display }} - 
+                                                    Sent {{ request.created_at|date:"M d, Y" }}
+                                                </small>
+                                            </div>
+                                            <div>
+                                                {% if request.status == 'pending' %}
+                                                    <span class="badge bg-warning">Pending Review</span>
+                                                {% elif request.status == 'approved' %}
+                                                    <span class="badge bg-success">Approved - Awaiting Your Confirmation</span>
+                                                    <div class="mt-2">
+                                                        <button class="btn btn-sm btn-success confirm-btn" data-request-id="{{ request.id }}">
+                                                            <i class="bi bi-check"></i> Confirm
+                                                        </button>
+                                                        <button class="btn btn-sm btn-outline-secondary decline-btn" data-request-id="{{ request.id }}">
+                                                            <i class="bi bi-x"></i> Decline
+                                                        </button>
+                                                    </div>
+                                                {% endif %}
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        {% endif %}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value || '{{ csrf_token }}';
+    
+    // Handle open invitation button
+    const openInvitationBtn = document.getElementById('open-invitation-btn');
+    if (openInvitationBtn) {
+        openInvitationBtn.addEventListener('click', function() {
+            submitRequest('open_invitation', null, '');
+        });
+    }
+    
+    // Handle specific researcher form
+    const specificForm = document.getElementById('specific-researcher-form');
+    if (specificForm) {
+        specificForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const researcherId = document.getElementById('researcher-select').value;
+            const message = document.getElementById('message').value;
+            
+            if (!researcherId) {
+                alert('Please select a researcher.');
+                return;
+            }
+            
+            submitRequest('specific_researcher', researcherId, message);
+        });
+    }
+    
+    // Handle confirmation buttons
+    document.querySelectorAll('.confirm-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const requestId = this.dataset.requestId;
+            confirmParticipation(requestId, 'confirm');
+        });
+    });
+    
+    document.querySelectorAll('.decline-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const requestId = this.dataset.requestId;
+            confirmParticipation(requestId, 'decline');
+        });
+    });
+    
+    function submitRequest(requestType, researcherId, message) {
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', csrfToken);
+        formData.append('request_type', requestType);
+        if (researcherId) formData.append('researcher_id', researcherId);
+        if (message) formData.append('message', message);
+        
+        fetch('{% url "user_management:submit_participation_request" %}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred. Please try again.');
+        });
+    }
+    
+    function confirmParticipation(requestId, action) {
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', csrfToken);
+        formData.append('action', action);
+        
+        fetch(`{% url 'user_management:confirm_participation' 0 %}`.replace('0', requestId), {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred. Please try again.');
+        });
+    }
+});
+</script>
+{% endblock %}

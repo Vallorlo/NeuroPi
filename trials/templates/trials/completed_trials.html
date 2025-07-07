@@ -124,7 +124,7 @@
                                     <i class="bi bi-inbox display-4 text-muted mb-3"></i>
                                     <h4 class="text-muted">No Traditional Trials Completed</h4>
                                     <p class="text-muted">No traditional trial data found. Start a new trial to see results here.</p>
-                                    <a href="{% url 'start_trial' %}" class="btn btn-primary">
+                                    <a href="{% url 'trials:start_trial' %}" class="btn btn-primary">
                                         <i class="bi bi-plus-circle me-2"></i>Start First Trial
                                     </a>
                                 </div>
@@ -188,7 +188,7 @@
                                                     <li><a class="dropdown-item" href="#"><i class="bi bi-graph-up"></i> View Analysis</a></li>
                                                     <li><a class="dropdown-item" href="#"><i class="bi bi-list-ul"></i> Event Timeline</a></li>
                                                     <li><hr class="dropdown-divider"></li>
-                                                    <li><a class="dropdown-item" href="{% url 'visual_trial_setup' %}"><i class="bi bi-arrow-repeat"></i> Repeat Setup</a></li>
+                                                    <li><a class="dropdown-item" href="{% url 'trials:visual_trial_setup' %}"><i class="bi bi-arrow-repeat"></i> Repeat Setup</a></li>
                                                     <li><hr class="dropdown-divider"></li>
                                                     <li><a class="dropdown-item text-danger" href="#"><i class="bi bi-trash"></i> Delete Session</a></li>
                                                 </ul>
@@ -205,7 +205,7 @@
                                     <i class="bi bi-eye display-4 text-muted mb-3"></i>
                                     <h4 class="text-muted">No Visual Trials Completed</h4>
                                     <p class="text-muted">No visual word focus trials found. Start a new visual trial to see results here.</p>
-                                    <a href="{% url 'start_trial' %}" class="btn btn-success">
+                                    <a href="{% url 'trials:start_trial' %}" class="btn btn-success">
                                         <i class="bi bi-eye-fill me-2"></i>Start First Visual Trial
                                     </a>
                                 </div>
@@ -236,7 +236,7 @@
             </div>
 
             <div class="text-center mt-4">
-                <a href="{% url 'start_trial' %}" class="btn btn-lg btn-primary">
+                <a href="{% url 'trials:start_trial' %}" class="btn btn-lg btn-primary">
                     <i class="bi bi-plus-circle-fill me-2"></i>Start New Trial
                 </a>
             </div>

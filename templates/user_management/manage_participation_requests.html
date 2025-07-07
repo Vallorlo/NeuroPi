@@ -1,0 +1,404 @@
+{% extends "layout.html" %}
+{% load static %}
+
+{% block title %}Manage Participation Requests{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-lg-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0"><i class="bi bi-inbox"></i> Manage Participation Requests</h2>
+                </div>
+                <div class="card-body">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+
+                    <!-- Navigation Tabs -->
+                    <ul class="nav nav-tabs" id="requestTabs" role="tablist">
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link active" id="specific-tab" data-bs-toggle="tab" data-bs-target="#specific" type="button" role="tab">
+                                <i class="bi bi-envelope"></i> Direct Requests ({{ specific_requests|length }})
+                            </button>
+                        </li>
+                        <li class="nav-item" role="presentation">
+                            <button class="nav-link" id="open-tab" data-bs-toggle="tab" data-bs-target="#open" type="button" role="tab">
+                                <i class="bi bi-broadcast"></i> Open Participants ({{ open_participants|length }})
+                            </button>
+                        </li>
+                    </ul>
+
+                    <div class="tab-content" id="requestTabsContent">
+                        <!-- Direct Requests Tab -->
+                        <div class="tab-pane fade show active" id="specific" role="tabpanel">
+                            <div class="mt-4">
+                                {% if specific_requests %}
+                                    {% for request in specific_requests %}
+                                        <div class="card mb-3 request-card" data-request-id="{{ request.id }}">
+                                            <div class="card-body">
+                                                <div class="row">
+                                                    <div class="col-md-8">
+                                                        <h5 class="card-title">
+                                                            {{ request.participant.first_name|default:request.participant.username }} {{ request.participant.last_name }}
+                                                            <span class="badge bg-{{ request.status|yesno:'success,warning,secondary' }} ms-2">
+                                                                {{ request.get_status_display }}
+                                                            </span>
+                                                        </h5>
+                                                        
+                                                        <div class="participant-info mb-3">
+                                                            <div class="row">
+                                                                <div class="col-sm-6">
+                                                                    <small class="text-muted">
+                                                                        <i class="bi bi-person"></i> 
+                                                                        {% if request.participant.participant_profile.age %}
+                                                                            {{ request.participant.participant_profile.age }} years old
+                                                                        {% else %}
+                                                                            Age not specified
+                                                                        {% endif %}
+                                                                    </small>
+                                                                </div>
+                                                                <div class="col-sm-6">
+                                                                    <small class="text-muted">
+                                                                        <i class="bi bi-calendar"></i> 
+                                                                        Registered {{ request.participant.participant_profile.date_registered|date:"M d, Y" }}
+                                                                    </small>
+                                                                </div>
+                                                            </div>
+                                                            <div class="row mt-1">
+                                                                <div class="col-sm-6">
+                                                                    <small class="text-muted">
+                                                                        <i class="bi bi-hand-index"></i> 
+                                                                        {{ request.participant.participant_profile.get_handedness_display|default:"Not specified" }}
+                                                                    </small>
+                                                                </div>
+                                                                <div class="col-sm-6">
+                                                                    <small class="text-muted">
+                                                                        <i class="bi bi-shield-check"></i> 
+                                                                        {% if request.participant.participant_profile.has_valid_consent %}
+                                                                            <span class="text-success">Valid Consent</span>
+                                                                        {% else %}
+                                                                            <span class="text-danger">No Valid Consent</span>
+                                                                        {% endif %}
+                                                                    </small>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+
+                                                        {% if request.participant_message %}
+                                                            <div class="alert alert-light">
+                                                                <strong>Participant's Message:</strong><br>
+                                                                "{{ request.participant_message }}"
+                                                            </div>
+                                                        {% endif %}
+
+                                                        <small class="text-muted">
+                                                            <i class="bi bi-clock"></i> 
+                                                            Requested {{ request.created_at|date:"M d, Y \a\t g:i A" }}
+                                                            {% if not request.is_expired %}
+                                                                ({{ request.days_until_expiry }} days remaining)
+                                                            {% else %}
+                                                                <span class="text-danger">(Expired)</span>
+                                                            {% endif %}
+                                                        </small>
+                                                    </div>
+                                                    
+                                                    <div class="col-md-4 text-end">
+                                                        {% if request.status == 'pending' and not request.is_expired %}
+                                                            <div class="d-grid gap-2">
+                                                                <button class="btn btn-success approve-btn" data-request-id="{{ request.id }}">
+                                                                    <i class="bi bi-check-circle"></i> Approve
+                                                                </button>
+                                                                <button class="btn btn-outline-danger decline-btn" data-request-id="{{ request.id }}">
+                                                                    <i class="bi bi-x-circle"></i> Decline
+                                                                </button>
+                                                                <a href="{% url 'user_management:participant_detail' request.participant.participant_profile.participant_id %}"
+                                                                   class="btn btn-outline-primary">
+                                                                    <i class="bi bi-eye"></i> View Profile
+                                                                </a>
+                                                            </div>
+                                                        {% elif request.status == 'approved' %}
+                                                            <div class="alert alert-success">
+                                                                <i class="bi bi-check-circle"></i> Approved<br>
+                                                                <small>Waiting for participant confirmation</small>
+                                                            </div>
+                                                        {% elif request.status == 'confirmed' %}
+                                                            <div class="alert alert-info">
+                                                                <i class="bi bi-handshake"></i> Confirmed<br>
+                                                                <small>Ready to schedule sessions</small>
+                                                            </div>
+                                                            <div class="d-grid gap-2">
+                                                                <a href="{% url 'assign_consent_form' %}?participant={{ request.participant.id }}"
+                                                                   class="btn btn-warning btn-sm">
+                                                                    <i class="bi bi-file-earmark-text"></i> Assign Consent Forms
+                                                                </a>
+                                                                <a href="{% url 'create_session' %}?participant={{ request.participant.id }}"
+                                                                   class="btn btn-primary btn-sm">
+                                                                    <i class="bi bi-calendar-plus"></i> Schedule Session
+                                                                </a>
+                                                            </div>
+                                                        {% endif %}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                {% else %}
+                                    <div class="text-center py-5">
+                                        <i class="bi bi-inbox display-1 text-muted"></i>
+                                        <h4 class="mt-3">No Direct Requests</h4>
+                                        <p class="text-muted">You haven't received any direct participation requests yet.</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <!-- Open Participants Tab -->
+                        <div class="tab-pane fade" id="open" role="tabpanel">
+                            <div class="mt-4">
+                                {% if open_participants %}
+                                    <div class="alert alert-info">
+                                        <i class="bi bi-info-circle"></i> 
+                                        These participants have made themselves available for research invitations. 
+                                        You can review their profiles and invite them to your studies.
+                                    </div>
+                                    
+                                    <div class="row">
+                                        {% for availability in open_participants %}
+                                            <div class="col-md-6 col-lg-4 mb-4">
+                                                <div class="card h-100">
+                                                    <div class="card-body">
+                                                        <h6 class="card-title">
+                                                            {{ availability.participant.first_name|default:availability.participant.username }} {{ availability.participant.last_name }}
+                                                        </h6>
+                                                        
+                                                        <div class="participant-summary">
+                                                            <small class="text-muted d-block">
+                                                                <i class="bi bi-person"></i> 
+                                                                {% if availability.participant.participant_profile.age %}
+                                                                    {{ availability.participant.participant_profile.age }} years old
+                                                                {% else %}
+                                                                    Age not specified
+                                                                {% endif %}
+                                                            </small>
+                                                            <small class="text-muted d-block">
+                                                                <i class="bi bi-hand-index"></i> 
+                                                                {{ availability.participant.participant_profile.get_handedness_display|default:"Not specified" }}
+                                                            </small>
+                                                            <small class="text-muted d-block">
+                                                                <i class="bi bi-shield-check"></i> 
+                                                                {% if availability.participant.participant_profile.has_valid_consent %}
+                                                                    <span class="text-success">Valid Consent</span>
+                                                                {% else %}
+                                                                    <span class="text-danger">No Valid Consent</span>
+                                                                {% endif %}
+                                                            </small>
+                                                        </div>
+                                                        
+                                                        {% if availability.availability_notes %}
+                                                            <div class="mt-2">
+                                                                <small class="text-muted">
+                                                                    <strong>Notes:</strong> {{ availability.availability_notes|truncatewords:10 }}
+                                                                </small>
+                                                            </div>
+                                                        {% endif %}
+                                                    </div>
+                                                    <div class="card-footer">
+                                                        <div class="d-grid gap-2">
+                                                            <a href="{% url 'user_management:participant_detail' availability.participant.participant_profile.participant_id %}"
+                                                               class="btn btn-outline-primary btn-sm">
+                                                                <i class="bi bi-eye"></i> View Profile
+                                                            </a>
+                                                            <button class="btn btn-success btn-sm invite-btn" 
+                                                                    data-participant-id="{{ availability.participant.id }}">
+                                                                <i class="bi bi-envelope"></i> Send Invitation
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        {% endfor %}
+                                    </div>
+                                {% else %}
+                                    <div class="text-center py-5">
+                                        <i class="bi bi-broadcast display-1 text-muted"></i>
+                                        <h4 class="mt-3">No Open Participants</h4>
+                                        <p class="text-muted">No participants are currently open to research invitations.</p>
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Response Modal -->
+<div class="modal fade" id="responseModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="responseModalTitle">Respond to Request</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="responseForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="requestId" name="request_id">
+                    <input type="hidden" id="action" name="action">
+
+                    <div class="mb-3">
+                        <label for="responseMessage" class="form-label">Response Message (Optional):</label>
+                        <textarea class="form-control" id="responseMessage" name="response_message" rows="3"
+                                  placeholder="Add a personal message to the participant..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="submitResponse">Send Response</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Invitation Modal -->
+<div class="modal fade" id="invitationModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Send Research Invitation</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="invitationForm">
+                    {% csrf_token %}
+                    <input type="hidden" id="participantId" name="participant_id">
+
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        You're sending an invitation to this participant to join your research study.
+                        They will receive a notification and can choose to accept or decline.
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="invitationMessage" class="form-label">Invitation Message:</label>
+                        <textarea class="form-control" id="invitationMessage" name="message" rows="4" required
+                                  placeholder="Explain your research study and why you'd like them to participate..."></textarea>
+                        <div class="form-text">A personalized message increases acceptance rates!</div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-success" id="submitInvitation">
+                    <i class="bi bi-send"></i> Send Invitation
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    const responseModal = new bootstrap.Modal(document.getElementById('responseModal'));
+    const invitationModal = new bootstrap.Modal(document.getElementById('invitationModal'));
+    
+    // Handle approve buttons
+    document.querySelectorAll('.approve-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const requestId = this.dataset.requestId;
+            showResponseModal(requestId, 'approve', 'Approve Request');
+        });
+    });
+    
+    // Handle decline buttons
+    document.querySelectorAll('.decline-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const requestId = this.dataset.requestId;
+            showResponseModal(requestId, 'decline', 'Decline Request');
+        });
+    });
+    
+    // Handle invite buttons (for open participants)
+    document.querySelectorAll('.invite-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const participantId = this.dataset.participantId;
+            showInvitationModal(participantId);
+        });
+    });
+    
+    function showResponseModal(requestId, action, title) {
+        document.getElementById('responseModalTitle').textContent = title;
+        document.getElementById('requestId').value = requestId;
+        document.getElementById('action').value = action;
+        document.getElementById('responseMessage').value = '';
+        responseModal.show();
+    }
+
+    function showInvitationModal(participantId) {
+        document.getElementById('participantId').value = participantId;
+        document.getElementById('invitationMessage').value = '';
+        invitationModal.show();
+    }
+    
+    // Handle response submission
+    document.getElementById('submitResponse').addEventListener('click', function() {
+        const formData = new FormData(document.getElementById('responseForm'));
+        const requestId = document.getElementById('requestId').value;
+
+        fetch(`/user_management/respond-to-request/${requestId}/`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                responseModal.hide();
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred. Please try again.');
+        });
+    });
+
+    // Handle invitation submission
+    document.getElementById('submitInvitation').addEventListener('click', function() {
+        const formData = new FormData(document.getElementById('invitationForm'));
+        const participantId = document.getElementById('participantId').value;
+
+        fetch(`/user_management/send-invitation/${participantId}/`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                invitationModal.hide();
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('An error occurred. Please try again.');
+        });
+    });
+});
+</script>
+{% endblock %}

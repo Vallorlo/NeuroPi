@@ -1,0 +1,160 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Consent Management - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Consent Management</li>
+{% endblock %}
+
+{% block page_content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+            <h1>
+                <i class="fas fa-file-contract me-3"></i>
+                Consent Management
+            </h1>
+            <p class="subtitle">Manage consent forms and participant agreements</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'user_management:create_consent_form' %}" class="action-button success">
+                <i class="fas fa-plus"></i>
+                Create New Consent Form
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Consent Forms List -->
+<div class="row">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-list-ul me-2"></i> Active Consent Forms
+                    <span class="badge bg-light text-dark ms-2">{{ total_forms|default:0 }}</span>
+                </h5>
+            </div>
+                <div class="card-body">
+                    {% if consent_forms %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Version</th>
+                                        <th>Created</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for form in consent_forms %}
+                                    <tr>
+                                        <td>
+                                            <strong>{{ form.title }}</strong>
+                                            {% if form.description %}
+                                                <br><small class="text-muted">{{ form.description|truncatechars:50 }}</small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">v{{ form.version }}</span>
+                                        </td>
+                                        <td>
+                                            <small>{{ form.created_at|date:"M d, Y" }}</small>
+                                        </td>
+                                        <td>
+                                            {% if form.is_active %}
+                                                <span class="status-badge approved">Active</span>
+                                            {% else %}
+                                                <span class="status-badge expired">Inactive</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <a href="{% url 'user_management:edit_consent_form' form.id %}"
+                                                   class="btn btn-modern btn-outline-primary" title="Edit">
+                                                    <i class="fas fa-edit"></i>
+                                                </a>
+                                                <a href="{% url 'user_management:assign_consent_form' form.id %}"
+                                                   class="btn btn-modern btn-outline-success" title="Assign to Participant">
+                                                    <i class="fas fa-user-plus"></i>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="fas fa-file-contract text-muted" style="font-size: 3rem;"></i>
+                            <h5 class="text-muted mt-3">No Consent Forms Found</h5>
+                            <p class="text-muted">Create your first consent form to get started.</p>
+                            <a href="{% url 'user_management:create_consent_form' %}" class="action-button success">
+                                <i class="fas fa-plus"></i> Create Consent Form
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+<!-- Quick Actions Section -->
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-bolt me-2"></i> Quick Actions
+                </h6>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{% url 'user_management:create_consent_form' %}" class="btn btn-modern btn-outline-primary">
+                        <i class="fas fa-plus-circle me-2"></i> Create New Form
+                    </a>
+                    <a href="{% url 'user_management:participant_list' %}" class="btn btn-modern btn-outline-info">
+                        <i class="fas fa-users me-2"></i> View Participants
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <h6 class="mb-0">
+                    <i class="fas fa-info-circle me-2"></i> Information
+                </h6>
+            </div>
+            <div class="card-body">
+                <p class="small text-muted mb-2">
+                    <strong>Consent Management:</strong> Create, edit, and assign consent forms to participants.
+                </p>
+                <p class="small text-muted mb-2">
+                    <strong>Digital Signatures:</strong> Participants can sign consent forms electronically.
+                </p>
+                <p class="small text-muted mb-0">
+                    <strong>Compliance:</strong> All consent activities are logged for audit purposes.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add any JavaScript functionality here
+    console.log('Consent Management page loaded');
+});
+</script>
+{% endblock %}

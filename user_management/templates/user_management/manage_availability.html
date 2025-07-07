@@ -1,0 +1,1244 @@
+<!-- design after changes -->
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Manage Availability - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Manage Availability</li>
+{% endblock %}
+
+{% block page_content %}
+<div class="user-management-container">
+    <div class="container">
+        <!-- Enhanced Loading Overlay -->
+        <div class="loading-overlay" id="loadingOverlay">
+            <div class="loading-spinner">
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+                <div class="loading-text">Updating your availability...</div>
+            </div>
+        </div>
+
+        <!-- Success/Error Toast Notifications -->
+        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index: 9999;">
+            <div id="successToast" class="toast align-items-center text-white bg-success border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-check-circle me-2"></i>
+                        <span id="successMessage">Availability updated successfully!</span>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            </div>
+            <div id="errorToast" class="toast align-items-center text-white bg-danger border-0" role="alert" aria-live="assertive" aria-atomic="true">
+                <div class="d-flex">
+                    <div class="toast-body">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <span id="errorMessage">Please check your input and try again.</span>
+                    </div>
+                    <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+                </div>
+            </div>
+        </div>
+        <!-- Enhanced Hero Header -->
+        <div class="availability-hero mb-5">
+            <div class="hero-bg-animation"></div>
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <div class="hero-content">
+                        <div class="hero-badge mb-3">
+                            <i class="fas fa-clock me-2"></i>
+                            <span class="badge-text">Schedule Management</span>
+                        </div>
+                        <h1 class="hero-title mb-3">
+                            <span class="title-line">Manage Your</span>
+                            <span class="title-highlight">Availability</span>
+                        </h1>
+                        <p class="hero-subtitle mb-4">
+                            Set your preferred times and days for research participation.
+                            Your schedule helps researchers find the perfect time to collaborate with you.
+                        </p>
+                        <div class="availability-stats">
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-calendar-alt"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <div class="stat-number">24/7</div>
+                                    <div class="stat-label">Flexible Scheduling</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-bell"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <div class="stat-number">Auto</div>
+                                    <div class="stat-label">Smart Notifications</div>
+                                </div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-icon">
+                                    <i class="fas fa-shield-alt"></i>
+                                </div>
+                                <div class="stat-info">
+                                    <div class="stat-number">100%</div>
+                                    <div class="stat-label">Privacy Protected</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6">
+                    <div class="availability-visual">
+                        <div class="calendar-mockup">
+                            <div class="calendar-header">
+                                <div class="calendar-title">Your Schedule</div>
+                                <div class="calendar-nav">
+                                    <span class="nav-dot active"></span>
+                                    <span class="nav-dot"></span>
+                                    <span class="nav-dot"></span>
+                                </div>
+                            </div>
+                            <div class="calendar-grid">
+                                <div class="calendar-day available">M</div>
+                                <div class="calendar-day available">T</div>
+                                <div class="calendar-day available">W</div>
+                                <div class="calendar-day">T</div>
+                                <div class="calendar-day available">F</div>
+                                <div class="calendar-day">S</div>
+                                <div class="calendar-day">S</div>
+                            </div>
+                            <div class="time-slots">
+                                <div class="time-slot available">9:00 AM</div>
+                                <div class="time-slot available">2:00 PM</div>
+                                <div class="time-slot">6:00 PM</div>
+                            </div>
+                            <div class="calendar-pulse"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enhanced Availability Settings -->
+        <div class="row justify-content-center">
+            <div class="col-lg-11">
+                <div class="dashboard-card settings-card">
+                    <div class="card-header">
+                        <div class="d-flex align-items-center">
+                            <div class="settings-icon me-3">
+                                <i class="fas fa-cog"></i>
+                            </div>
+                            <div class="settings-content">
+                                <h3 class="mb-1">Availability Settings</h3>
+                                <p class="mb-0 opacity-75">Configure when you're available for research sessions</p>
+                            </div>
+                            <div class="settings-status ms-auto">
+                                <div class="status-indicator active">
+                                    <span class="status-dot"></span>
+                                    <span class="status-text">Active</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="card-body">
+                        <form method="post" action="{% url 'user_management:manage_availability' %}" id="availabilityForm">
+                            {% csrf_token %}
+
+
+
+                            <!-- General Availability -->
+                                <div class="card mb-4">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-toggle-on me-2"></i>
+                                            General Availability
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check form-switch mb-3">
+                                                    {{ form.is_currently_available }}
+                                                    <label class="form-check-label fw-medium" for="{{ form.is_currently_available.id_for_label }}">
+                                                        I am currently available for research participation
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.availability_start_date.id_for_label }}" class="form-label fw-medium">
+                                                        <i class="fas fa-calendar-plus me-1 text-success"></i>
+                                                        Available From
+                                                    </label>
+                                                    {{ form.availability_start_date }}
+                                                </div>
+                                            </div>
+                                            <div class="col-md-3">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.availability_end_date.id_for_label }}" class="form-label fw-medium">
+                                                        <i class="fas fa-calendar-minus me-1 text-warning"></i>
+                                                        Available Until
+                                                    </label>
+                                                    {{ form.availability_end_date }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            
+
+                            <!-- Weekly Schedule -->
+                                <div class="card mb-4">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-calendar-week me-2"></i>
+                                            Weekly Schedule
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <p class="text-muted mb-4">Select the days you're available for research sessions</p>
+                                        <div class="row">
+                                            <div class="col-lg-3 col-md-6 mb-3">
+                                                <div class="form-check">
+                                                    {{ form.monday_available }}
+                                                    <label class="form-check-label" for="{{ form.monday_available.id_for_label }}">
+                                                        <i class="fas fa-calendar-day me-2"></i>Monday
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-3 col-md-6 mb-3">
+                                                <div class="form-check">
+                                                    {{ form.tuesday_available }}
+                                                    <label class="form-check-label" for="{{ form.tuesday_available.id_for_label }}">
+                                                        <i class="fas fa-calendar-day me-2"></i>Tuesday
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-3 col-md-6 mb-3">
+                                                <div class="form-check">
+                                                    {{ form.wednesday_available }}
+                                                    <label class="form-check-label" for="{{ form.wednesday_available.id_for_label }}">
+                                                        <i class="fas fa-calendar-day me-2"></i>Wednesday
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-3 col-md-6 mb-3">
+                                                <div class="form-check">
+                                                    {{ form.thursday_available }}
+                                                    <label class="form-check-label" for="{{ form.thursday_available.id_for_label }}">
+                                                        <i class="fas fa-calendar-day me-2"></i>Thursday
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-3 col-md-6 mb-3">
+                                                <div class="form-check">
+                                                    {{ form.friday_available }}
+                                                    <label class="form-check-label" for="{{ form.friday_available.id_for_label }}">
+                                                        <i class="fas fa-calendar-day me-2"></i>Friday
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-3 col-md-6 mb-3">
+                                                <div class="form-check">
+                                                    {{ form.saturday_available }}
+                                                    <label class="form-check-label" for="{{ form.saturday_available.id_for_label }}">
+                                                        <i class="fas fa-calendar-day me-2"></i>Saturday
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <div class="col-lg-3 col-md-6 mb-3">
+                                                <div class="form-check">
+                                                    {{ form.sunday_available }}
+                                                    <label class="form-check-label" for="{{ form.sunday_available.id_for_label }}">
+                                                        <i class="fas fa-calendar-day me-2"></i>Sunday
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            
+
+                            <!-- Time Preferences -->
+                                <div class="card mb-4">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-clock me-2"></i>
+                                            Time Preferences
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.earliest_time.id_for_label }}" class="form-label">
+                                                        <i class="fas fa-sunrise me-2"></i>
+                                                        Earliest Available Time
+                                                    </label>
+                                                    {{ form.earliest_time }}
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.latest_time.id_for_label }}" class="form-label">
+                                                        <i class="fas fa-sunset me-2"></i>
+                                                        Latest Available Time
+                                                    </label>
+                                                    {{ form.latest_time }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            
+                                <!-- Session Limits & Special Requirements -->
+                                <div class="card mb-4">
+                                    <div class="card-header bg-primary text-white">
+                                        <h5 class="mb-0">
+                                            <i class="fas fa-sliders-h me-2"></i>
+                                            Session Preferences
+                                        </h5>
+                                    </div>
+                                    <div class="card-body">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.max_sessions_per_week.id_for_label }}" class="form-label">
+                                                        <i class="fas fa-chart-bar me-2"></i>
+                                                        Maximum Sessions Per Week
+                                                    </label>
+                                                    {{ form.max_sessions_per_week }}
+                                                    <div class="form-text">How many research sessions you can participate in per week</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.min_break_between_sessions.id_for_label }}" class="form-label">
+                                                        <i class="fas fa-pause me-2"></i>
+                                                        Minimum Break Between Sessions (hours)
+                                                    </label>
+                                                    {{ form.min_break_between_sessions }}
+                                                    <div class="form-text">Minimum time needed between research sessions</div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="row">
+                                            <div class="col-12">
+                                                <div class="mb-3">
+                                                    <label for="{{ form.special_requirements.id_for_label }}" class="form-label">
+                                                        <i class="fas fa-sticky-note me-2"></i>
+                                                        Additional Notes or Requirements
+                                                    </label>
+                                                    {{ form.special_requirements }}
+                                                    <div class="form-text">
+                                                        Any special accommodations, preferences, or constraints researchers should know about
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            
+
+                                <!-- Form Actions -->
+                                <div class="d-grid gap-2 d-md-flex justify-content-md-end mt-4">
+                                    <!-- <a href="{% url 'user_management:dashboard' %}" class="btn btn-outline-secondary me-md-2">
+                                        <i class="fas fa-times me-2"></i>
+                                        Cancel
+                                    </a> -->
+                                    <button type="reset" class="btn btn-secondary">
+                                        <i class="fas fa-save me-2"></i>
+                                        Clear
+                                    </button>
+                                    <button type="submit" class="btn btn-success">
+                                        <i class="fas fa-save me-2"></i>
+                                        Save Availability Settings
+                                    </button>
+                                </div>
+
+                            
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Enhanced Help Information with Expandable Sections -->
+<!-- <div class="container mt-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="help-section">
+                <div class="help-header">
+                    <h4><i class="fas fa-question-circle me-2"></i>How Availability Works</h4>
+                    <p>Learn how to make the most of your availability settings</p>
+                </div>
+                <div class="help-cards">
+                    <div class="help-card">
+                        <div class="help-icon">
+                            <i class="fas fa-calendar-check"></i>
+                        </div>
+                        <h6>Smart Scheduling</h6>
+                        <p>Researchers see your availability in real-time and can book sessions that fit your schedule perfectly.</p>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h6>Privacy First</h6>
+                        <p>Only verified researchers can see your availability. Your personal details remain completely private.</p>
+                    </div>
+                    <div class="help-card">
+                        <div class="help-icon">
+                            <i class="fas fa-bell"></i>
+                        </div>
+                        <h6>Instant Updates</h6>
+                        <p>Changes to your availability take effect immediately, and you'll get notified of any booking requests.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div> -->
+
+
+<!-- Quick Actions Floating Button
+<div class="floating-actions">
+    <button class="fab-main" id="fabMain">
+        <i class="fas fa-cog"></i>
+    </button>
+    <div class="fab-menu" id="fabMenu">
+        <button class="fab-item" data-action="quick-disable">
+            <i class="fas fa-pause"></i>
+            <span>Quick Disable</span>
+        </button>
+        <button class="fab-item" data-action="duplicate-schedule">
+            <i class="fas fa-copy"></i>
+            <span>Copy Schedule</span>
+        </button>
+        <button class="fab-item" data-action="reset-form">
+            <i class="fas fa-undo"></i>
+            <span>Reset Form</span>
+        </button>
+    </div>
+</div> -->
+
+
+
+<script>
+// Enhanced form functionality with animations and validations
+document.addEventListener('DOMContentLoaded', function() {
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const form = document.getElementById('availabilityForm');
+
+    // Toast notification functions
+    function showToast(type, message) {
+        const toast = type === 'success' ?
+            document.getElementById('successToast') :
+            document.getElementById('errorToast');
+        const messageElement = type === 'success' ?
+            document.getElementById('successMessage') :
+            document.getElementById('errorMessage');
+
+        messageElement.textContent = message;
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+    }
+
+    // Loading overlay functions
+    function showLoading() {
+        loadingOverlay.classList.add('active');
+    }
+
+    function hideLoading() {
+        loadingOverlay.classList.remove('active');
+    }
+
+    // Form validation
+    function validateForm() {
+        const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
+        let isValid = true;
+
+        console.log('Validating form, found', requiredFields.length, 'required fields');
+
+        requiredFields.forEach(field => {
+            if (!field.value.trim()) {
+                console.log('Invalid field:', field.name || field.id, 'value:', field.value);
+                field.classList.add('is-invalid');
+                isValid = false;
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
+
+        console.log('Form validation result:', isValid);
+        return isValid;
+    }
+
+
+
+    // Enhanced form submission
+    form.setAttribute('data-custom-handler', 'true'); // Prevent global handler
+
+    form.addEventListener('submit', function(e) {
+        console.log('Availability form submit event triggered');
+
+        // Simplified validation - just check if form exists and is valid
+        const requiredFields = form.querySelectorAll('input[required], select[required], textarea[required]');
+        let hasEmptyRequired = false;
+
+        requiredFields.forEach(field => {
+            if (field.type !== 'checkbox' && field.type !== 'radio' && !field.value.trim()) {
+                hasEmptyRequired = true;
+                field.classList.add('is-invalid');
+            } else {
+                field.classList.remove('is-invalid');
+            }
+        });
+
+        if (hasEmptyRequired) {
+            console.log('Availability form validation failed');
+            e.preventDefault();
+            showToast('error', 'Please fill in all required fields before saving.');
+            // Shake animation for invalid fields
+            const invalidFields = document.querySelectorAll('.is-invalid');
+            invalidFields.forEach(field => {
+                field.style.animation = 'shake 0.5s ease';
+                setTimeout(() => field.style.animation = '', 500);
+            });
+            return false;
+        } else {
+            console.log('Form validation passed, submitting...');
+            showLoading();
+            // Form will submit normally
+            return true;
+        }
+    });
+
+    // Progress step click navigation
+    progressSteps.forEach((step, index) => {
+        step.addEventListener('click', function() {
+            currentStep = index + 1;
+            updateStep(currentStep);
+        });
+    });
+
+    // Number input controls
+    document.querySelectorAll('.number-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const action = this.dataset.action;
+            const input = this.parentElement.previousElementSibling;
+            const currentValue = parseInt(input.value) || 0;
+            
+            if (action === 'increment') {
+                input.value = currentValue + 1;
+            } else if (action === 'decrement' && currentValue > 0) {
+                input.value = currentValue - 1;
+            }
+        });
+    });
+
+    // Textarea counter
+    const textarea = document.querySelector('textarea');
+    const counter = document.querySelector('.current-count');
+    
+    if (textarea && counter) {
+        textarea.addEventListener('input', function() {
+            counter.textContent = this.value.length;
+        });
+    }
+
+    // Floating Action Button
+    const fabMain = document.getElementById('fabMain');
+    const fabMenu = document.getElementById('fabMenu');
+    
+    fabMain.addEventListener('click', function() {
+        fabMenu.classList.toggle('active');
+    });
+
+    // FAB actions
+    document.querySelectorAll('.fab-item').forEach(item => {
+        item.addEventListener('click', function() {
+            const action = this.dataset.action;
+            
+            switch(action) {
+                case 'quick-disable':
+                    document.getElementById('id_is_currently_available').checked = false;
+                    break;
+                case 'duplicate-schedule':
+                    // Logic to duplicate previous week's schedule
+                    break;
+                case 'reset-form':
+                    if (confirm('Are you sure you want to reset all form data?')) {
+                        document.getElementById('availabilityForm').reset();
+                    }
+                    break;
+            }
+            
+            fabMenu.classList.remove('active');
+        });
+    });
+
+    // Close FAB menu when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!fabMain.contains(e.target) && !fabMenu.contains(e.target)) {
+            fabMenu.classList.remove('active');
+        }
+    });
+
+    // Keyboard navigation support
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            const fabMenu = document.querySelector('.fab-menu');
+            if (fabMenu) {
+                fabMenu.classList.remove('active');
+            }
+        }
+    });
+
+    // Auto-save draft functionality
+    let autoSaveTimer;
+    const formInputs = form.querySelectorAll('input, select, textarea');
+
+    formInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                // Save draft to localStorage
+                const formData = new FormData(form);
+                const draftData = {};
+                for (let [key, value] of formData.entries()) {
+                    draftData[key] = value;
+                }
+                localStorage.setItem('availabilityDraft', JSON.stringify(draftData));
+
+                // Show subtle save indicator
+                const saveIndicator = document.createElement('div');
+                saveIndicator.className = 'save-indicator';
+                saveIndicator.innerHTML = '<i class="fas fa-check"></i> Draft saved';
+                document.body.appendChild(saveIndicator);
+
+                setTimeout(() => {
+                    saveIndicator.remove();
+                }, 2000);
+            }, 1000);
+        });
+    });
+
+    // Load draft on page load
+    const savedDraft = localStorage.getItem('availabilityDraft');
+    if (savedDraft) {
+        try {
+            const draftData = JSON.parse(savedDraft);
+            Object.keys(draftData).forEach(key => {
+                const field = form.querySelector(`[name="${key}"]`);
+                if (field) {
+                    if (field.type === 'checkbox') {
+                        field.checked = draftData[key] === 'on';
+                    } else {
+                        field.value = draftData[key];
+                    }
+                }
+            });
+        } catch (e) {
+            console.log('Error loading draft:', e);
+        }
+    }
+
+    // Clear draft on successful submission
+    form.addEventListener('submit', function() {
+        localStorage.removeItem('availabilityDraft');
+    });
+
+    // Debug submit button
+    const submitButton = document.querySelector('button[type="submit"]');
+    if (submitButton) {
+        console.log('Submit button found:', submitButton);
+        submitButton.addEventListener('click', function(e) {
+            console.log('Submit button clicked');
+        });
+    } else {
+        console.log('Submit button not found!');
+    }
+
+    // Initialize tooltips for better UX
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+}
+
+.loading-overlay.active {
+    display: flex;
+}
+
+.loading-spinner {
+    text-align: center;
+    color: white;
+}
+
+.spinner-ring {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+    margin: 0 5px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-text {
+    margin-top: 1rem;
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+/* Hero Section */
+.availability-hero {
+    background: var(--primary-gradient);
+    color: white;
+    padding: 3rem 0;
+    border-radius: 20px;
+    margin-bottom: 2rem;
+}
+
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.15);
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    margin-bottom: 1rem;
+}
+
+.hero-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.hero-subtitle {
+    font-size: 1.1rem;
+    opacity: 0.9;
+    margin-bottom: 2rem;
+}
+
+.availability-stats {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.stat-card {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 15px;
+    padding: 1rem;
+    text-align: center;
+    flex: 1;
+    min-width: 150px;
+}
+
+.stat-icon {
+    width: 40px;
+    height: 40px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    margin: 0 auto 0.5rem;
+}
+
+.stat-number {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 0.25rem;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    opacity: 0.8;
+}
+
+/* Calendar Mockup */
+.availability-visual {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.calendar-mockup {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 15px;
+    padding: 1.5rem;
+    width: 250px;
+}
+
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.calendar-title {
+    font-weight: 600;
+    font-size: 1rem;
+}
+
+.calendar-nav {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.nav-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.4);
+}
+
+.nav-dot.active {
+    background: white;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 0.25rem;
+    margin-bottom: 1rem;
+}
+
+.calendar-day {
+    width: 25px;
+    height: 25px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.calendar-day.available {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.time-slots {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.time-slot {
+    padding: 0.4rem 0.8rem;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.1);
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.time-slot.available {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Settings Card */
+.settings-icon {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.2);
+    padding: 0.5rem 1rem;
+    border-radius: 25px;
+    font-size: 0.9rem;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #28a745;
+}
+
+/* Form Styles */
+.form-step {
+    display: none;
+}
+
+.form-step.active {
+    display: block;
+}
+
+.progress-indicator {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.step-icon {
+    width: 40px;
+    height: 40px;
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: #6c757d;
+}
+
+.progress-step.active .step-icon {
+    background: var(--primary-gradient);
+    color: white;
+    border-color: transparent;
+}
+
+.step-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.progress-step.active .step-label {
+    color: #667eea;
+    font-weight: 600;
+}
+
+/* Form Step Animations */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeOut {
+    from { opacity: 1; transform: translateY(0); }
+    to { opacity: 0; transform: translateY(-20px); }
+}
+
+@keyframes stepSuccess {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); background: rgba(40, 167, 69, 0.1); }
+    100% { transform: scale(1); }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+    20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+/* Validation styles */
+.is-invalid {
+    border-color: #dc3545 !important;
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25) !important;
+}
+
+.is-valid {
+    border-color: #28a745 !important;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25) !important;
+}
+
+/* Form Navigation */
+.form-navigation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e9ecef;
+}
+
+.nav-spacer {
+    flex: 1;
+}
+
+
+/* Floating Action Button */
+.floating-actions {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 1000;
+}
+
+.fab-main {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(45deg, #007bff, #0056b3);
+    border: none;
+    border-radius: 50%;
+    color: white;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+}
+
+.fab-main:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 20px rgba(0, 123, 255, 0.6);
+}
+
+.fab-menu {
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.3s ease;
+    pointer-events: none;
+}
+
+.fab-menu.active {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: all;
+}
+
+.fab-item {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1.5rem;
+    background: white;
+    border: none;
+    border-radius: 25px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+
+.fab-item:hover {
+    transform: translateX(-5px);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+}
+
+.fab-item i {
+    color: #007bff;
+    font-size: 1.1rem;
+}
+
+.fab-item span {
+    color: #495057;
+    font-weight: 500;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2rem;
+    }
+
+    .availability-stats {
+        flex-direction: column;
+    }
+
+    .calendar-mockup {
+        width: 200px;
+        padding: 1rem;
+    }
+
+    .floating-actions {
+        bottom: 1rem;
+        right: 1rem;
+    }
+
+    .fab-main {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
+    }
+}
+
+
+
+/* Form Sections */
+.form-section {
+    margin-bottom: 2rem;
+}
+
+.progress-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+}
+
+.step-icon {
+    width: 40px;
+    height: 40px;
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    color: #6c757d;
+}
+
+.progress-step.active .step-icon {
+    background: var(--primary-gradient);
+    color: white;
+    border-color: transparent;
+}
+
+.step-label {
+    font-size: 0.8rem;
+    color: #6c757d;
+}
+
+.progress-step.active .step-label {
+    color: #667eea;
+    font-weight: 600;
+}
+
+/* Navigation and Buttons */
+.form-navigation {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 2rem;
+    padding-top: 2rem;
+    border-top: 1px solid #e9ecef;
+}
+
+.nav-spacer {
+    flex: 1;
+}
+
+/* Floating Action Button */
+.floating-actions {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    z-index: 1000;
+}
+
+.fab-main {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: var(--primary-gradient);
+    color: white;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.fab-menu {
+    position: absolute;
+    bottom: 70px;
+    right: 0;
+    display: none;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.fab-menu.active {
+    display: flex;
+}
+
+.fab-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: white;
+    border: none;
+    padding: 0.75rem 1rem;
+    border-radius: 25px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2rem;
+    }
+
+    .availability-stats {
+        flex-direction: column;
+    }
+
+    .calendar-mockup {
+        width: 200px;
+        padding: 1rem;
+    }
+
+    .floating-actions {
+        bottom: 1rem;
+        right: 1rem;
+    }
+
+    .fab-main {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
+    }
+}
+</style>
+{% endblock %}
+
+
+

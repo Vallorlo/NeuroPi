@@ -1,0 +1,169 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}View Consent Form - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">View Consent Form</li>
+{% endblock %}
+
+{% block page_content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+            <h1>
+                <i class="fas fa-file-contract me-3"></i>
+                Consent Form
+            </h1>
+            <p class="subtitle">Review and sign consent form</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'user_management:dashboard' %}" class="action-button">
+                <i class="fas fa-arrow-left"></i>
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-contract me-2"></i> Consent Form
+                </h5>
+            </div>
+            <div class="card-body">
+
+                    {% if consent_form %}
+                        <div class="mb-4">
+                            <h3>{{ consent_form.title }}</h3>
+                            {% if consent_form.description %}
+                                <p class="text-muted">{{ consent_form.description }}</p>
+                            {% endif %}
+                            <div class="mb-2">
+                                <span class="badge bg-info">Version {{ consent_form.version }}</span>
+                                <span class="badge bg-secondary">Created {{ consent_form.created_at|date:"M d, Y" }}</span>
+                            </div>
+                        </div>
+
+                        <div class="consent-content border p-4 mb-4" style="max-height: 400px; overflow-y: auto;">
+                            {{ consent_form.content|safe }}
+                        </div>
+
+                        {% if consent_record %}
+                            <div class="alert alert-info">
+                                <h5><i class="bi bi-info-circle"></i> Consent Status</h5>
+                                <p><strong>Status:</strong> 
+                                    {% if consent_record.status == 'signed' %}
+                                        <span class="badge bg-success">Signed</span>
+                                    {% elif consent_record.status == 'pending' %}
+                                        <span class="badge bg-warning">Pending</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">{{ consent_record.get_status_display }}</span>
+                                    {% endif %}
+                                </p>
+                                {% if consent_record.signed_at %}
+                                    <p><strong>Signed on:</strong> {{ consent_record.signed_at|date:"F d, Y \a\t g:i A" }}</p>
+                                {% endif %}
+                                {% if consent_record.expires_at %}
+                                    <p><strong>Expires on:</strong> {{ consent_record.expires_at|date:"F d, Y" }}</p>
+                                {% endif %}
+                            </div>
+
+                            {% if consent_record.status == 'pending' %}
+                                <form method="post" class="mt-4">
+                                    {% csrf_token %}
+                                    <div class="form-check mb-3">
+                                        <input class="form-check-input" type="checkbox" id="consent_agreement" required>
+                                        <label class="form-check-label" for="consent_agreement">
+                                            <strong>I have read and understood the above consent form and agree to participate in this research study.</strong>
+                                        </label>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="digital_signature" class="form-label">
+                                            <i class="bi bi-pen"></i> Digital Signature *
+                                        </label>
+                                        <input type="text" class="form-control" id="digital_signature" name="digital_signature" 
+                                               placeholder="Type your full name as your digital signature" required>
+                                        <div class="form-text">
+                                            By typing your name, you are providing your digital signature and consent.
+                                        </div>
+                                    </div>
+
+                                    <div class="d-flex justify-content-between">
+                                        <a href="{% url 'user_management:dashboard' %}" class="btn btn-secondary">
+                                            <i class="bi bi-arrow-left"></i> Back to Dashboard
+                                        </a>
+                                        <button type="submit" class="btn btn-success">
+                                            <i class="bi bi-pen"></i> Sign Consent Form
+                                        </button>
+                                    </div>
+                                </form>
+                            {% else %}
+                                <div class="d-flex justify-content-between">
+                                    <a href="{% url 'user_management:dashboard' %}" class="btn btn-secondary">
+                                        <i class="bi bi-arrow-left"></i> Back to Dashboard
+                                    </a>
+                                    {% if consent_record.status == 'signed' %}
+                                        <a href="{% url 'user_management:download_consent_pdf' consent_record.id %}" 
+                                           class="btn btn-primary" target="_blank">
+                                            <i class="bi bi-file-pdf"></i> Download PDF
+                                        </a>
+                                    {% endif %}
+                                </div>
+                            {% endif %}
+                        {% else %}
+                            <div class="d-flex justify-content-between">
+                                <a href="{% url 'user_management:dashboard' %}" class="btn btn-secondary">
+                                    <i class="bi bi-arrow-left"></i> Back to Dashboard
+                                </a>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center py-5">
+                            <i class="bi bi-file-earmark-x text-muted" style="font-size: 3rem;"></i>
+                            <h5 class="text-muted mt-3">Consent Form Not Found</h5>
+                            <p class="text-muted">The requested consent form could not be found.</p>
+                            <a href="{% url 'user_management:dashboard' %}" class="btn btn-primary">
+                                <i class="bi bi-arrow-left"></i> Back to Dashboard
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add form validation
+    const form = document.querySelector('form');
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            const checkbox = document.getElementById('consent_agreement');
+            const signature = document.getElementById('digital_signature');
+            
+            if (!checkbox.checked) {
+                e.preventDefault();
+                alert('Please check the agreement checkbox to proceed.');
+                return false;
+            }
+            
+            if (!signature.value.trim()) {
+                e.preventDefault();
+                alert('Please provide your digital signature.');
+                signature.focus();
+                return false;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

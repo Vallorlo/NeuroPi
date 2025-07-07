@@ -1,0 +1,797 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Create Research Participation Request{% endblock %}
+
+{% block breadcrumb %}
+<!-- Remove breadcrumb for cleaner UI -->
+{% endblock %}
+
+{% block page_content %}
+<!-- Hero Section -->
+<div class="hero-section mb-5 rounded-3">
+    <div class="container">
+        <div class="row p-3 align-items-center">
+            <div class="col-lg-6">
+                <div class="hero-content">
+                    <div class="hero-badge mb-3">
+                        <i class="fas fa-microscope me-2"></i>
+                        Research Participation
+                    </div>
+                    <h1 class="hero-title mb-3">Join Groundbreaking Research</h1>
+                    <p class="hero-subtitle mb-4">
+                        Contribute to scientific discovery and help advance our understanding of the human brain.
+                        Your participation makes a difference in neuroscience research.
+                    </p>
+                    <div class="hero-stats">
+                        <div class="stat-item">
+                            <div class="stat-number">500+</div>
+                            <div class="stat-label">Active Participants</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">50+</div>
+                            <div class="stat-label">Research Studies</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-number">95%</div>
+                            <div class="stat-label">Satisfaction Rate</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="hero-visual">
+                    <div class="floating-card card-1">
+                        <i class="fas fa-brain"></i>
+                        <span>Neuroscience</span>
+                    </div>
+                    <div class="floating-card card-2">
+                        <i class="fas fa-chart-line"></i>
+                        <span>Data Analysis</span>
+                    </div>
+                    <div class="floating-card card-3">
+                        <i class="fas fa-users"></i>
+                        <span>Collaboration</span>
+                    </div>
+                    <div class="hero-circle"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <!-- How It Works Section -->
+        <div class="how-it-works-section mb-5">
+            <div class="container">
+                <div class="text-center mb-5">
+                    <h2 class="section-title">How It Works</h2>
+                    <p class="section-subtitle">Choose your preferred way to participate in research</p>
+                </div>
+
+                <div class="row">
+                    <div class="col-lg-6 mb-4">
+                        <div class="participation-option" data-type="open_invitation">
+                            <div class="option-header">
+                                <div class="option-icon">
+                                    <i class="fas fa-broadcast-tower"></i>
+                                </div>
+                                <div class="option-content">
+                                    <h4>Open to All Researchers</h4>
+                                    <p>Make yourself discoverable to the research community</p>
+                                </div>
+                                <div class="option-badge">
+                                    <span class="badge bg-primary">Popular</span>
+                                </div>
+                            </div>
+
+                            <div class="option-body">
+                                <div class="benefits-grid">
+                                    <div class="benefit-item">
+                                        <i class="fas fa-eye text-primary"></i>
+                                        <span>Visible to all verified researchers</span>
+                                    </div>
+                                    <div class="benefit-item">
+                                        <i class="fas fa-envelope text-success"></i>
+                                        <span>Receive multiple study invitations</span>
+                                    </div>
+                                    <div class="benefit-item">
+                                        <i class="fas fa-hand-paper text-warning"></i>
+                                        <span>You choose which studies to join</span>
+                                    </div>
+                                    <div class="benefit-item">
+                                        <i class="fas fa-shield-alt text-info"></i>
+                                        <span>Privacy controls maintained</span>
+                                    </div>
+                                </div>
+
+                                <div class="process-steps">
+                                    <div class="step">
+                                        <div class="step-number">1</div>
+                                        <div class="step-text">Create your profile</div>
+                                    </div>
+                                    <div class="step">
+                                        <div class="step-number">2</div>
+                                        <div class="step-text">Researchers find you</div>
+                                    </div>
+                                    <div class="step">
+                                        <div class="step-number">3</div>
+                                        <div class="step-text">Accept invitations</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6 mb-4">
+                        <div class="participation-option" data-type="specific_researcher">
+                            <div class="option-header">
+                                <div class="option-icon">
+                                    <i class="fas fa-user-tie"></i>
+                                </div>
+                                <div class="option-content">
+                                    <h4>Specific Researcher</h4>
+                                    <p>Connect directly with researchers you're interested in</p>
+                                </div>
+                                <div class="option-badge">
+                                    <span class="badge bg-success">Targeted</span>
+                                </div>
+                            </div>
+
+                            <div class="option-body">
+                                <div class="benefits-grid">
+                                    <div class="benefit-item">
+                                        <i class="fas fa-bullseye text-primary"></i>
+                                        <span>Direct communication channel</span>
+                                    </div>
+                                    <div class="benefit-item">
+                                        <i class="fas fa-comments text-success"></i>
+                                        <span>Personal message included</span>
+                                    </div>
+                                    <div class="benefit-item">
+                                        <i class="fas fa-heart text-danger"></i>
+                                        <span>Show interest in specific research</span>
+                                    </div>
+                                    <div class="benefit-item">
+                                        <i class="fas fa-handshake text-warning"></i>
+                                        <span>Build research relationships</span>
+                                    </div>
+                                </div>
+
+                                <div class="process-steps">
+                                    <div class="step">
+                                        <div class="step-number">1</div>
+                                        <div class="step-text">Browse researchers</div>
+                                    </div>
+                                    <div class="step">
+                                        <div class="step-number">2</div>
+                                        <div class="step-text">Send request</div>
+                                    </div>
+                                    <div class="step">
+                                        <div class="step-number">3</div>
+                                        <div class="step-text">Start collaboration</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Request Form -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-form me-2"></i>
+                    Request Details
+                </h4>
+            </div>
+            <div class="card-body">
+                <!-- Information Alert -->
+                <div class="alert alert-info border-0">
+                    <div class="d-flex align-items-start">
+                        <div class="alert-icon me-3">
+                            <i class="fas fa-info-circle"></i>
+                        </div>
+                        <div>
+                            <h6 class="alert-heading">Important Information:</h6>
+                            <ul class="mb-0 small">
+                                <li>All requests expire after <strong>14 days</strong></li>
+                                <li>You maintain <strong>final approval control</strong> over all invitations</li>
+                                <li>Your personal information remains <strong>private</strong> until you accept</li>
+                                <li>You can <strong>withdraw</strong> your request at any time</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        
+                        <div class="mb-3">
+                            <label for="{{ form.request_type.id_for_label }}" class="form-label">
+                                Request Type <span class="text-danger">*</span>
+                            </label>
+                            {{ form.request_type }}
+                            <div class="form-text">Choose how you want to participate in research</div>
+                        </div>
+
+                        <div class="mb-3" id="researcher-field">
+                            <label for="{{ form.researcher.id_for_label }}" class="form-label">
+                                Specific Researcher
+                            </label>
+                            {{ form.researcher }}
+                            <div class="form-text">Leave empty for open invitations to all researchers</div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.participant_message.id_for_label }}" class="form-label">
+                                Message to Researcher(s)
+                            </label>
+                            {{ form.participant_message }}
+                            <div class="form-text">Tell researchers about your interest and motivation</div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.preferred_session_count.id_for_label }}" class="form-label">
+                                        Preferred Session Count
+                                    </label>
+                                    {{ form.preferred_session_count }}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.preferred_duration.id_for_label }}" class="form-label">
+                                        Preferred Duration (minutes)
+                                    </label>
+                                    {{ form.preferred_duration }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.availability_notes.id_for_label }}" class="form-label">
+                                Availability Notes
+                            </label>
+                            {{ form.availability_notes }}
+                            <div class="form-text">Any specific scheduling preferences or constraints</div>
+                        </div>
+
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'user_management:dashboard' %}" class="btn btn-modern btn-outline-secondary me-md-2">
+                                <i class="fas fa-times me-2"></i>
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-modern btn-primary">
+                                <i class="fas fa-paper-plane me-2"></i>
+                                Submit Request
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const requestTypeField = document.getElementById('{{ form.request_type.id_for_label }}');
+    const researcherField = document.getElementById('researcher-field');
+    
+    function toggleResearcherField() {
+        if (requestTypeField.value === 'specific_researcher') {
+            researcherField.style.display = 'block';
+        } else {
+            researcherField.style.display = 'none';
+        }
+    }
+    
+    requestTypeField.addEventListener('change', toggleResearcherField);
+    toggleResearcherField(); // Initial call
+});
+</script>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Hero Section */
+.hero-section {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 4rem 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-section::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grain" width="100" height="100" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="75" cy="75" r="1" fill="rgba(255,255,255,0.1)"/><circle cx="50" cy="10" r="0.5" fill="rgba(255,255,255,0.1)"/><circle cx="10" cy="60" r="0.5" fill="rgba(255,255,255,0.1)"/><circle cx="90" cy="40" r="0.5" fill="rgba(255,255,255,0.1)"/></pattern></defs><rect width="100" height="100" fill="url(%23grain)"/></svg>');
+    opacity: 0.3;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 2;
+}
+
+.hero-badge {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.hero-title {
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 1.5rem;
+}
+
+.hero-subtitle {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    opacity: 0.9;
+    max-width: 500px;
+}
+
+.hero-stats {
+    display: flex;
+    gap: 2rem;
+    margin-top: 2rem;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    opacity: 0.8;
+    margin-top: 0.5rem;
+}
+
+.hero-visual {
+    position: relative;
+    height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hero-circle {
+    width: 300px;
+    height: 300px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.05));
+    border-radius: 50%;
+    position: absolute;
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.floating-card {
+    position: absolute;
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 15px;
+    padding: 1rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    font-weight: 500;
+    animation: float 6s ease-in-out infinite;
+}
+
+.floating-card i {
+    font-size: 1.2rem;
+}
+
+.floating-card.card-1 {
+    top: 20%;
+    left: 10%;
+    animation-delay: 0s;
+}
+
+.floating-card.card-2 {
+    top: 60%;
+    right: 10%;
+    animation-delay: 2s;
+}
+
+.floating-card.card-3 {
+    bottom: 20%;
+    left: 20%;
+    animation-delay: 4s;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-20px); }
+}
+
+/* How It Works Section */
+.how-it-works-section {
+    padding: 4rem 0;
+    background: #f8f9fa;
+}
+
+.section-title {
+    font-size: 2.5rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin-bottom: 1rem;
+}
+
+.section-subtitle {
+    font-size: 1.2rem;
+    color: #718096;
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+/* Participation Options */
+.participation-option {
+    background: white;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    transition: all 0.4s ease;
+    cursor: pointer;
+    overflow: hidden;
+    border: 3px solid transparent;
+    height: 100%;
+}
+
+.participation-option:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.participation-option.selected {
+    border-color: #667eea;
+    box-shadow: 0 20px 60px rgba(102, 126, 234, 0.3);
+}
+
+.option-header {
+    padding: 2rem;
+    background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    position: relative;
+}
+
+.option-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+    flex-shrink: 0;
+}
+
+.option-content h4 {
+    margin: 0 0 0.5rem 0;
+    color: #2d3748;
+    font-weight: 600;
+}
+
+.option-content p {
+    margin: 0;
+    color: #718096;
+    font-size: 0.95rem;
+}
+
+.option-badge {
+    margin-left: auto;
+}
+
+.option-badge .badge {
+    font-size: 0.8rem;
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+}
+
+.option-body {
+    padding: 2rem;
+}
+
+.benefits-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 2rem;
+}
+
+.benefit-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: #f8f9fa;
+    border-radius: 10px;
+    transition: all 0.3s ease;
+}
+
+.benefit-item:hover {
+    background: #e9ecef;
+    transform: translateX(5px);
+}
+
+.benefit-item i {
+    width: 20px;
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+.benefit-item span {
+    font-size: 0.95rem;
+    color: #4a5568;
+    font-weight: 500;
+}
+
+.process-steps {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    position: relative;
+}
+
+.process-steps::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    right: 20px;
+    height: 2px;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    z-index: 1;
+}
+
+.step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    position: relative;
+    z-index: 2;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+}
+
+.step-text {
+    font-size: 0.85rem;
+    color: #4a5568;
+    font-weight: 500;
+    text-align: center;
+    max-width: 80px;
+}
+
+.icon-circle {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 2rem;
+    margin: 0 auto;
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.3);
+}
+
+.request-type-card[data-type="specific_researcher"] .icon-circle {
+    background: linear-gradient(135deg, #28a745, #20c997);
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.3);
+}
+
+.features-list {
+    text-align: left;
+    margin-top: 1rem;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.feature-item i {
+    margin-right: 0.5rem;
+    width: 16px;
+}
+
+.alert-icon {
+    width: 40px;
+    height: 40px;
+    background: rgba(13, 202, 240, 0.2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #0dcaf0;
+    font-size: 1.2rem;
+    flex-shrink: 0;
+}
+
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    border-radius: 15px 15px 0 0 !important;
+    border-bottom: none;
+    padding: 1.25rem 1.5rem;
+}
+
+.form-control, .form-select {
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+.btn {
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.form-label {
+    color: #495057;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+}
+
+.subtitle {
+    color: #6c757d;
+    font-size: 1.1rem;
+}
+
+/* Interactive form enhancements */
+.form-group {
+    position: relative;
+    margin-bottom: 1.5rem;
+}
+
+.form-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.5rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .page-header {
+        padding: 1.5rem;
+    }
+
+    .icon-wrapper {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
+    }
+
+    .icon-circle {
+        width: 60px;
+        height: 60px;
+        font-size: 1.5rem;
+    }
+
+    .request-type-card .card {
+        margin-bottom: 1rem;
+    }
+}
+</style>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Enhanced request type selection
+    const requestTypeCards = document.querySelectorAll('.request-type-card');
+    const requestTypeField = document.getElementById('{{ form.request_type.id_for_label }}');
+    const researcherField = document.getElementById('researcher-field');
+
+    // Handle card selection
+    requestTypeCards.forEach(card => {
+        card.addEventListener('click', function() {
+            const type = this.dataset.type;
+
+            // Remove selected class from all cards
+            requestTypeCards.forEach(c => c.classList.remove('selected'));
+
+            // Add selected class to clicked card
+            this.classList.add('selected');
+
+            // Update form field
+            requestTypeField.value = type;
+
+            // Toggle researcher field visibility
+            toggleResearcherField();
+        });
+    });
+
+    function toggleResearcherField() {
+        if (requestTypeField.value === 'specific_researcher') {
+            researcherField.style.display = 'block';
+            researcherField.querySelector('select').required = true;
+        } else {
+            researcherField.style.display = 'none';
+            researcherField.querySelector('select').required = false;
+        }
+    }
+
+    // Initial setup
+    requestTypeField.addEventListener('change', toggleResearcherField);
+    toggleResearcherField();
+
+    // Set initial card selection based on form value
+    if (requestTypeField.value) {
+        const selectedCard = document.querySelector(`[data-type="${requestTypeField.value}"]`);
+        if (selectedCard) {
+            selectedCard.classList.add('selected');
+        }
+    }
+});
+</script>
+{% endblock %}
+{% endblock %}

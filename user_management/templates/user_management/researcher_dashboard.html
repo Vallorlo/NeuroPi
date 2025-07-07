@@ -1,0 +1,242 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Research Management Dashboard - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Research Dashboard</li>
+{% endblock %}
+
+{% block page_content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+            <h1>
+                <i class="fas fa-microscope me-3"></i>
+                Research Management Dashboard
+            </h1>
+            <p class="subtitle">Manage participants, consent forms, and research sessions</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'user_management:create_consent_form' %}" class="action-button success">
+                <i class="fas fa-plus"></i>
+                New Consent Form
+            </a>
+            <a href="{% url 'user_management:schedule_session' %}" class="action-button">
+                <i class="fas fa-calendar-plus"></i>
+                Schedule Session
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stat-card info">
+            <div class="stat-number">{{ total_participants|default:0 }}</div>
+            <div class="stat-label">Total Participants</div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stat-card warning">
+            <div class="stat-number">{{ pending_requests|default:0 }}</div>
+            <div class="stat-label">Pending Requests</div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stat-card success">
+            <div class="stat-number">{{ approved_requests|default:0 }}</div>
+            <div class="stat-label">Approved Requests</div>
+        </div>
+    </div>
+    <div class="col-lg-3 col-md-6 mb-3">
+        <div class="stat-card danger">
+            <div class="stat-number">{{ consent_assignments|default:0 }}</div>
+            <div class="stat-label">Consent Assignments</div>
+        </div>
+    </div>
+</div>
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <i class="fas fa-bolt me-2"></i>
+                Quick Actions
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:researcher_requests' %}" class="btn btn-modern btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 120px;">
+                            <i class="fas fa-inbox fa-2x mb-2"></i>
+                            <span>Review Requests</span>
+                            {% if pending_requests %}
+                                <span class="badge bg-warning mt-1">{{ pending_requests }}</span>
+                            {% endif %}
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:participant_list' %}" class="btn btn-modern btn-outline-info w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 120px;">
+                            <i class="fas fa-users fa-2x mb-2"></i>
+                            <span>Manage Participants</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:consent_management' %}" class="btn btn-modern btn-outline-success w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 120px;">
+                            <i class="fas fa-file-contract fa-2x mb-2"></i>
+                            <span>Consent Management</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:assign_consent_form' %}" class="btn btn-modern btn-outline-warning w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 120px;">
+                            <i class="fas fa-paper-plane fa-2x mb-2"></i>
+                            <span>Assign Consent</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Recent Activity -->
+<div class="row mb-4">
+    <div class="col-lg-6 mb-4">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <i class="fas fa-clock me-2"></i>
+                Recent Participation Requests
+            </div>
+            <div class="card-body">
+                {% if recent_requests %}
+                    {% for request in recent_requests %}
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-3" style="background: #f8f9fa; border-radius: 10px;">
+                        <div>
+                            <h6 class="mb-1">{{ request.participant.user.get_full_name|default:request.participant.user.username }}</h6>
+                            <small class="text-muted">{{ request.created_at|date:"M d, Y" }}</small>
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-clock me-1"></i>
+                                {% if request.is_expired %}
+                                    Expired
+                                {% else %}
+                                    {{ request.days_until_expiration }} days left
+                                {% endif %}
+                            </small>
+                        </div>
+                        <span class="status-badge {{ request.status }}">
+                            {{ request.get_status_display }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                    <a href="{% url 'user_management:researcher_requests' %}" class="btn btn-modern btn-outline-primary btn-sm">
+                        View All Requests
+                    </a>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">No participation requests yet</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <i class="fas fa-calendar me-2"></i>
+                Upcoming Sessions
+            </div>
+            <div class="card-body">
+                {% if upcoming_sessions %}
+                    {% for session in upcoming_sessions %}
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-3" style="background: #f8f9fa; border-radius: 10px;">
+                        <div>
+                            <h6 class="mb-1">{{ session.title }}</h6>
+                            <small class="text-muted">
+                                <i class="fas fa-user me-1"></i>
+                                {{ session.participant.user.get_full_name|default:session.participant.user.username }}
+                            </small>
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-calendar me-1"></i>
+                                {{ session.scheduled_date|date:"M d, Y H:i" }}
+                            </small>
+                        </div>
+                        <span class="status-badge {{ session.status }}">
+                            {{ session.get_status_display }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                    <a href="{% url 'user_management:schedule_session' %}" class="btn btn-modern btn-outline-info btn-sm">
+                        Schedule New Session
+                    </a>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-calendar-times fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">No upcoming sessions</p>
+                        <a href="{% url 'user_management:schedule_session' %}" class="action-button success">
+                            <i class="fas fa-plus"></i>
+                            Schedule First Session
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Participants -->
+<div class="row">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <i class="fas fa-users me-2"></i>
+                Recent Participants
+            </div>
+            <div class="card-body">
+                {% if recent_participants %}
+                    <div class="row">
+                        {% for participant in recent_participants %}
+                        <div class="col-lg-4 col-md-6 mb-3">
+                            <div class="request-card">
+                                <div class="card-header">
+                                    <h6 class="mb-0">{{ participant.user.get_full_name|default:participant.user.username }}</h6>
+                                    <small class="text-muted">Registered {{ participant.date_registered|date:"M d, Y" }}</small>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-2">
+                                        <span class="badge bg-{% if participant.has_valid_consent %}success{% else %}warning{% endif %}">
+                                            {% if participant.has_valid_consent %}Consented{% else %}Pending{% endif %}
+                                        </span>
+                                        {% if participant.is_open_to_invitations %}
+                                            <span class="badge bg-info">Open to Invitations</span>
+                                        {% endif %}
+                                    </div>
+                                    <a href="{% url 'user_management:participant_detail' participant.participant_id %}"
+                                       class="btn btn-modern btn-outline-primary btn-sm">
+                                        View Details
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    <div class="text-center">
+                        <a href="{% url 'user_management:participant_list' %}" class="btn btn-modern btn-outline-primary">
+                            View All Participants
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-users fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">No participants registered yet</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

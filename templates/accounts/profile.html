@@ -1,48 +1,211 @@
 {% extends "layout.html" %}
 
 {% block title %}
-    User Profile
+    Profile Settings - NeuroPi
 {% endblock title %}
 
 {% block content %}
 <div class="container mt-5 mb-5">
-    <div class="row">
-        <div class="col-lg-8 offset-lg-2">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h1 class="mb-0">User Profile</h1>
-                </div>
-                <div class="card-body">
-                    {% if messages %}
-                        {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }}">
-                                {{ message }}
-                            </div>
-                        {% endfor %}
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Header Section -->
+            <div class="text-center mb-5">
+                <div class="profile-avatar mb-3">
+                    {% if user.profile.role == 'trainer' %}
+                        <i class="bi bi-mortarboard-fill"></i>
+                    {% elif user.profile.role == 'user' %}
+                        <i class="bi bi-person-circle"></i>
+                    {% else %}
+                        <i class="bi bi-person"></i>
                     {% endif %}
-                    
-                    <div class="row">
-                        <div class="col-md-6">
-                            <h3>Account Information</h3>
-                            <p><strong>Username:</strong> {{ user.username }}</p>
-                            <p><strong>Email:</strong> {{ user.email }}</p>
-                            <p><strong>Role:</strong> {{ user.profile.get_role_display }}</p>
+                </div>
+                <h1 class="display-5 fw-bold text-primary mb-2">{{ user.username }}</h1>
+                <p class="text-muted">Manage your NeuroPi account settings</p>
+            </div>
+
+            <div class="row">
+                <!-- Account Information Card -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow-lg border-0 h-100">
+                        <div class="card-header bg-gradient-primary text-white py-4">
+                            <h3 class="mb-0"><i class="bi bi-person-lines-fill"></i> Account Information</h3>
                         </div>
-                        
-                        <div class="col-md-6">
-                            <h3>Update Role</h3>
-                            <form method="post">
-                                {% csrf_token %}
-                                
-                                <div class="mb-3">
-                                    <label for="id_role" class="form-label">Role</label>
-                                    {{ form.role }}
+                        <div class="card-body p-4">
+                            {% if messages %}
+                                {% for message in messages %}
+                                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                        <i class="bi bi-check-circle-fill"></i> {{ message }}
+                                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                    </div>
+                                {% endfor %}
+                            {% endif %}
+
+                            <div class="profile-info">
+                                <div class="info-item">
+                                    <div class="info-label">
+                                        <i class="bi bi-person-fill text-primary"></i> Username
+                                    </div>
+                                    <div class="info-value">{{ user.username }}</div>
                                 </div>
-                                
-                                <div class="d-grid gap-2">
-                                    <button type="submit" class="btn btn-primary">Update Role</button>
+
+                                <div class="info-item">
+                                    <div class="info-label">
+                                        <i class="bi bi-envelope-fill text-primary"></i> Email Address
+                                    </div>
+                                    <div class="info-value">{{ user.email|default:"Not provided" }}</div>
+                                </div>
+
+                                <div class="info-item">
+                                    <div class="info-label">
+                                        <i class="bi bi-person-badge text-primary"></i> Current Role
+                                    </div>
+                                    <div class="info-value">
+                                        {% if user.profile.role == 'trainer' %}
+                                            <span class="badge bg-warning text-dark fs-6">
+                                                <i class="bi bi-mortarboard-fill"></i> Trainer
+                                            </span>
+                                        {% elif user.profile.role == 'user' %}
+                                            <span class="badge bg-info fs-6">
+                                                <i class="bi bi-person-circle"></i> User
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-secondary fs-6">
+                                                <i class="bi bi-person"></i> Guest
+                                            </span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                <div class="info-item">
+                                    <div class="info-label">
+                                        <i class="bi bi-calendar-check text-primary"></i> Member Since
+                                    </div>
+                                    <div class="info-value">{{ user.date_joined|date:"F d, Y" }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Role Management Card -->
+                <div class="col-lg-6 mb-4">
+                    <div class="card shadow-lg border-0 h-100">
+                        <div class="card-header bg-gradient-secondary text-white py-4">
+                            <h3 class="mb-0"><i class="bi bi-gear-fill"></i> Role Management</h3>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="role-explanation mb-4">
+                                <h5 class="text-primary">Understanding Roles</h5>
+                                <div class="role-info">
+                                    <div class="role-item">
+                                        <strong><i class="bi bi-person-circle text-info"></i> User:</strong>
+                                        <span class="text-muted">Access to trials and basic data collection</span>
+                                    </div>
+                                    <div class="role-item">
+                                        <strong><i class="bi bi-mortarboard-fill text-warning"></i> Trainer:</strong>
+                                        <span class="text-muted">Full access to all features and advanced tools</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <form method="post" class="role-form">
+                                {% csrf_token %}
+
+                                <div class="mb-4">
+                                    <label for="id_role" class="form-label fw-semibold">
+                                        <i class="bi bi-arrow-repeat text-primary"></i> Change Role
+                                    </label>
+                                    <select name="role" class="form-select form-select-lg" id="id_role" required>
+                                        <option value="user" {% if user.profile.role == 'user' %}selected{% endif %}>
+                                            User - Basic access
+                                        </option>
+                                        <option value="trainer" {% if user.profile.role == 'trainer' %}selected{% endif %}>
+                                            Trainer - Full access
+                                        </option>
+                                    </select>
+                                    <div class="form-text">
+                                        <i class="bi bi-info-circle"></i> Changes take effect immediately
+                                    </div>
+                                </div>
+
+                                <div class="d-grid">
+                                    <button type="submit" class="btn btn-primary btn-lg">
+                                        <i class="bi bi-check-circle-fill"></i> Update Role
+                                    </button>
                                 </div>
                             </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Access Permissions Card -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="card shadow-lg border-0">
+                        <div class="card-header bg-gradient-info text-white py-4">
+                            <h3 class="mb-0"><i class="bi bi-shield-check"></i> Your Access Permissions</h3>
+                        </div>
+                        <div class="card-body p-4">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5 class="text-success mb-3"><i class="bi bi-check-circle-fill"></i> Available Features</h5>
+                                    <div class="permission-list">
+                                        <div class="permission-item available">
+                                            <i class="bi bi-house-door-fill"></i>
+                                            <span>Home & About Pages</span>
+                                        </div>
+                                        {% if user.profile.role != 'guest' %}
+                                        <div class="permission-item available">
+                                            <i class="bi bi-braces-asterisk"></i>
+                                            <span>Trials Data Collection</span>
+                                        </div>
+                                        {% endif %}
+                                        {% if user.profile.role == 'trainer' %}
+                                        <div class="permission-item available">
+                                            <i class="bi bi-graph-up"></i>
+                                            <span>Data Visualization & Plots</span>
+                                        </div>
+                                        <div class="permission-item available">
+                                            <i class="bi bi-cpu"></i>
+                                            <span>Data Preprocessing</span>
+                                        </div>
+                                        <div class="permission-item available">
+                                            <i class="bi bi-lightning-charge"></i>
+                                            <span>Neural Network Training</span>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+
+                                {% if user.profile.role != 'trainer' %}
+                                <div class="col-md-6">
+                                    <h5 class="text-warning mb-3"><i class="bi bi-lock-fill"></i> Upgrade for More</h5>
+                                    <div class="permission-list">
+                                        {% if user.profile.role == 'guest' %}
+                                        <div class="permission-item restricted">
+                                            <i class="bi bi-braces-asterisk"></i>
+                                            <span>Trials Data Collection</span>
+                                        </div>
+                                        {% endif %}
+                                        {% if user.profile.role != 'trainer' %}
+                                        <div class="permission-item restricted">
+                                            <i class="bi bi-graph-up"></i>
+                                            <span>Advanced Data Visualization</span>
+                                        </div>
+                                        <div class="permission-item restricted">
+                                            <i class="bi bi-cpu"></i>
+                                            <span>Data Preprocessing Tools</span>
+                                        </div>
+                                        <div class="permission-item restricted">
+                                            <i class="bi bi-lightning-charge"></i>
+                                            <span>Neural Network Training</span>
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                {% endif %}
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -50,4 +213,238 @@
         </div>
     </div>
 </div>
+
+<style>
+/* Enhanced Profile Page Styles */
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #0d6efd, #6610f2) !important;
+}
+
+.bg-gradient-secondary {
+    background: linear-gradient(135deg, #6c757d, #495057) !important;
+}
+
+.bg-gradient-info {
+    background: linear-gradient(135deg, #0dcaf0, #0d6efd) !important;
+}
+
+.profile-avatar {
+    width: 100px;
+    height: 100px;
+    margin: 0 auto;
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 3rem;
+    color: white;
+    box-shadow: 0 10px 30px rgba(13, 110, 253, 0.3);
+}
+
+.card {
+    border-radius: 16px;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-5px);
+}
+
+.profile-info {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.info-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border-left: 4px solid #0d6efd;
+}
+
+.info-label {
+    font-weight: 600;
+    color: #495057;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.info-value {
+    font-weight: 500;
+    color: #333;
+}
+
+.role-explanation {
+    background: linear-gradient(135deg, #f8f9ff, #ffffff);
+    padding: 1.5rem;
+    border-radius: 12px;
+    border: 2px solid #e3f2fd;
+}
+
+.role-info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin-top: 1rem;
+}
+
+.role-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: white;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+}
+
+.permission-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.permission-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    border-radius: 12px;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.permission-item.available {
+    background: linear-gradient(135deg, #d4edda, #c3e6cb);
+    color: #155724;
+    border: 2px solid #c3e6cb;
+}
+
+.permission-item.restricted {
+    background: linear-gradient(135deg, #f8d7da, #f5c6cb);
+    color: #721c24;
+    border: 2px solid #f5c6cb;
+}
+
+.permission-item i {
+    font-size: 1.2rem;
+    width: 20px;
+    text-align: center;
+}
+
+.form-select-lg {
+    border-radius: 12px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.form-select-lg:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(13, 110, 253, 0.3);
+}
+
+/* Animation for cards */
+.card {
+    animation: slideInUp 0.6s ease-out;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .info-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.5rem;
+    }
+
+    .profile-avatar {
+        width: 80px;
+        height: 80px;
+        font-size: 2.5rem;
+    }
+
+    .role-info {
+        gap: 0.5rem;
+    }
+
+    .permission-item {
+        padding: 0.5rem;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Role form submission with confirmation
+    const roleForm = document.querySelector('.role-form');
+    const roleSelect = document.getElementById('id_role');
+    const currentRole = '{{ user.profile.role }}';
+
+    roleForm.addEventListener('submit', function(e) {
+        const newRole = roleSelect.value;
+
+        if (newRole !== currentRole) {
+            const roleNames = {
+                'user': 'User',
+                'trainer': 'Trainer'
+            };
+
+            const confirmed = confirm(
+                `Are you sure you want to change your role to ${roleNames[newRole]}?\n\n` +
+                `This will ${newRole === 'trainer' ? 'grant you access to all features' : 'limit your access to basic features'}.`
+            );
+
+            if (!confirmed) {
+                e.preventDefault();
+                roleSelect.value = currentRole; // Reset to current role
+            }
+        }
+    });
+
+    // Add loading state to form submission
+    roleForm.addEventListener('submit', function() {
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+
+        submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Updating...';
+        submitBtn.disabled = true;
+
+        // Re-enable button after 3 seconds (in case of errors)
+        setTimeout(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }, 3000);
+    });
+});
+</script>
 {% endblock content %}

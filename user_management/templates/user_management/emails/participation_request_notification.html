@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Research Participation Request - NeuroPi</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .email-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #667eea;
+        }
+        .logo {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #2d3748;
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .highlight-box {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #4a5568;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .info-value {
+            color: #2d3748;
+            font-size: 1.1rem;
+            margin-top: 5px;
+        }
+        .action-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 5px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .action-button:hover {
+            opacity: 0.9;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            color: #718096;
+            font-size: 0.9rem;
+        }
+        .message-box {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+            font-style: italic;
+        }
+        @media (max-width: 600px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            .action-button {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="logo">Neuro<span style="color: #e53e3e;">π</span></div>
+            <h1 class="title">New Research Participation Request</h1>
+        </div>
+
+        <div class="content">
+            <p>Hello {{ researcher.user.get_full_name|default:researcher.user.username }},</p>
+            
+            <p>You have received a new research participation request from a participant interested in your studies.</p>
+
+            <div class="highlight-box">
+                <h3 style="margin-top: 0;">Participant Information</h3>
+                <p><strong>Name:</strong> {{ request.participant.user.get_full_name|default:request.participant.user.username }}</p>
+                <p><strong>Request Type:</strong> {{ request.get_request_type_display }}</p>
+                <p><strong>Submitted:</strong> {{ request.created_at|date:"F d, Y" }}</p>
+                <p><strong>Expires:</strong> {{ request.expires_at|date:"F d, Y" }} ({{ request.days_until_expiration }} days remaining)</p>
+            </div>
+
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Preferred Sessions</div>
+                    <div class="info-value">{{ request.preferred_session_count }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Duration (minutes)</div>
+                    <div class="info-value">{{ request.preferred_duration }}</div>
+                </div>
+                {% if request.participant.age %}
+                <div class="info-item">
+                    <div class="info-label">Age</div>
+                    <div class="info-value">{{ request.participant.age }} years</div>
+                </div>
+                {% endif %}
+                {% if request.participant.handedness %}
+                <div class="info-item">
+                    <div class="info-label">Handedness</div>
+                    <div class="info-value">{{ request.participant.get_handedness_display }}</div>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if request.participant_message %}
+            <div class="message-box">
+                <h4>Message from Participant:</h4>
+                <p>{{ request.participant_message }}</p>
+            </div>
+            {% endif %}
+
+            {% if request.availability_notes %}
+            <div class="message-box">
+                <h4>Availability Notes:</h4>
+                <p>{{ request.availability_notes }}</p>
+            </div>
+            {% endif %}
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{ domain }}{% url 'user_management:respond_to_request' request.id %}" class="action-button">
+                    Review & Respond
+                </a>
+                <a href="{{ domain }}{% url 'user_management:researcher_requests' %}" class="action-button" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    View All Requests
+                </a>
+            </div>
+
+            <p><strong>Important:</strong> This request will expire automatically in {{ request.days_until_expiration }} days. Please review and respond promptly to maintain participant engagement.</p>
+        </div>
+
+        <div class="footer">
+            <p>This email was sent from the NeuroPi Research Platform.</p>
+            <p>If you have any questions, please contact the system administrator.</p>
+            <p>&copy; {% now "Y" %} NeuroPi. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

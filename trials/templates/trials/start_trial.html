@@ -61,7 +61,7 @@ Main Trial Selection Page - Choose between Traditional and Visual Trials
                         <h5 class="mb-0">Traditional Trial Setup</h5>
                     </div>
                     <div class="card-body">
-                        <form method="post" action="{% url 'word_trials' %}" id="traditionalTrialForm">
+                        <form method="post" action="{% url 'trials:word_trials' %}" id="traditionalTrialForm">
                             {% csrf_token %}
                             
                             <div class="row mb-4">
@@ -133,7 +133,7 @@ Main Trial Selection Page - Choose between Traditional and Visual Trials
                         <h5 class="mb-0">Visual Word Focus Trial Setup</h5>
                     </div>
                     <div class="card-body">
-                        <form method="post" action="{% url 'visual_trial_setup' %}" id="visualTrialForm">
+                        <form method="post" action="{% url 'trials:visual_trial_setup' %}" id="visualTrialForm">
                             {% csrf_token %}
                             
                             <div class="row mb-4">
@@ -203,7 +203,7 @@ Main Trial Selection Page - Choose between Traditional and Visual Trials
 <div class="container mt-3 mb-5">
     <div class="row">
         <div class="col text-center">
-            <a href="{% url 'debug_audio_devices' %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+            <a href="{% url 'trials:debug_audio_devices' %}" target="_blank" class="btn btn-sm btn-outline-secondary">
                 <i class="bi bi-wrench"></i> Debug Audio Devices
             </a>
         </div>
@@ -360,7 +360,7 @@ Main Trial Selection Page - Choose between Traditional and Visual Trials
         
         microphoneSelect.innerHTML = '<option value="">Loading microphones...</option>';
         
-        fetch('{% url "get_microphones" %}')
+        fetch('{% url "trials:get_microphones" %}')
             .then(response => response.json())
             .then(data => {
                 microphoneSelect.innerHTML = '';

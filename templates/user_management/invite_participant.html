@@ -1,0 +1,328 @@
+{% extends 'layout.html' %}
+{% load static %}
+
+{% block title %}Invite Participant to Study - NeuroPi{% endblock %}
+
+{% block extra_css %}
+<style>
+    .invite-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+    
+    .participant-info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 15px;
+        margin-bottom: 30px;
+    }
+    
+    .consent-status {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 30px;
+    }
+    
+    .form-section {
+        background: white;
+        padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.1);
+        margin-bottom: 30px;
+    }
+    
+    .form-control, .form-select {
+        border-radius: 10px;
+        border: 2px solid #e3e6f0;
+        padding: 12px 15px;
+    }
+    
+    .form-control:focus, .form-select:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.25);
+    }
+    
+    .btn-send-invitation {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+    }
+    
+    .btn-send-invitation:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
+        color: white;
+    }
+    
+    .consent-badge {
+        font-size: 0.9rem;
+        margin-right: 10px;
+        margin-bottom: 5px;
+    }
+    
+    .study-preview {
+        background: #f8f9fa;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        padding: 20px;
+        margin-top: 20px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="invite-container">
+        <!-- Page Header -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h1 class="h3 mb-0 text-gray-800">
+                    <i class="fas fa-paper-plane text-primary"></i>
+                    Invite Participant to Research Study
+                </h1>
+                <p class="text-muted">Send a personalized study invitation to an eligible participant</p>
+            </div>
+            <div>
+                <a href="{% url 'user_management:eligible_participants_view' %}" class="btn btn-secondary">
+                    <i class="fas fa-arrow-left"></i> Back to Participants
+                </a>
+            </div>
+        </div>
+        
+        <!-- Participant Information -->
+        <div class="participant-info">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <h3 class="mb-2">
+                        <i class="fas fa-user"></i>
+                        {{ participant.user.get_full_name|default:participant.user.username }}
+                    </h3>
+                    <p class="mb-1">
+                        <i class="fas fa-envelope"></i> {{ participant.user.email }}
+                    </p>
+                    <p class="mb-1">
+                        <i class="fas fa-calendar"></i> Registered: {{ participant.date_registered|date:"F d, Y" }}
+                    </p>
+                    {% if participant.age %}
+                    <p class="mb-0">
+                        <i class="fas fa-birthday-cake"></i> Age: {{ participant.age }} years
+                        {% if participant.gender %} | Gender: {{ participant.get_gender_display }}{% endif %}
+                    </p>
+                    {% endif %}
+                </div>
+                <div class="col-md-4 text-end">
+                    <div class="h4 mb-0">
+                        <span class="badge bg-light text-dark">
+                            <i class="fas fa-check-circle text-success"></i>
+                            Eligible Participant
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Consent Status -->
+        <div class="consent-status">
+            <h5 class="text-success mb-3">
+                <i class="fas fa-shield-check"></i> Active Consent Forms
+            </h5>
+            <p class="mb-3">This participant has signed the following consent forms and is eligible for research participation:</p>
+            
+            <div class="row">
+                {% for consent_record in participant.consent_records.all %}
+                    {% if consent_record.is_valid %}
+                    <div class="col-md-6 mb-2">
+                        <span class="badge bg-success consent-badge">
+                            <i class="fas fa-check"></i>
+                            {{ consent_record.consent_form.title }}
+                        </span>
+                        <small class="text-muted">
+                            (Expires: {{ consent_record.expires_at|date:"M d, Y" }})
+                        </small>
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+        </div>
+        
+        <!-- Invitation Form -->
+        <div class="form-section">
+            <h4 class="mb-4">
+                <i class="fas fa-edit"></i> Create Study Invitation
+            </h4>
+            
+            <form method="post">
+                {% csrf_token %}
+                
+                <div class="row">
+                    <div class="col-md-8 mb-3">
+                        <label for="study_title" class="form-label">
+                            <i class="fas fa-heading"></i> Study Title *
+                        </label>
+                        <input type="text" class="form-control" id="study_title" name="study_title" 
+                               placeholder="Enter the title of your research study" required>
+                        <div class="form-text">Provide a clear, descriptive title for your research study</div>
+                    </div>
+                    
+                    <div class="col-md-4 mb-3">
+                        <label for="session_duration" class="form-label">
+                            <i class="fas fa-clock"></i> Session Duration
+                        </label>
+                        <select class="form-select" id="session_duration" name="session_duration">
+                            <option value="">Select duration</option>
+                            <option value="30 minutes">30 minutes</option>
+                            <option value="45 minutes">45 minutes</option>
+                            <option value="1 hour">1 hour</option>
+                            <option value="1.5 hours">1.5 hours</option>
+                            <option value="2 hours">2 hours</option>
+                            <option value="2+ hours">2+ hours</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label for="study_description" class="form-label">
+                        <i class="fas fa-align-left"></i> Study Description *
+                    </label>
+                    <textarea class="form-control" id="study_description" name="study_description" 
+                              rows="6" placeholder="Describe your research study, what it involves, and what the participant can expect..." required></textarea>
+                    <div class="form-text">Provide a detailed description of the study procedures, requirements, and expectations</div>
+                </div>
+                
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="compensation" class="form-label">
+                            <i class="fas fa-dollar-sign"></i> Compensation
+                        </label>
+                        <input type="text" class="form-control" id="compensation" name="compensation" 
+                               placeholder="e.g., $20 gift card, Course credit, etc.">
+                        <div class="form-text">Specify any compensation or incentives offered</div>
+                    </div>
+                    
+                    <div class="col-md-6 mb-3">
+                        <label for="contact_method" class="form-label">
+                            <i class="fas fa-phone"></i> Preferred Contact Method
+                        </label>
+                        <select class="form-select" id="contact_method" name="contact_method">
+                            <option value="email">Email</option>
+                            <option value="phone">Phone</option>
+                            <option value="platform">NeuroPi Platform</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <!-- Study Preview -->
+                <div class="study-preview">
+                    <h6 class="text-muted mb-3">
+                        <i class="fas fa-eye"></i> Invitation Preview
+                    </h6>
+                    <div id="invitation-preview">
+                        <p><strong>Dear {{ participant.user.get_full_name|default:participant.user.username }},</strong></p>
+                        <p>You are invited to participate in a research study conducted by {{ researcher.user.get_full_name|default:researcher.user.username }}.</p>
+                        <p><strong>Study Title:</strong> <span id="preview-title">[Study title will appear here]</span></p>
+                        <p><strong>Description:</strong> <span id="preview-description">[Study description will appear here]</span></p>
+                        <p><strong>Duration:</strong> <span id="preview-duration">[Duration will appear here]</span></p>
+                        <p><strong>Compensation:</strong> <span id="preview-compensation">[Compensation will appear here]</span></p>
+                        <p>If you are interested in participating, please respond through the NeuroPi platform.</p>
+                        <p>Best regards,<br>{{ researcher.user.get_full_name|default:researcher.user.username }}</p>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="text-center mt-4">
+                    <a href="{% url 'user_management:eligible_participants_view' %}" class="btn btn-outline-secondary me-3">
+                        <i class="fas fa-times"></i> Cancel
+                    </a>
+                    <button type="submit" class="btn-send-invitation">
+                        <i class="fas fa-paper-plane"></i> Send Study Invitation
+                    </button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Additional Information -->
+        <div class="alert alert-info">
+            <h6 class="alert-heading">
+                <i class="fas fa-info-circle"></i> Important Notes:
+            </h6>
+            <ul class="mb-0">
+                <li>The participant will receive an email notification about this study invitation</li>
+                <li>They can accept or decline the invitation through their NeuroPi dashboard</li>
+                <li>You will be notified of their response via email and dashboard notifications</li>
+                <li>All communication is logged for research compliance purposes</li>
+            </ul>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Real-time preview updates
+    const titleInput = document.getElementById('study_title');
+    const descriptionInput = document.getElementById('study_description');
+    const durationSelect = document.getElementById('session_duration');
+    const compensationInput = document.getElementById('compensation');
+    
+    const previewTitle = document.getElementById('preview-title');
+    const previewDescription = document.getElementById('preview-description');
+    const previewDuration = document.getElementById('preview-duration');
+    const previewCompensation = document.getElementById('preview-compensation');
+    
+    function updatePreview() {
+        previewTitle.textContent = titleInput.value || '[Study title will appear here]';
+        previewDescription.textContent = descriptionInput.value || '[Study description will appear here]';
+        previewDuration.textContent = durationSelect.value || '[Duration will appear here]';
+        previewCompensation.textContent = compensationInput.value || '[Compensation will appear here]';
+    }
+    
+    titleInput.addEventListener('input', updatePreview);
+    descriptionInput.addEventListener('input', updatePreview);
+    durationSelect.addEventListener('change', updatePreview);
+    compensationInput.addEventListener('input', updatePreview);
+    
+    // Form validation
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        const title = titleInput.value.trim();
+        const description = descriptionInput.value.trim();
+        
+        if (!title || !description) {
+            e.preventDefault();
+            alert('Please fill in all required fields (Study Title and Description).');
+            return false;
+        }
+        
+        if (title.length < 10) {
+            e.preventDefault();
+            alert('Study title should be at least 10 characters long.');
+            titleInput.focus();
+            return false;
+        }
+        
+        if (description.length < 50) {
+            e.preventDefault();
+            alert('Study description should be at least 50 characters long to provide adequate information.');
+            descriptionInput.focus();
+            return false;
+        }
+        
+        // Final confirmation
+        if (!confirm(`Are you sure you want to send this study invitation to ${titleInput.closest('form').querySelector('[name="participant_name"]')?.value || 'this participant'}?`)) {
+            e.preventDefault();
+            return false;
+        }
+    });
+});
+</script>
+{% endblock %}

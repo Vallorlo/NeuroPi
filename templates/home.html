@@ -49,17 +49,102 @@
                         </div>
                     </div>
                 </div>
+                {% elif user.is_authenticated %}
+                <!-- Welcome back section for authenticated users -->
+                <div class="welcome-back-container mb-5">
+                    <div class="welcome-card">
+                        <div class="welcome-content">
+                            <div class="welcome-avatar">
+                                {% if user.profile.role == 'trainer' %}
+                                    <i class="bi bi-mortarboard-fill"></i>
+                                {% elif user.profile.role == 'user' %}
+                                    <i class="bi bi-person-circle"></i>
+                                {% else %}
+                                    <i class="bi bi-person"></i>
+                                {% endif %}
+                            </div>
+                            <div class="welcome-text">
+                                <h3>Welcome back, {{ user.username }}!</h3>
+                                <p>
+                                    {% if user.profile.role == 'trainer' %}
+                                        You have full access to all NeuroPi features. Ready to train some neural networks?
+                                    {% elif user.profile.role == 'user' %}
+                                        You can access trials and data collection. Want to upgrade to Trainer for more features?
+                                    {% else %}
+                                        Complete your registration to start collecting EEG data.
+                                    {% endif %}
+                                </p>
+                                <div class="welcome-stats">
+                                    <div class="stat-item">
+                                        <i class="bi bi-person-badge text-primary"></i>
+                                        <span>{{ user.profile.get_role_display }}</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <i class="bi bi-calendar-check text-success"></i>
+                                        <span>Member since {{ user.date_joined|date:"M Y" }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="welcome-actions">
+                                {% if user.profile.role == 'trainer' %}
+                                    <a href="{% url 'pi_main:model_dashboard' %}" class="btn-welcome-primary">
+                                        <i class="bi bi-speedometer2"></i> Dashboard
+                                    </a>
+                                {% elif user.profile.role == 'user' %}
+                                    <a href="{% url 'profile' %}" class="btn-welcome-primary">
+                                        <i class="bi bi-arrow-up-circle"></i> Upgrade Role
+                                    </a>
+                                {% else %}
+                                    <a href="{% url 'register' %}" class="btn-welcome-primary">
+                                        <i class="bi bi-person-plus"></i> Complete Registration
+                                    </a>
+                                {% endif %}
+                                <a href="{% url 'profile' %}" class="btn-welcome-secondary">
+                                    <i class="bi bi-gear"></i> Settings
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 {% endif %}
 
+                {% if user.is_authenticated and user.profile.role != 'guest' %}
                 <div class="d-grid gap-3 d-sm-flex justify-content-sm-center custom-layout">
-                    <a href="{% url 'start_trial' %}" class="btn btn-primary btn-lg px-4">
+                    <a href="{% url 'trials:start_trial' %}" class="btn btn-primary btn-lg px-4">
                         <i class="bi bi-play-circle-fill"></i> Start New Trial
                     </a>
 
-                    <a href="{% url 'completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
+                    <a href="{% url 'trials:completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
                         <i class="bi bi-list-check"></i> View Completed Trials
                     </a>
+
+                    {% if user.profile.role == 'trainer' %}
+                    <a href="{% url 'pi_main:model_dashboard' %}" class="btn btn-success btn-lg px-4">
+                        <i class="bi bi-lightning-charge"></i> Neural Networks
+                    </a>
+                    {% endif %}
                 </div>
+                {% elif not user.is_authenticated %}
+                <div class="d-grid gap-3 d-sm-flex justify-content-sm-center custom-layout">
+                    <a href="{% url 'register' %}" class="btn btn-primary btn-lg px-4">
+                        <i class="bi bi-person-plus-fill"></i> Get Started
+                    </a>
+
+                    <a href="{% url 'about' %}" class="btn btn-outline-light btn-lg px-4">
+                        <i class="bi bi-info-circle"></i> Learn More
+                    </a>
+                </div>
+                {% else %}
+                <div class="d-grid gap-3 d-sm-flex justify-content-sm-center custom-layout">
+                    <a href="{% url 'register' %}" class="btn btn-primary btn-lg px-4">
+                        <i class="bi bi-person-check-fill"></i> Complete Registration
+                    </a>
+
+                    <a href="{% url 'about' %}" class="btn btn-outline-light btn-lg px-4">
+                        <i class="bi bi-info-circle"></i> Learn More
+                    </a>
+                </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -71,10 +156,10 @@
                 <p class="lead text-white mb-5">A comprehensive platform for EEG data collection, processing, and neural network analysis</p>
                 <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
 
-                    <a href="{% url 'start_trial' %}" class="btn btn-primary btn-lg px-4 me-sm-3">
+                    <a href="{% url 'trials:start_trial' %}" class="btn btn-primary btn-lg px-4 me-sm-3">
                         <i class="bi bi-play-circle-fill"></i> Start New Trial
                     </a>
-                    <a href="{% url 'completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
+                    <a href="{% url 'trials:completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
                         <i class="bi bi-list-check"></i> View Completed Trials
                     </a>
                 </div>
@@ -97,7 +182,7 @@
                     </div>
                     <h3>Data Collection</h3>
                     <p>Collect synchronized EEG and audio data across multiple trial stages. Organize experiments by participant, word, and stage.</p>
-                    <a href="{% url 'start_trial' %}" class="feature-btn">
+                    <a href="{% url 'trials:start_trial' %}" class="feature-btn">
                         Start Collection <i class="bi bi-arrow-right"></i>
                     </a>
                 </div>
@@ -376,6 +461,124 @@
 .btn-cta-secondary:hover {
     background-color: rgba(255, 255, 255, 0.25);
     color: white;
+}
+
+/* Welcome Back Section Styles */
+.welcome-back-container {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.welcome-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 249, 250, 0.95));
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.welcome-content {
+    padding: 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.welcome-avatar {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    color: white;
+    box-shadow: 0 8px 25px rgba(13, 110, 253, 0.3);
+    flex-shrink: 0;
+}
+
+.welcome-text {
+    flex: 1;
+    min-width: 300px;
+}
+
+.welcome-text h3 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.welcome-text p {
+    color: #6c757d;
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.welcome-stats {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #495057;
+    font-weight: 500;
+}
+
+.welcome-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+.btn-welcome-primary {
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 50px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(13, 110, 253, 0.3);
+}
+
+.btn-welcome-primary:hover {
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(13, 110, 253, 0.4);
+}
+
+.btn-welcome-secondary {
+    background: rgba(108, 117, 125, 0.1);
+    color: #6c757d;
+    padding: 0.75rem 1.5rem;
+    border-radius: 50px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border: 2px solid rgba(108, 117, 125, 0.2);
+}
+
+.btn-welcome-secondary:hover {
+    background: rgba(108, 117, 125, 0.15);
+    color: #495057;
+    transform: translateY(-2px);
 }
 
 /* Feature Card Styles */

@@ -26,13 +26,14 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('', views.homepage, name='home'),
     path('about/', views.about, name='about'),
-    path('trials/', include('trials.urls')),
+    path('trials/', include('trials.urls', namespace='trials')),
     path('plot/', include('plot.urls')),
     path('preprocessor/', include('preprocessor.urls')),
     path('accounts/', include('accounts.urls')),
     path('motor_imagery/', include('motor_imagery.urls')),
     path('bci/', include('bci.urls')),
-    path('pi_main/', include('pi_main.urls')),
+    path('pi_main/', include('pi_main.urls', namespace='pi_main')),
+    path('user_management/', include('user_management.urls')),
     path('BCI/', bci_redirect),  # Redirect uppercase to lowercase
 ]
 

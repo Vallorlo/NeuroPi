@@ -57,10 +57,10 @@
                             
                             <!-- Navigation buttons -->
                             <div class="d-flex justify-content-between mt-3">
-                                <a href="{% url 'word_trials' %}" class="btn btn-sm btn-outline-primary">
+                                <a href="{% url 'trials:word_trials' %}" class="btn btn-sm btn-outline-primary">
                                     <i class="bi bi-arrow-left"></i> Back to Stages
                                 </a>
-                                <form method="post" action="{% url 'word_trials' %}">
+                                <form method="post" action="{% url 'trials:word_trials' %}">
                                     {% csrf_token %}
                                     <input type="hidden" name="existing_participant" value="{{ participant_name }}">
                                     <input type="hidden" name="microphone_index" value="{{ microphone_index }}">
@@ -125,7 +125,7 @@
                                             Next Attempt ({{ attempt_number|add:"1" }} of {{ max_attempts }})
                                         </a>
                                     {% else %}
-                                        <a href="{% url 'word_trials' %}?word={{ word }}" class="btn btn-success">
+                                        <a href="{% url 'trials:word_trials' %}?word={{ word }}" class="btn btn-success">
                                             <i class="bi bi-arrow-left"></i> Return to Trial List
                                         </a>
                                     {% endif %}
@@ -295,7 +295,7 @@ document.addEventListener('DOMContentLoaded', function() {
             // Make AJAX request to check quality
             const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
             
-            fetch('{% url "check_eeg_connection" %}', {
+            fetch('{% url "trials:check_eeg_connection" %}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/x-www-form-urlencoded',

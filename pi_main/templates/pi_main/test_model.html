@@ -126,17 +126,25 @@
         const form = document.querySelector('form');
         const submitBtn = document.getElementById('submitBtn');
         const loadingOverlay = document.getElementById('loadingOverlay');
-        
-        form.addEventListener('submit', function() {
+
+        form.setAttribute('data-custom-handler', 'true'); // Prevent global handler
+
+        form.addEventListener('submit', function(e) {
+            console.log('Test model form submission attempted');
+
             // Check if either file upload or selection is provided
             const fileInput = document.querySelector('input[name="test_file"]');
             const fileSelect = document.querySelector('select[name="selected_file"]');
-            
+
             if ((fileInput.files.length === 0) && (fileSelect.value === "")) {
+                console.log('No test file provided');
                 alert('Please upload or select a test file.');
+                e.preventDefault();
                 return false;
             }
-            
+
+            console.log('Test model form validation passed');
+
             // Show loading overlay
             loadingOverlay.classList.remove('d-none');
             submitBtn.disabled = true;

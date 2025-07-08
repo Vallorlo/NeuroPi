@@ -1,0 +1,182 @@
+<!--
+trials/templates/trials/visual_trial_setup_page.html
+Separate Visual Trial Setup Page for consistency
+-->
+{% extends "layout.html" %}
+
+{% block title %}
+    Visual Trial Setup
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow">
+        <div class="card-header bg-success text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="mb-0">Visual Word Focus Trial Setup</h1>
+                <a href="{% url 'start_trial' %}" class="btn btn-outline-light">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Trial Selection
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>Visual Word Focus:</strong> Visual word presentation system with randomized display and configurable timing.
+                    </div>
+                </div>
+            </div>
+
+            <form method="post" action="{% url 'visual_trial_setup' %}" id="visualTrialForm">
+                {% csrf_token %}
+                
+                <!-- Participant Selection -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Participant Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="visual_participant_select" class="form-label">Select Existing Participant:</label>
+                                    <select class="form-select" id="visual_participant_select" name="existing_participant">
+                                        <option value="">-- Select Existing Participant --</option>
+                                        {% for participant in existing_participants %}
+                                            <option value="{{ participant }}">{{ participant }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="visual_participant_name" class="form-label">Or Create New Participant:</label>
+                                    <input type="text" class="form-control" id="visual_participant_name" name="participant_name" 
+                                           placeholder="Enter participant name">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Word Set Selection -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Word Set Selection</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if word_sets %}
+                            <div class="row">
+                                {% for word_set in word_sets %}
+                                    <div class="col-md-6 mb-3">
+                                        <div class="card word-set-card h-100">
+                                            <div class="card-body">
+                                                <div class="form-check">
+                                                    <input class="form-check-input" type="radio" name="word_set_id" 
+                                                           id="word_set_{{ word_set.id }}" value="{{ word_set.id }}">
+                                                    <label class="form-check-label w-100" for="word_set_{{ word_set.id }}">
+                                                        <h6 class="card-title">{{ word_set.name }}</h6>
+                                                        <p class="card-text">{{ word_set.description }}</p>
+                                                        <div class="mt-2">
+                                                            <small class="text-muted">Words: </small>
+                                                            {% for word in word_set.words.all|slice:":5" %}
+                                                                <span class="badge bg-secondary me-1">{{ word.word }}</span>
+                                                            {% endfor %}
+                                                            {% if word_set.words.count > 5 %}
+                                                                <span class="badge bg-light text-dark">+{{ word_set.words.count|add:"-5" }} more</span>
+                                                            {% endif %}
+                                                        </div>
+                                                    </label>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                                No word sets available. Please create word sets in the admin panel first.
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Start Button -->
+                {% if word_sets %}
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-lg btn-success" id="startVisualTrialBtn">
+                        <i class="bi bi-eye-fill me-2"></i>Setup Visual Trial
+                    </button>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+</div>
+
+<style>
+.word-set-card {
+    transition: all 0.3s ease;
+    cursor: pointer;
+    border: 2px solid #dee2e6;
+}
+
+.word-set-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    border-color: #28a745;
+}
+
+.word-set-card:has(input:checked) {
+    border-color: #28a745;
+    background-color: #f8fff9;
+    box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
+}
+
+.form-check-label {
+    cursor: pointer;
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.getElementById('visualTrialForm');
+    form.addEventListener('submit', function(e) {
+        const existingParticipant = document.getElementById('visual_participant_select').value;
+        const newParticipant = document.getElementById('visual_participant_name').value.trim();
+        
+        if (!existingParticipant && !newParticipant) {
+            e.preventDefault();
+            alert('Please select an existing participant or enter a new participant name.');
+            return false;
+        }
+        
+        const wordSetSelected = document.querySelector('input[name="word_set_id"]:checked');
+        if (!wordSetSelected) {
+            e.preventDefault();
+            alert('Please select a word set for the trial.');
+            return false;
+        }
+    });
+
+    // Make entire card clickable
+    document.querySelectorAll('.word-set-card').forEach(card => {
+        card.addEventListener('click', function(e) {
+            if (e.target.type !== 'radio') {
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+                
+                // Update visual feedback
+                document.querySelectorAll('.word-set-card').forEach(c => c.classList.remove('selected'));
+                this.classList.add('selected');
+            }
+        });
+    });
+});
+</script>
+
+{% endblock content %}

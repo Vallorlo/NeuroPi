@@ -19,3 +19,4 @@ nvidia-cudnn-cu11==8.6.0.163
 librosa
 noisereduce
 soundfile
+imblearn

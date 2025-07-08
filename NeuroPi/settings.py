@@ -41,12 +41,13 @@ INSTALLED_APPS = [
     'django.contrib.sites',
     'trials',
     'plot.apps.PlotConfig',
-    'preprocessor',
     'accounts',
     'motor_imagery',
     'bci',
     'pi_main',
-    'user_management']
+    'user_management',
+    'eeg_visualization',
+]
 
 
 MIDDLEWARE = [

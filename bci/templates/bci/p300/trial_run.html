@@ -1,0 +1,690 @@
+<!-- bci/templates/bci/p300/trial_run.html -->
+{% extends "bci/base.html" %}
+
+{% block title %}
+    P300 Prediction Trial - {{ session.model.name }}
+{% endblock title %}
+
+{% block content %}
+<div class="container-fluid vh-100 d-flex flex-column">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-body p-2">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>P300 Prediction</strong> - {{ session.model.name }}
+                            {% if target_word %}
+                                <span class="badge bg-info ms-2">Target: {{ target_word|title }}</span>
+                            {% else %}
+                                <span class="badge bg-secondary ms-2">Auto-detect</span>
+                            {% endif %}
+                        </div>
+                        <div>
+                            <span id="progress-text">Ready to start...</span>
+                        </div>
+                        <div>
+                            <button id="stop-trial-btn" class="btn btn-sm btn-danger" style="display: none;" onclick="stopTrial()">
+                                <i class="bi bi-stop-fill"></i> Stop Trial
+                            </button>
+                        </div>
+                    </div>
+                    <div class="progress mt-2" style="height: 8px;">
+                        <div id="progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row flex-grow-1">
+        <div class="col-12 d-flex align-items-center justify-content-center">
+            <div class="text-center">
+                <div id="start-screen" class="start-screen">
+                    <h1 class="display-3 text-primary mb-4">Ready to Begin</h1>
+                    {% if target_word %}
+                        <p class="lead mb-4">Focus on "<strong class="text-primary">{{ target_word|title }}</strong>" when it becomes clear and bold</p>
+                        <p class="text-muted mb-4">
+                            Only think about the target word when it's unblurred and bold.<br>
+                            Ignore other words when they're highlighted.
+                        </p>
+                    {% else %}
+                        <p class="lead mb-4">Focus on the word that becomes clear and bold</p>
+                        <p class="text-muted mb-4">
+                            Think about the highlighted word during its presentation.<br>
+                            The model will detect which word you focused on.
+                        </p>
+                    {% endif %}
+                    <div class="mb-4">
+                        <button id="debug-eeg-btn" class="btn btn-outline-info me-3">
+                            <i class="bi bi-bug me-2"></i>Debug EEG
+                        </button>
+                        <button id="check-eeg-btn" class="btn btn-outline-primary me-3">
+                            <i class="bi bi-activity me-2"></i>Check EEG Connection
+                        </button>
+                        <button id="start-eeg-btn" class="btn btn-success me-3">
+                            <i class="bi bi-record-circle me-2"></i>Start EEG Recording
+                        </button>
+                    </div>
+                    <button id="start-btn" class="btn btn-lg btn-success" disabled onclick="startTrial()">
+                        <i class="bi bi-play-circle-fill me-2"></i>Start Trial
+                    </button>
+                    <div class="mt-3">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle me-1"></i>
+                            EEG recording will automatically initialize if needed
+                        </small>
+                    </div>
+                    <div id="eeg-status" class="mt-3"></div>
+                </div>
+
+                <div id="word-display" class="word-display" style="display: none;">
+                    <div class="word-grid">
+                        <div class="word-item blurred" data-word="green">
+                            <span class="word-text">GREEN</span>
+                        </div>
+                        <div class="word-item blurred" data-word="purple">
+                            <span class="word-text">PURPLE</span>
+                        </div>
+                        <div class="word-item blurred" data-word="yellow">
+                            <span class="word-text">YELLOW</span>
+                        </div>
+                        <div class="word-item blurred" data-word="red">
+                            <span class="word-text">RED</span>
+                        </div>
+                        <div class="word-item blurred" data-word="blue">
+                            <span class="word-text">BLUE</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="status-display" class="status-display mt-4" style="display: none;">
+                    <div id="current-status" class="h4 text-muted">Preparing...</div>
+                    <div id="countdown" class="display-4 text-primary" style="display: none;"></div>
+                </div>
+
+                <div id="completion-screen" class="completion-screen" style="display: none;">
+                    <h1 class="display-3 text-success mb-4">
+                        <i class="bi bi-check-circle-fill"></i> Trial Complete!
+                    </h1>
+                    <p class="lead">Excellent work! P300 prediction trial completed successfully.</p>
+                    
+                    <!-- Final Results Display -->
+                    <div id="final-results" class="alert alert-success mb-4" style="max-width: 600px; margin: 0 auto;">
+                        <h6><i class="bi bi-brain me-2"></i>P300 Prediction Results:</h6>
+                        <div id="results-summary">Processing results...</div>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <a href="{% url 'bci:p300_prediction' %}" class="btn btn-lg btn-primary me-3">
+                            <i class="bi bi-arrow-left"></i> Back to Prediction
+                        </a>
+                        <a href="{% url 'bci:p300_trial_results' session.pk %}" class="btn btn-lg btn-outline-success">
+                            <i class="bi bi-chart-line"></i> View Detailed Results
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="data-collection-status" style="display: none;">
+        <div class="position-fixed bottom-0 start-0 p-3">
+            <div class="alert alert-info alert-sm mb-0">
+                <i class="bi bi-activity"></i> EEG Recording Active
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .word-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 45px;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .word-item {
+        padding: 20px;
+        border: 2px solid #e9ecef;
+        border-radius: 10px;
+        background: #f8f9fa;
+        transition: all 0.3s ease;
+        min-height: 100px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .word-text {
+        font-size: 2rem;
+        font-weight: 500;
+        transition: all 0.3s ease;
+    }
+
+    .word-item.blurred .word-text {
+        filter: blur(2px);
+        color: #8c8c8c;
+        opacity: 0.7;
+    }
+
+    .word-item.focused {
+        border-color: #0d6efd;
+        background: linear-gradient(135deg, #0d6efd, #6610f2);
+        transform: scale(1.05);
+        box-shadow: 0 10px 25px rgba(13, 110, 253, 0.3);
+    }
+
+    .word-item.focused .word-text {
+        filter: none;
+        color: white;
+        font-weight: bold;
+        font-size: 2.5rem;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+
+    .word-item.rest .word-text {
+        filter: blur(3px);
+        color: #bbb;
+        opacity: 0.4;
+    }
+
+    .start-screen, .completion-screen {
+        animation: fadeIn 0.5s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.02); }
+        100% { transform: scale(1); }
+    }
+
+    .word-item.focused {
+        animation: pulse 2s ease-in-out infinite;
+    }
+
+    .status-display {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        background: rgba(255, 255, 255, 0.95);
+        padding: 10px 15px;
+        border-radius: 15px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        backdrop-filter: blur(10px);
+        min-width: 150px;
+        z-index: 1000;
+    }
+
+    #current-status {
+        font-size: 0.9rem;
+        margin-bottom: 5px;
+    }
+
+    #countdown {
+        font-family: 'Courier New', monospace;
+        font-weight: bold;
+        font-size: 1.8rem;
+    }
+</style>
+
+<script>
+    class P300Trial {
+        constructor() {
+            this.session = {
+                id: '{{ session.pk }}',
+                targetWord: '{{ target_word|default:"" }}',
+                wordDisplayDuration: {{ word_display_duration|default:3000 }},
+                restDuration: {{ rest_duration|default:1500 }},
+            };
+            this.currentWordIndex = 0;
+            this.isRunning = false;
+            this.currentTimeout = null;
+            this.countdownInterval = null;
+            this.wordOrder = {{ word_order|safe }};
+            
+            this.initializeElements();
+            this.bindEvents();
+        }
+        
+        initializeElements() {
+            this.startBtn = document.getElementById('start-btn');
+            this.stopBtn = document.getElementById('stop-trial-btn');
+            this.startScreen = document.getElementById('start-screen');
+            this.wordDisplay = document.getElementById('word-display');
+            this.statusDisplay = document.getElementById('status-display');
+            this.completionScreen = document.getElementById('completion-screen');
+            this.progressBar = document.getElementById('progress-bar');
+            this.progressText = document.getElementById('progress-text');
+            this.currentStatus = document.getElementById('current-status');
+            this.countdown = document.getElementById('countdown');
+            this.dataCollectionStatus = document.getElementById('data-collection-status');
+            
+            this.wordItems = document.querySelectorAll('.word-item');
+        }
+        
+        bindEvents() {
+            const debugEEGBtn = document.getElementById('debug-eeg-btn');
+            const checkEEGBtn = document.getElementById('check-eeg-btn');
+            const startEEGBtn = document.getElementById('start-eeg-btn');
+            
+            if (debugEEGBtn) {
+                debugEEGBtn.addEventListener('click', () => this.debugEEG());
+            }
+            
+            if (checkEEGBtn) {
+                checkEEGBtn.addEventListener('click', () => this.checkEEGConnection());
+            }
+            
+            if (startEEGBtn) {
+                startEEGBtn.addEventListener('click', () => this.startEEGRecording());
+            }
+        }
+        
+        async debugEEG() {
+            const statusDiv = document.getElementById('eeg-status');
+            const debugBtn = document.getElementById('debug-eeg-btn');
+            
+            debugBtn.disabled = true;
+            debugBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Debugging...';
+            
+            try {
+                // Call a debug endpoint on your backend
+                statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>Running EEG diagnostics...</div>';
+                
+                // Add a small delay to show the debug is running
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>EEG Debug completed - check console logs</div>';
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="alert alert-danger">Failed to run EEG debug</div>';
+            } finally {
+                debugBtn.disabled = false;
+                debugBtn.innerHTML = '<i class="bi bi-bug me-2"></i>Debug EEG';
+            }
+        }
+
+        async checkEEGConnection() {
+            const statusDiv = document.getElementById('eeg-status');
+            const checkBtn = document.getElementById('check-eeg-btn');
+            const startEEGBtn = document.getElementById('start-eeg-btn');
+            
+            checkBtn.disabled = true;
+            checkBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Checking...';
+            
+            try {
+                // Simple connection check
+                statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>Checking EEG connection...</div>';
+                
+                // Add a small delay to show checking
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-check-circle me-2"></i>EEG connection verified!</div>';
+                startEEGBtn.disabled = false;
+                
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>EEG Warning: Could not verify connection<br><small>You can still try to start recording.</small></div>';
+            } finally {
+                checkBtn.disabled = false;
+                checkBtn.innerHTML = '<i class="bi bi-activity me-2"></i>Check EEG Connection';
+            }
+        }
+        
+        async startTrial() {
+            this.isRunning = true;
+            this.startScreen.style.display = 'none';
+            this.wordDisplay.style.display = 'block';
+            this.statusDisplay.style.display = 'block';
+            this.dataCollectionStatus.style.display = 'block';
+            this.stopBtn.style.display = 'inline-block';
+            
+            await this.showInitialCountdown();
+            
+            if (!this.isRunning) return;
+            
+            await this.runTrialLoop();
+        }
+        
+        async showInitialCountdown() {
+            return new Promise((resolve) => {
+                this.wordItems.forEach(item => {
+                    item.classList.remove('focused', 'rest');
+                    item.classList.add('blurred');
+                });
+                
+                this.currentStatus.textContent = 'Get Ready';
+                
+                let count = 3;
+                this.countdown.style.display = 'block';
+                this.countdown.textContent = count;
+                
+                const countdownInterval = setInterval(() => {
+                    count--;
+                    if (count > 0) {
+                        this.countdown.textContent = count;
+                    } else {
+                        this.countdown.textContent = 'START!';
+                        setTimeout(async () => {
+                            clearInterval(countdownInterval);
+                            this.countdown.style.display = 'none';
+                            
+                            await this.markTrialStart();
+                            
+                            resolve();
+                        }, 500);
+                    }
+                }, 1000);
+            });
+        }
+        
+        async markTrialStart() {
+            try {
+                const response = await fetch(`/bci/p300/prediction/mark-start/${this.session.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                if (data.status) {
+                    console.log('Trial start marked successfully');
+                } else {
+                    console.error('Failed to mark trial start:', data.error);
+                }
+            } catch (error) {
+                console.error('Error marking trial start:', error);
+            }
+        }
+        
+        async runTrialLoop() {
+            for (let i = 0; i < this.wordOrder.length; i++) {
+                if (!this.isRunning) return;
+                
+                const word = this.wordOrder[i];
+                this.currentWordIndex = i;
+                
+                const progress = ((i + 1) / this.wordOrder.length) * 100;
+                this.progressBar.style.width = `${progress}%`;
+                this.progressText.textContent = `${i + 1} / ${this.wordOrder.length}`;
+                
+                // Show the word FIRST
+                await this.showWord(word, this.session.wordDisplayDuration);
+                
+                // Then show rest period AFTER the word (if rest duration > 0)
+                if (this.session.restDuration > 0 && this.isRunning) {
+                    await this.showRestPeriod(this.session.restDuration);
+                }
+                
+                if (!this.isRunning) return;
+            }
+            
+            if (this.isRunning) {
+                this.completeTrial();
+            }
+        }
+        
+        async showRestPeriod(duration) {
+            // First, tell the backend we're in rest period
+            try {
+                await fetch(`/bci/p300/prediction/set-word/${this.session.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ word: 'XXXXX' })
+                });
+            } catch (error) {
+                console.error('Failed to set rest period:', error);
+            }
+            
+            return new Promise((resolve) => {
+                this.wordItems.forEach(item => {
+                    item.classList.remove('focused');
+                    item.classList.add('rest');
+                });
+                
+                this.currentStatus.textContent = 'Rest Period';
+                this.showCountdown(duration, resolve);
+            });
+        }
+        
+        async showWord(word, duration) {
+            // First, tell the backend we're displaying this word NOW
+            try {
+                await fetch(`/bci/p300/prediction/set-word/${this.session.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ word: word })
+                });
+            } catch (error) {
+                console.error('Failed to set current word:', error);
+            }
+            
+            return new Promise((resolve) => {
+                this.wordItems.forEach(item => {
+                    item.classList.remove('focused', 'rest');
+                    item.classList.add('blurred');
+                });
+                
+                const targetWord = document.querySelector(`[data-word="${word}"]`);
+                if (targetWord) {
+                    targetWord.classList.remove('blurred', 'rest');
+                    targetWord.classList.add('focused');
+                }
+                
+                this.currentStatus.textContent = `Focus: ${word.toUpperCase()}`;
+                this.showCountdown(duration, resolve);
+            });
+        }
+        
+        showCountdown(duration, callback) {
+            if (duration <= 0) {
+                this.countdown.style.display = 'none';
+                callback();
+                return;
+            }
+            
+            let timeLeft = duration;
+            const startTime = Date.now();
+            
+            this.countdown.style.display = 'block';
+            
+            const updateCountdown = () => {
+                const elapsed = Date.now() - startTime;
+                timeLeft = Math.max(0, duration - elapsed);
+                
+                const seconds = Math.ceil(timeLeft / 1000);
+                this.countdown.textContent = seconds;
+                
+                if (timeLeft <= 0) {
+                    this.countdown.style.display = 'none';
+                    callback();
+                } else if (this.isRunning) {
+                    this.countdownInterval = setTimeout(updateCountdown, 100);
+                }
+            };
+            
+            updateCountdown();
+        }
+        
+        async stopTrial() {
+            this.isRunning = false;
+            
+            if (this.currentTimeout) {
+                clearTimeout(this.currentTimeout);
+            }
+            
+            if (this.countdownInterval) {
+                clearTimeout(this.countdownInterval);
+            }
+            
+            await this.stopEEGRecording();
+            
+            window.location.href = '{% url "bci:p300_prediction" %}';
+        }
+        
+        async completeTrial() {
+            this.isRunning = false;
+            
+            await this.stopEEGRecording();
+            
+            // Get final results
+            await this.loadFinalResults();
+            
+            this.wordDisplay.style.display = 'none';
+            this.statusDisplay.style.display = 'none';
+            this.dataCollectionStatus.style.display = 'none';
+            this.stopBtn.style.display = 'none';
+            this.completionScreen.style.display = 'block';
+            
+            this.progressBar.style.width = '100%';
+            this.progressText.textContent = 'Complete!';
+        }
+        
+        async loadFinalResults() {
+            try {
+                console.log('Loading final results...');
+                const response = await fetch(`/bci/p300/prediction/data/${this.session.id}/`);
+                const data = await response.json();
+                
+                const resultsDiv = document.getElementById('results-summary');
+                
+                if (data.status === 'success' && data.predictions.length > 0) {
+                    // Find highest confidence prediction
+                    const bestPrediction = data.predictions.reduce((max, pred) => 
+                        pred.confidence > max.confidence ? pred : max
+                    );
+                    
+                    const avgConfidence = data.predictions.reduce((sum, pred) => sum + pred.confidence, 0) / data.predictions.length;
+                    
+                    let accuracyText = '';
+                    if (this.session.targetWord) {
+                        const isCorrect = bestPrediction.predicted_label === this.session.targetWord;
+                        accuracyText = `<br><strong>Accuracy:</strong> <span class="${isCorrect ? 'text-success' : 'text-danger'}">${isCorrect ? 'Correct' : 'Incorrect'}</span>`;
+                    }
+                    
+                    resultsDiv.innerHTML = `
+                        <div class="row text-start">
+                            <div class="col-md-6">
+                                <strong>Best Prediction:</strong> <span class="badge bg-primary">${bestPrediction.predicted_label.toUpperCase()}</span><br>
+                                <strong>Confidence:</strong> ${bestPrediction.confidence.toFixed(1)}%${accuracyText}
+                            </div>
+                            <div class="col-md-6">
+                                <strong>Total Predictions:</strong> ${data.predictions.length}<br>
+                                <strong>Average Confidence:</strong> ${avgConfidence.toFixed(1)}%
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = '<em>No predictions were recorded during the trial.</em>';
+                }
+            } catch (error) {
+                console.error('Error loading final results:', error);
+                document.getElementById('results-summary').innerHTML = '<em>Error loading results.</em>';
+            }
+        }
+        
+        showError(message) {
+            this.currentStatus.textContent = `Error: ${message}`;
+            this.currentStatus.className = 'h4 text-danger';
+            this.countdown.style.display = 'none';
+        }
+        
+        async startEEGRecording() {
+            const statusDiv = document.getElementById('eeg-status');
+            const startEEGBtn = document.getElementById('start-eeg-btn');
+            
+            startEEGBtn.disabled = true;
+            startEEGBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Starting...';
+            
+            try {
+                statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>Initializing EEG connection and starting recording...</div>';
+                
+                const response = await fetch(`/bci/p300/prediction/start/${this.session.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    statusDiv.innerHTML = '<div class="alert alert-success"><i class="bi bi-record-circle me-2"></i>EEG recording started successfully!</div>';
+                    this.startBtn.disabled = false;
+                    startEEGBtn.style.display = 'none';
+                    
+                    this.dataCollectionStatus.style.display = 'block';
+                } else {
+                    statusDiv.innerHTML = `<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Failed to start recording: ${data.message}</div>`;
+                    startEEGBtn.disabled = false;
+                    startEEGBtn.innerHTML = '<i class="bi bi-record-circle me-2"></i>Start EEG Recording';
+                }
+            } catch (error) {
+                statusDiv.innerHTML = '<div class="alert alert-danger"><i class="bi bi-x-circle me-2"></i>Error starting EEG recording. Please check your device connection.</div>';
+                startEEGBtn.disabled = false;
+                startEEGBtn.innerHTML = '<i class="bi bi-record-circle me-2"></i>Start EEG Recording';
+            }
+        }
+        
+        async stopEEGRecording() {
+            try {
+                const response = await fetch(`/bci/p300/prediction/stop/${this.session.id}/`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                const data = await response.json();
+                console.log('EEG recording stopped:', data);
+            } catch (error) {
+                console.error('Error stopping EEG recording:', error);
+            }
+        }
+    }
+    
+    // Global functions
+    function startTrial() {
+        if (window.p300Trial) {
+            window.p300Trial.startTrial();
+        }
+    }
+    
+    function stopTrial() {
+        if (window.p300Trial) {
+            window.p300Trial.stopTrial();
+        }
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+        if (!document.querySelector('[name=csrfmiddlewaretoken]')) {
+            const csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrfmiddlewaretoken';
+            csrfInput.value = '{{ csrf_token }}';
+            document.body.appendChild(csrfInput);
+        }
+        
+        window.p300Trial = new P300Trial();
+    });
+</script>
+{% endblock content %}

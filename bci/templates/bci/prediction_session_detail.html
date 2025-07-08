@@ -24,14 +24,48 @@
                 </span>
             </h1>
             <div>
-                {% if session.status == 'stopped' %}
-                <a href="{% url 'bci:start_prediction' session.pk %}" class="btn btn-success">
-                    <i class="fas fa-play me-1"></i>Start Prediction
-                </a>
-                {% elif session.status == 'running' %}
-                <a href="{% url 'bci:stop_prediction' session.pk %}" class="btn btn-danger">
-                    <i class="fas fa-stop me-1"></i>Stop Prediction
-                </a>
+                {% if is_p300 %}
+                    <!-- P300 specific buttons -->
+                    {% if session.status == 'stopped' %}
+                    <a href="{% url 'bci:p300_trial_run' session.pk %}" class="btn btn-success">
+                        <i class="fas fa-play me-1"></i>Start P300 Trial
+                    </a>
+                    {% elif session.status == 'running' %}
+                    <a href="{% url 'bci:stop_p300_prediction' session.pk %}" class="btn btn-danger">
+                        <i class="fas fa-stop me-1"></i>Stop P300 Trial
+                    </a>
+                    {% endif %}
+                    
+                    <!-- Always show trial results link for P300 if predictions exist -->
+                    {% if total_predictions > 0 %}
+                    <a href="{% url 'bci:p300_trial_results' session.pk %}" class="btn btn-outline-info ms-2">
+                        <i class="fas fa-chart-line me-1"></i>View Results
+                    </a>
+                    {% endif %}
+                    
+                {% elif is_motor_imagery %}
+                    <!-- Motor Imagery specific buttons -->
+                    {% if session.status == 'stopped' %}
+                    <a href="{% url 'bci:start_prediction' session.pk %}" class="btn btn-success">
+                        <i class="fas fa-play me-1"></i>Start Prediction
+                    </a>
+                    {% elif session.status == 'running' %}
+                    <a href="{% url 'bci:stop_prediction' session.pk %}" class="btn btn-danger">
+                        <i class="fas fa-stop me-1"></i>Stop Prediction
+                    </a>
+                    {% endif %}
+                    
+                {% else %}
+                    <!-- Generic fallback -->
+                    {% if session.status == 'stopped' %}
+                    <a href="{% url 'bci:start_prediction' session.pk %}" class="btn btn-success">
+                        <i class="fas fa-play me-1"></i>Start Prediction
+                    </a>
+                    {% elif session.status == 'running' %}
+                    <a href="{% url 'bci:stop_prediction' session.pk %}" class="btn btn-danger">
+                        <i class="fas fa-stop me-1"></i>Stop Prediction
+                    </a>
+                    {% endif %}
                 {% endif %}
             </div>
         </div>
@@ -48,6 +82,24 @@
                 </h5>
             </div>
             <div class="card-body">
+                <div class="col-md-6">
+                    <p><strong>Approach:</strong> 
+                        {% if is_p300 %}
+                            <span class="badge bg-info">P300 Event-Related Potential</span>
+                        {% elif is_motor_imagery %}
+                            <span class="badge bg-success">Motor Imagery</span>
+                        {% else %}
+                            {{ session.model.approach|title }}
+                        {% endif %}
+                    </p>
+                    
+                    {% if is_p300 %}
+                    <p><strong>Trial Type:</strong> Word Focus Detection</p>
+                    <p><strong>Target Words:</strong> Green, Purple, Yellow, Red, Blue</p>
+                    {% elif is_motor_imagery %}
+                    <p><strong>Classes:</strong> {{ session.model.class_labels|join:", " }}</p>
+                    {% endif %}
+                </div>
                 <div class="row">
                     <div class="col-md-6">
                         <p><strong>Model:</strong> {{ session.model.name }}</p>
@@ -155,7 +207,7 @@
                 </h5>
             </div>
             <div class="card-body">
-                <canvas id="confidenceChart" height="100"></canvas>
+                <canvas id="confidenceChart" height="400"></canvas>
             </div>
         </div>
     </div>
@@ -206,58 +258,91 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
 <script>
 let confidenceChart;
 let isSessionRunning = {{ session.status|yesno:'true,false,false' }};
 const sessionId = '{{ session.pk }}';
 const classLabels = {{ session.model.class_labels|safe }};
 
+// Wait for Chart.js to be fully loaded
+function waitForChart(callback) {
+    if (typeof Chart !== 'undefined') {
+        callback();
+    } else {
+        setTimeout(() => waitForChart(callback), 100);
+    }
+}
+
 // Initialize confidence chart
 function initConfidenceChart() {
-    const ctx = document.getElementById('confidenceChart').getContext('2d');
-    confidenceChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: classLabels.map((label, index) => ({
-                label: label,
-                data: [],
-                borderColor: `hsl(${index * 360 / classLabels.length}, 70%, 50%)`,
-                backgroundColor: `hsla(${index * 360 / classLabels.length}, 70%, 50%, 0.1)`,
-                fill: false,
-                tension: 0.4
-            }))
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    max: 100,
-                    title: {
-                        display: true,
-                        text: 'Confidence (%)'
-                    }
-                },
-                x: {
-                    title: {
-                        display: true,
-                        text: 'Time'
-                    }
-                }
+    console.log('Initializing confidence chart...');
+    
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js is not loaded!');
+        return;
+    }
+    
+    const canvas = document.getElementById('confidenceChart');
+    if (!canvas) {
+        console.error('Canvas element not found!');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
+    
+    try {
+        confidenceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: classLabels.map((label, index) => ({
+                    label: label,
+                    data: [],
+                    borderColor: `hsl(${index * 360 / classLabels.length}, 70%, 50%)`,
+                    backgroundColor: `hsla(${index * 360 / classLabels.length}, 70%, 50%, 0.1)`,
+                    fill: false,
+                    tension: 0.4,
+                    pointRadius: 2,
+                    pointHoverRadius: 4
+                }))
             },
-            plugins: {
-                legend: {
-                    position: 'top',
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+                        title: {
+                            display: true,
+                            text: 'Confidence (%)'
+                        }
+                    },
+                    x: {
+                        title: {
+                            display: true,
+                            text: 'Time'
+                        }
+                    }
                 },
-                title: {
-                    display: true,
-                    text: 'Real-time Confidence History'
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    },
+                    title: {
+                        display: true,
+                        text: 'Real-time Confidence History'
+                    }
                 }
             }
-        }
-    });
+        });
+        
+        console.log('Chart initialized successfully');
+    } catch (error) {
+        console.error('Error creating chart:', error);
+    }
 }
 
 // Update real-time display
@@ -266,15 +351,23 @@ function updateRealtimeDisplay(data) {
         const latest = data.predictions[0];
         
         // Update current prediction
-        document.getElementById('current-prediction').textContent = latest.predicted_label;
-        document.getElementById('current-confidence').textContent = `Confidence: ${(latest.confidence * 100).toFixed(1)}%`;
+        const predElement = document.getElementById('current-prediction');
+        const confElement = document.getElementById('current-confidence');
+        
+        if (predElement) predElement.textContent = latest.predicted_label;
+        if (confElement) confElement.textContent = `Confidence: ${(latest.confidence * 100).toFixed(1)}%`;
         
         // Update probability bars
-        latest.probabilities.forEach((prob, index) => {
-            const percentage = (prob * 100).toFixed(1);
-            document.getElementById(`prob-${index}`).style.width = `${percentage}%`;
-            document.getElementById(`prob-${index}-text`).textContent = `${percentage}%`;
-        });
+        if (latest.probabilities && Array.isArray(latest.probabilities)) {
+            latest.probabilities.forEach((prob, index) => {
+                const percentage = (prob * 100).toFixed(1);
+                const barElement = document.getElementById(`prob-${index}`);
+                const textElement = document.getElementById(`prob-${index}-text`);
+                
+                if (barElement) barElement.style.width = `${percentage}%`;
+                if (textElement) textElement.textContent = `${percentage}%`;
+            });
+        }
         
         // Add to predictions table
         addPredictionToTable(latest);
@@ -287,6 +380,8 @@ function updateRealtimeDisplay(data) {
 // Add prediction to table
 function addPredictionToTable(prediction) {
     const tbody = document.querySelector('#predictions-table tbody');
+    if (!tbody) return;
+    
     const time = new Date(prediction.timestamp).toLocaleTimeString();
     
     const row = tbody.insertRow(0);
@@ -294,7 +389,7 @@ function addPredictionToTable(prediction) {
         <td>${time}</td>
         <td><span class="badge bg-primary">${prediction.predicted_label}</span></td>
         <td>${(prediction.confidence * 100).toFixed(1)}%</td>
-        <td>${prediction.prediction_time_ms.toFixed(1)}ms</td>
+        <td>${prediction.prediction_time_ms ? prediction.prediction_time_ms.toFixed(1) : 'N/A'}ms</td>
     `;
     
     // Keep only last 20 rows
@@ -305,13 +400,19 @@ function addPredictionToTable(prediction) {
 
 // Update confidence chart
 function updateConfidenceChart(prediction) {
+    if (!confidenceChart) return;
+    
     const time = new Date(prediction.timestamp).toLocaleTimeString();
     
     confidenceChart.data.labels.push(time);
     
-    prediction.probabilities.forEach((prob, index) => {
-        confidenceChart.data.datasets[index].data.push(prob * 100);
-    });
+    if (prediction.probabilities && Array.isArray(prediction.probabilities)) {
+        prediction.probabilities.forEach((prob, index) => {
+            if (confidenceChart.data.datasets[index]) {
+                confidenceChart.data.datasets[index].data.push(prob * 100);
+            }
+        });
+    }
     
     // Keep only last 50 points
     if (confidenceChart.data.labels.length > 50) {
@@ -334,9 +435,10 @@ function fetchPredictionData() {
             updateRealtimeDisplay(data);
             isSessionRunning = data.session_status === 'running';
             
-            if (!isSessionRunning) {
-                document.getElementById('live-indicator').textContent = 'STOPPED';
-                document.getElementById('live-indicator').className = 'badge bg-secondary ms-2';
+            const indicator = document.getElementById('live-indicator');
+            if (!isSessionRunning && indicator) {
+                indicator.textContent = 'STOPPED';
+                indicator.className = 'badge bg-secondary ms-2';
             }
         })
         .catch(error => {
@@ -349,39 +451,50 @@ function loadHistoricalData() {
     fetch(`{% url 'bci:prediction_history' session.pk %}?limit=50`)
         .then(response => response.json())
         .then(data => {
-            data.history.forEach(item => {
-                const time = new Date(item.timestamp).toLocaleTimeString();
-                confidenceChart.data.labels.push(time);
-                
-                item.probabilities.forEach((prob, index) => {
-                    confidenceChart.data.datasets[index].data.push(prob * 100);
+            if (confidenceChart && data.history) {
+                data.history.forEach(item => {
+                    const time = new Date(item.timestamp).toLocaleTimeString();
+                    confidenceChart.data.labels.push(time);
+                    
+                    if (item.probabilities && Array.isArray(item.probabilities)) {
+                        item.probabilities.forEach((prob, index) => {
+                            if (confidenceChart.data.datasets[index]) {
+                                confidenceChart.data.datasets[index].data.push(prob * 100);
+                            }
+                        });
+                    }
                 });
-            });
-            
-            confidenceChart.update();
+                
+                confidenceChart.update();
+            }
         })
         .catch(error => {
             console.error('Error loading historical data:', error);
         });
 }
 
-// Initialize on page load
+// Initialize everything when DOM and Chart.js are ready
 document.addEventListener('DOMContentLoaded', function() {
-    initConfidenceChart();
-    loadHistoricalData();
+    console.log('DOM loaded, waiting for Chart.js...');
     
-    if (isSessionRunning) {
-        // Start real-time updates
-        setInterval(fetchPredictionData, 1000);
+    waitForChart(function() {
+        console.log('Chart.js is ready, initializing...');
+        initConfidenceChart();
+        loadHistoricalData();
         
-        // Animate live indicator
-        setInterval(() => {
-            const indicator = document.getElementById('live-indicator');
-            if (indicator) {
-                indicator.style.opacity = indicator.style.opacity === '0.5' ? '1' : '0.5';
-            }
-        }, 1000);
-    }
+        if (isSessionRunning) {
+            // Start real-time updates
+            setInterval(fetchPredictionData, 1000);
+            
+            // Animate live indicator
+            setInterval(() => {
+                const indicator = document.getElementById('live-indicator');
+                if (indicator && isSessionRunning) {
+                    indicator.style.opacity = indicator.style.opacity === '0.5' ? '1' : '0.5';
+                }
+            }, 1000);
+        }
+    });
 });
 </script>
 {% endblock %}

@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EEG Visualization - صفحة 333</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px 20px;
+            border-radius: 20px;
+            margin-bottom: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .header h1 {
+            font-size: 3em;
+            color: #2c3e50;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .header h2 {
+            font-size: 1.5em;
+            color: #7f8c8d;
+            margin-bottom: 20px;
+        }
+
+        .visualization-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .feature-card {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            cursor: pointer;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-10px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        }
+
+        .feature-icon {
+            width: 80px;
+            height: 80px;
+            background: linear-gradient(135deg, #00b894, #00a085);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 20px;
+            font-size: 2em;
+            color: white;
+        }
+
+        .feature-card h3 {
+            font-size: 1.8em;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+
+        .feature-card p {
+            color: #7f8c8d;
+            font-size: 1.1em;
+            line-height: 1.6;
+            margin-bottom: 20px;
+        }
+
+        .feature-btn {
+            background: linear-gradient(45deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+        }
+
+        .feature-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(52, 152, 219, 0.4);
+        }
+
+        .eeg-visualization-card {
+            background: linear-gradient(135deg, #74b9ff, #0984e3);
+            color: white;
+        }
+
+        .eeg-visualization-card .feature-icon {
+            background: linear-gradient(135deg, #00b894, #00a085);
+        }
+
+        .eeg-visualization-card h3 {
+            color: white;
+        }
+
+        .eeg-visualization-card p {
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .eeg-visualization-card .feature-btn {
+            background: linear-gradient(45deg, #00b894, #00a085);
+            box-shadow: 0 4px 15px rgba(0, 184, 148, 0.3);
+        }
+
+        .eeg-visualization-card .feature-btn:hover {
+            box-shadow: 0 6px 20px rgba(0, 184, 148, 0.4);
+        }
+
+        .page-333 {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .page-333 h2 {
+            font-size: 2.5em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+        }
+
+        .page-333 p {
+            font-size: 1.3em;
+            color: #7f8c8d;
+            line-height: 1.8;
+        }
+
+        .back-btn {
+            background: linear-gradient(45deg, #e74c3c, #c0392b);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+            margin-top: 20px;
+        }
+
+        .back-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Main Page -->
+        <div id="mainPage">
+            <div class="header">
+                <h1>🧠 EEG Visualization</h1>
+                <h2>نظام تصور إشارات الدماغ المتقدم</h2>
+            </div>
+
+            <div class="visualization-grid">
+                <!-- Original Visualization Card -->
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        📊
+                    </div>
+                    <h3>Visualization</h3>
+                    <p>Interactive EEG data visualization with customizable plots, channel comparisons, and event analysis.</p>
+                    <button class="feature-btn">Visualize Data →</button>
+                </div>
+
+                <!-- New EEG Visualization Card -->
+                <div class="feature-card eeg-visualization-card">
+                    <div class="feature-icon">
+                        🧠
+                    </div>
+                    <h3>EEG Visualization</h3>
+                    <p>Advanced EEG signal visualization with real-time monitoring, frequency analysis, and brain activity mapping.</p>
+                    <button class="feature-btn" onclick="openEEGVisualization()">EEG Visualize →</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Page 333 -->
+        <div id="page333" class="page-333 hidden">
+            <h2>🎯 صفحة 333 - EEG Visualization</h2>
+            <p>مرحباً بك في صفحة EEG Visualization المتقدمة!</p>
+            <p>هنا يمكنك الوصول إلى جميع أدوات تصور إشارات الدماغ الكهربائية.</p>
+            
+            <div style="margin: 30px 0;">
+                <div style="background: linear-gradient(135deg, #74b9ff, #0984e3); color: white; padding: 20px; border-radius: 15px; margin: 20px 0;">
+                    <h3>🔬 ميزات التصور المتقدمة</h3>
+                    <ul style="list-style: none; padding: 0; text-align: right;">
+                        <li>📈 تصور الإشارات في الوقت الفعلي</li>
+                        <li>🎨 خرائط النشاط الدماغي</li>
+                        <li>📊 تحليل الترددات الطيفية</li>
+                        <li>🔍 مقارنة القنوات المختلفة</li>
+                        <li>⚡ معالجة البيانات التفاعلية</li>
+                    </ul>
+                </div>
+            </div>
+
+            <button class="back-btn" onclick="goBack()">← العودة للصفحة الرئيسية</button>
+        </div>
+    </div>
+
+    <script>
+        function openEEGVisualization() {
+            document.getElementById('mainPage').classList.add('hidden');
+            document.getElementById('page333').classList.remove('hidden');
+            document.getElementById('page333').classList.add('fade-in');
+        }
+
+        function goBack() {
+            document.getElementById('page333').classList.add('hidden');
+            document.getElementById('mainPage').classList.remove('hidden');
+            document.getElementById('mainPage').classList.add('fade-in');
+        }
+    </script>
+</body>
+</html>

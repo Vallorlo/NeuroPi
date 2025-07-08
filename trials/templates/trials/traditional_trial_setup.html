@@ -1,0 +1,188 @@
+<!--
+trials/templates/trials/traditional_trial_setup.html
+Traditional Trial Setup Page
+-->
+{% extends "layout.html" %}
+
+{% block title %}
+    Traditional Trial Setup
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="card shadow">
+        <div class="card-header bg-primary text-white">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="mb-0">Traditional Trial Setup</h1>
+                <a href="{% url 'start_trial' %}" class="btn btn-outline-light">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Trial Selection
+                </a>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>Traditional Trials:</strong> Multi-stage trials with vocal, non-vocal, and motor tasks including microphone recording.
+                    </div>
+                </div>
+            </div>
+
+            <form method="post" action="{% url 'word_trials' %}" id="traditionalTrialForm">
+                {% csrf_token %}
+                
+                <!-- Participant Selection -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Participant Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="participant_select" class="form-label">Select Existing Participant:</label>
+                                    <select class="form-select" id="participant_select" name="existing_participant">
+                                        <option value="">-- Select Existing Participant --</option>
+                                        {% for participant in existing_participants %}
+                                            <option value="{{ participant }}">{{ participant }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="participant_name" class="form-label">Or Create New Participant:</label>
+                                    <input type="text" class="form-control" id="participant_name" name="participant_name" 
+                                           placeholder="Enter participant name">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Microphone Selection -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Audio Setup</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <label for="microphone_select" class="form-label">Select Microphone:</label>
+                                <select class="form-select" id="microphone_select" name="microphone_index">
+                                    <option value="">Loading microphones...</option>
+                                </select>
+                            </div>
+                            <div class="col-md-4 d-flex align-items-end">
+                                <button type="button" class="btn btn-outline-primary" id="refresh_mics">
+                                    <i class="bi bi-arrow-clockwise me-2"></i>Refresh
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Word Selection -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Word Selection</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            {% for word in unique_words %}
+                                <div class="col-md-3 col-sm-6 mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="radio" name="word" 
+                                               id="word_{{ forloop.counter }}" value="{{ word }}">
+                                        <label class="form-check-label" for="word_{{ forloop.counter }}">
+                                            <span class="badge bg-primary">{{ word }}</span>
+                                        </label>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Start Button -->
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-lg btn-primary" id="startTraditionalTrialBtn">
+                        <i class="bi bi-play-circle-fill me-2"></i>Start Traditional Trial
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadMicrophones();
+    
+    // Form validation
+    const form = document.getElementById('traditionalTrialForm');
+    form.addEventListener('submit', function(e) {
+        const existingParticipant = document.getElementById('participant_select').value;
+        const newParticipant = document.getElementById('participant_name').value.trim();
+        
+        if (!existingParticipant && !newParticipant) {
+            e.preventDefault();
+            alert('Please select an existing participant or enter a new participant name.');
+            return false;
+        }
+        
+        const wordSelected = document.querySelector('input[name="word"]:checked');
+        if (!wordSelected) {
+            e.preventDefault();
+            alert('Please select a word for the trial.');
+            return false;
+        }
+    });
+
+    // Refresh microphones button
+    document.getElementById('refresh_mics').addEventListener('click', loadMicrophones);
+});
+
+function loadMicrophones() {
+    const select = document.getElementById('microphone_select');
+    const refreshBtn = document.getElementById('refresh_mics');
+    
+    select.innerHTML = '<option value="">Loading microphones...</option>';
+    refreshBtn.disabled = true;
+    
+    fetch('/trials/get_microphones/')
+        .then(response => response.json())
+        .then(data => {
+            select.innerHTML = '';
+            
+            if (data.success && data.microphones.length > 0) {
+                data.microphones.forEach(mic => {
+                    const option = document.createElement('option');
+                    option.value = mic.index;
+                    option.textContent = `${mic.name} (Device ${mic.index})`;
+                    select.appendChild(option);
+                });
+                
+                // Select first microphone by default
+                if (data.microphones.length > 0) {
+                    select.selectedIndex = 0;
+                }
+            } else {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No microphones found';
+                select.appendChild(option);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading microphones:', error);
+            select.innerHTML = '<option value="">Error loading microphones</option>';
+        })
+        .finally(() => {
+            refreshBtn.disabled = false;
+        });
+}
+</script>
+
+{% endblock content %}

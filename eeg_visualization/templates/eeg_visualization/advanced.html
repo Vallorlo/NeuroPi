@@ -1,0 +1,238 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Advanced EEG Visualization
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="mb-0">🧠 Advanced EEG Visualization Dashboard</h2>
+                </div>
+                <div class="card-body">
+                    <!-- Control Panel -->
+                    <div class="row mb-4">
+                        <div class="col-md-12">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Welcome to the Advanced Control Panel!</strong>
+                                Here you can access all advanced EEG signal visualization tools.
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Visualization Controls -->
+                    <div class="row mb-4">
+                        <div class="col-md-3">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>⚙️ Visualization Settings</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-3">
+                                        <label class="form-label">Visualization Type</label>
+                                        <select class="form-select" id="visualizationType">
+                                            <option value="realtime">Real-time</option>
+                                            <option value="frequency">Frequency Analysis</option>
+                                            <option value="topographic">Topographic Map</option>
+                                            <option value="connectivity">Neural Connectivity</option>
+                                        </select>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label">Sampling Rate</label>
+                                        <select class="form-select" id="samplingRate">
+                                            <option value="128">128 Hz</option>
+                                            <option value="256">256 Hz</option>
+                                            <option value="512">512 Hz</option>
+                                        </select>
+                                    </div>
+                                    <button class="btn btn-primary w-100" onclick="startVisualization()">
+                                        <i class="bi bi-play"></i> Start Visualization
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-9">
+                            <div class="card">
+                                <div class="card-header d-flex justify-content-between">
+                                    <h5>📊 Main Visualization Area</h5>
+                                    <div>
+                                        <button class="btn btn-sm btn-success" onclick="exportData()">
+                                            <i class="bi bi-download"></i> Export
+                                        </button>
+                                        <button class="btn btn-sm btn-warning" onclick="resetView()">
+                                            <i class="bi bi-arrow-clockwise"></i> Reset
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="card-body">
+                                    <div id="eegVisualizationArea" style="height: 400px; background: #f8f9fa; border-radius: 8px; display: flex; align-items: center; justify-content: center;">
+                                        <div class="text-center text-muted">
+                                            <i class="bi bi-activity" style="font-size: 3rem;"></i>
+                                            <h4>Visualization Area</h4>
+                                            <p>Click "Start Visualization" to display data</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Statistics Panel -->
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h5>📈 Data Statistics</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row">
+                                        <div class="col-md-3">
+                                            <div class="stat-card bg-primary text-white">
+                                                <div class="stat-icon">
+                                                    <i class="bi bi-broadcast"></i>
+                                                </div>
+                                                <div class="stat-info">
+                                                    <h3 id="channelCount">14</h3>
+                                                    <p>Active Channels</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="stat-card bg-success text-white">
+                                                <div class="stat-icon">
+                                                    <i class="bi bi-speedometer2"></i>
+                                                </div>
+                                                <div class="stat-info">
+                                                    <h3 id="samplingRateDisplay">128</h3>
+                                                    <p>Sampling Rate Hz</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="stat-card bg-warning text-white">
+                                                <div class="stat-icon">
+                                                    <i class="bi bi-clock"></i>
+                                                </div>
+                                                <div class="stat-info">
+                                                    <h3 id="recordingTime">00:00</h3>
+                                                    <p>Recording Time</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-3">
+                                            <div class="stat-card bg-info text-white">
+                                                <div class="stat-icon">
+                                                    <i class="bi bi-signal"></i>
+                                                </div>
+                                                <div class="stat-info">
+                                                    <h3 id="signalQuality">Good</h3>
+                                                    <p>Signal Quality</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.stat-card {
+    padding: 1.5rem;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.stat-icon {
+    font-size: 2.5rem;
+    margin-left: 1rem;
+}
+
+.stat-info h3 {
+    margin: 0;
+    font-size: 2rem;
+    font-weight: bold;
+}
+
+.stat-info p {
+    margin: 0;
+    opacity: 0.9;
+}
+
+#eegVisualizationArea {
+    border: 2px dashed #dee2e6;
+    transition: all 0.3s ease;
+}
+
+#eegVisualizationArea.active {
+    border-color: #0d6efd;
+    background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+}
+</style>
+
+<script>
+function startVisualization() {
+    const area = document.getElementById('eegVisualizationArea');
+    area.classList.add('active');
+    area.innerHTML = `
+        <div class="text-center">
+            <div class="spinner-border text-primary mb-3" role="status">
+                <span class="visually-hidden">Loading...</span>
+            </div>
+            <h4 class="text-primary">Loading data...</h4>
+            <p class="text-muted">Preparing EEG signal visualization</p>
+        </div>
+    `;
+
+    // Simulate loading
+    setTimeout(() => {
+        area.innerHTML = `
+            <div class="text-center text-success">
+                <i class="bi bi-check-circle" style="font-size: 3rem;"></i>
+                <h4>Visualization started successfully!</h4>
+                <p>Data ready for display</p>
+                <small class="text-muted">This is a demo example - will be connected to real EEG data</small>
+            </div>
+        `;
+    }, 2000);
+}
+
+function exportData() {
+    alert('Data will be exported soon!');
+}
+
+function resetView() {
+    const area = document.getElementById('eegVisualizationArea');
+    area.classList.remove('active');
+    area.innerHTML = `
+        <div class="text-center text-muted">
+            <i class="bi bi-activity" style="font-size: 3rem;"></i>
+            <h4>Visualization Area</h4>
+            <p>Click "Start Visualization" to display data</p>
+        </div>
+    `;
+}
+
+// Update time counter
+let startTime = Date.now();
+setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    const minutes = Math.floor(elapsed / 60);
+    const seconds = elapsed % 60;
+    document.getElementById('recordingTime').textContent = 
+        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+}, 1000);
+</script>
+{% endblock %}

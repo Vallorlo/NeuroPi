@@ -1,0 +1,305 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    EEG Visualization - Advanced Brain Signal Analysis
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-5">
+    <!-- Header Section -->
+    <div class="row mb-5">
+        <div class="col-lg-12 text-center">
+            <div class="header-card">
+                <h1 class="display-4 text-white mb-3">🧠 EEG Visualization</h1>
+                <h2 class="h3 text-white-50 mb-4">Advanced Brain Signal Analysis System</h2>
+                <p class="lead text-white">Welcome to the Advanced EEG Visualization Platform!</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MNE Visualization Tools Grid -->
+    <div class="row g-4 mb-5">
+        <!-- CSV Upload -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="viz-card" onclick="openVisualization('upload')">
+                <div class="viz-icon bg-success">
+                    <i class="bi bi-cloud-upload"></i>
+                </div>
+                <h4>📁 Upload CSV Data</h4>
+                <p>Load your EEG data files</p>
+                <div class="viz-badge">Data Upload</div>
+            </div>
+        </div>
+
+        <!-- Interactive Plots -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="viz-card" onclick="openVisualization('interactive')">
+                <div class="viz-icon bg-primary">
+                    <i class="bi bi-graph-up-arrow"></i>
+                </div>
+                <h4>📊 Interactive Plots</h4>
+                <p>raw.plot() - Direct data control</p>
+                <div class="viz-badge">Interactive</div>
+            </div>
+        </div>
+
+        <!-- Topographic Maps -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="viz-card" onclick="openVisualization('topographic')">
+                <div class="viz-icon bg-info">
+                    <i class="bi bi-globe"></i>
+                </div>
+                <h4>🗺️ Topographic Maps</h4>
+                <p>plot_topomap() - Activity distribution</p>
+                <div class="viz-badge">Topomap</div>
+            </div>
+        </div>
+
+        <!-- Time-Frequency Analysis -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="viz-card" onclick="openVisualization('timefreq')">
+                <div class="viz-icon bg-warning">
+                    <i class="bi bi-soundwave"></i>
+                </div>
+                <h4>⚡ Time-Frequency Analysis</h4>
+                <p>tfr.plot() - Spectral analysis</p>
+                <div class="viz-badge">Time-Freq</div>
+            </div>
+        </div>
+
+        <!-- 3D Visualization -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="viz-card" onclick="openVisualization('3d')">
+                <div class="viz-icon bg-dark">
+                    <i class="bi bi-box"></i>
+                </div>
+                <h4>🧊 3D Visualization</h4>
+                <p>plot_alignment() - Brain model</p>
+                <div class="viz-badge">3D</div>
+            </div>
+        </div>
+
+        <!-- ICA Components -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="viz-card" onclick="openVisualization('ica')">
+                <div class="viz-icon bg-danger">
+                    <i class="bi bi-diagram-2"></i>
+                </div>
+                <h4>🔍 ICA Components</h4>
+                <p>ica.plot_components() - Signal separation</p>
+                <div class="viz-badge">ICA</div>
+            </div>
+        </div>
+
+        <!-- Statistical Visualization -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="viz-card" onclick="openVisualization('stats')">
+                <div class="viz-icon bg-secondary">
+                    <i class="bi bi-bar-chart-line"></i>
+                </div>
+                <h4>📈 Statistical Plots</h4>
+                <p>cluster_test() - Cluster analysis</p>
+                <div class="viz-badge">Stats</div>
+            </div>
+        </div>
+
+        <!-- Brain Connectivity -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="viz-card" onclick="openVisualization('connectivity')">
+                <div class="viz-icon bg-purple">
+                    <i class="bi bi-share"></i>
+                </div>
+                <h4>🌐 Brain Connectivity</h4>
+                <p>plot_connectivity() - Network analysis</p>
+                <div class="viz-badge">Network</div>
+            </div>
+        </div>
+
+        <!-- Power Spectral Density -->
+        <div class="col-lg-3 col-md-4 col-sm-6">
+            <div class="viz-card" onclick="openVisualization('psd')">
+                <div class="viz-icon bg-light text-dark">
+                    <i class="bi bi-activity"></i>
+                </div>
+                <h4>📊 Power Spectral Density</h4>
+                <p>plot_psd() - Frequency analysis</p>
+                <div class="viz-badge">PSD</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="row">
+        <div class="col-lg-12 text-center">
+            <div class="action-buttons">
+                <a href="{% url 'eeg_visualization:advanced' %}" class="btn btn-primary btn-lg me-3">
+                    <i class="bi bi-rocket"></i> Start Advanced Visualization
+                </a>
+                <a href="{% url 'eeg_view' %}" class="btn btn-outline-light btn-lg me-3">
+                    <i class="bi bi-graph-up"></i> Traditional Visualization
+                </a>
+                <a href="{% url 'home' %}" class="btn btn-secondary btn-lg">
+                    <i class="bi bi-house"></i> Back to Home
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.header-card {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 3rem 2rem;
+    border-radius: 20px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+    margin-bottom: 2rem;
+}
+
+.viz-card {
+    background: rgba(255, 255, 255, 0.95);
+    border-radius: 15px;
+    padding: 1.5rem;
+    text-align: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.viz-card:hover {
+    transform: translateY(-8px) scale(1.02);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+}
+
+.viz-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    transform: scaleX(0);
+    transition: transform 0.3s ease;
+}
+
+.viz-card:hover::before {
+    transform: scaleX(1);
+}
+
+.viz-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    font-size: 1.5rem;
+    color: white;
+    transition: all 0.3s ease;
+}
+
+.viz-card:hover .viz-icon {
+    transform: scale(1.1) rotate(5deg);
+}
+
+.viz-card h4 {
+    color: #2c3e50;
+    margin-bottom: 0.8rem;
+    font-size: 1.1rem;
+    font-weight: 600;
+}
+
+.viz-card p {
+    color: #6c757d;
+    margin-bottom: 1rem;
+    line-height: 1.4;
+    font-size: 0.9rem;
+}
+
+.viz-badge {
+    background: linear-gradient(45deg, #667eea, #764ba2);
+    color: white;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    display: inline-block;
+    margin-top: auto;
+}
+
+.bg-purple {
+    background: linear-gradient(135deg, #667eea, #764ba2) !important;
+}
+
+.action-buttons {
+    margin-top: 2rem;
+}
+
+.btn-lg {
+    padding: 0.75rem 2rem;
+    font-size: 1.1rem;
+    border-radius: 50px;
+}
+
+body {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+}
+
+@media (max-width: 768px) {
+    .header-card {
+        padding: 2rem 1rem;
+    }
+
+    .viz-card {
+        padding: 1.2rem;
+    }
+
+    .action-buttons .btn {
+        margin-bottom: 0.5rem;
+        display: block;
+        width: 100%;
+    }
+}
+</style>
+
+<script>
+function openVisualization(type) {
+    // Add visual effect on click
+    event.target.closest('.viz-card').style.transform = 'scale(0.95)';
+    setTimeout(() => {
+        event.target.closest('.viz-card').style.transform = '';
+    }, 150);
+
+    // Open the requested visualization page
+    if (type === 'upload') {
+        window.open('/eeg-visualization/upload/', '_blank');
+    } else {
+        window.open(`/eeg-visualization/plot/${type}/`, '_blank');
+    }
+}
+
+// Additional interactive effects
+document.addEventListener('DOMContentLoaded', function() {
+    const vizCards = document.querySelectorAll('.viz-card');
+
+    vizCards.forEach(card => {
+        card.addEventListener('mouseenter', function() {
+            this.style.background = 'rgba(255, 255, 255, 1)';
+        });
+
+        card.addEventListener('mouseleave', function() {
+            this.style.background = 'rgba(255, 255, 255, 0.95)';
+        });
+    });
+});
+</script>
+{% endblock %}

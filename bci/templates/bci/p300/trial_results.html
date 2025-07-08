@@ -1,0 +1,509 @@
+<!-- bci/templates/bci/p300/trial_results.html -->
+{% extends 'bci/base.html' %}
+{% load bci_filters %}
+
+{% block title %}P300 Trial Results - BCI{% endblock %}
+
+{% block breadcrumb %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{% url 'bci:dashboard' %}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'bci:p300_dashboard' %}">P300</a></li>
+        <li class="breadcrumb-item"><a href="{% url 'bci:p300_prediction' %}">Prediction</a></li>
+        <li class="breadcrumb-item active">Trial Results</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="fas fa-chart-line me-2 text-info"></i>P300 Trial Results
+                </h1>
+                <div class="btn-group" role="group">
+                    <a href="{% url 'bci:p300_trial_run' session.pk %}" class="btn btn-outline-info">
+                        <i class="fas fa-redo me-1"></i>Run Again
+                    </a>
+                    <a href="{% url 'bci:p300_prediction' %}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-1"></i>Back to Prediction
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Session Summary -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Trial Summary
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <td><strong>Model:</strong></td>
+                                    <td>{{ session.model.name }}</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Architecture:</strong></td>
+                                    <td>
+                                        {% if session.model.model_config.model_type == 'cnn_lstm_attention' %}
+                                            CNN+LSTM+Multi-Head-Attention
+                                        {% else %}
+                                            {{ session.model.model_config.model_type|title }}
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Model Accuracy:</strong></td>
+                                    <td>{{ session.model.validation_accuracy|floatformat:1 }}%</td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Trial Date:</strong></td>
+                                    <td>{{ session.started_at|date:"M d, Y H:i" }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                        <div class="col-md-6">
+                            <table class="table table-sm table-borderless">
+                                <tr>
+                                    <td><strong>Target Word:</strong></td>
+                                    <td>
+                                        {% if target_word %}
+                                            <span class="badge bg-primary">{{ target_word|title }}</span>
+                                        {% else %}
+                                            <span class="text-muted">Auto-detect</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Duration:</strong></td>
+                                    <td>
+                                        {% if session.completed_at and session.started_at %}
+                                            {{ session.completed_at|timeuntil:session.started_at }}
+                                        {% else %}
+                                            <span class="text-muted">-</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Status:</strong></td>
+                                    <td>
+                                        {% if session.status == 'completed' %}
+                                            <span class="badge bg-success">Completed</span>
+                                        {% elif session.status == 'timeout' %}
+                                            <span class="badge bg-warning">Timeout</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ session.status|title }}</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td><strong>Total Predictions:</strong></td>
+                                    <td>{{ total_predictions }}</td>
+                                </tr>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Overview -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-bullseye fa-3x text-info mb-3"></i>
+                    <h3 class="card-title">
+                        {% if final_prediction %}
+                            {{ final_prediction.predicted_label|title }}
+                        {% else %}
+                            No Prediction
+                        {% endif %}
+                    </h3>
+                    <p class="card-text text-muted">Predicted Word</p>
+                    {% if final_prediction %}
+                        <div class="mt-2">
+                            <span class="badge {% if final_prediction.confidence >= 0.8 %}bg-success{% elif final_prediction.confidence >= 0.6 %}bg-warning{% else %}bg-danger{% endif %} fs-6">
+                                {{ final_prediction.confidence|floatformat:2 }} Confidence
+                            </span>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    {% if accuracy is not None %}
+                        {% if accuracy %}
+                            <i class="fas fa-check-circle fa-3x text-success mb-3"></i>
+                            <h3 class="card-title text-success">Correct</h3>
+                        {% else %}
+                            <i class="fas fa-times-circle fa-3x text-danger mb-3"></i>
+                            <h3 class="card-title text-danger">Incorrect</h3>
+                        {% endif %}
+                        <p class="card-text text-muted">Prediction Accuracy</p>
+                    {% else %}
+                        <i class="fas fa-question-circle fa-3x text-muted mb-3"></i>
+                        <h3 class="card-title text-muted">Unknown</h3>
+                        <p class="card-text text-muted">No Target Word Set</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card text-center">
+                <div class="card-body">
+                    <i class="fas fa-percentage fa-3x text-primary mb-3"></i>
+                    <h3 class="card-title">{{ avg_confidence|floatformat:2 }}</h3>
+                    <p class="card-text text-muted">Average Confidence</p>
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            {{ high_confidence_predictions }}/{{ total_predictions }} high confidence
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics Charts -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-pie me-2"></i>Word Predictions
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if word_counts %}
+                        <canvas id="wordChart" width="400" height="200"></canvas>
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-chart-pie fa-3x mb-3"></i>
+                            <p>No predictions to display</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Confidence Distribution
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if confidence_distribution %}
+                        <canvas id="confidenceChart" width="400" height="200"></canvas>
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-chart-bar fa-3x mb-3"></i>
+                            <p>No confidence data to display</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Prediction Timeline -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-clock me-2"></i>Prediction Timeline
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if predictions %}
+                        <div class="table-responsive">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Time</th>
+                                        <th>Predicted Word</th>
+                                        <th>Confidence</th>
+                                        <th>Match Target</th>
+                                        <th>Probabilities</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for prediction in predictions %}
+                                    <tr>
+                                        <td>{{ prediction.timestamp|date:"H:i:s.u" }}</td>
+                                        <td>
+                                            <span class="badge bg-info">{{ prediction.predicted_label|title }}</span>
+                                        </td>
+                                        <td>
+                                            <span class="badge {% if prediction.confidence >= 0.8 %}bg-success{% elif prediction.confidence >= 0.6 %}bg-warning{% else %}bg-secondary{% endif %}">
+                                                {{ prediction.confidence|floatformat:3 }}
+                                            </span>
+                                        </td>
+                                        <td>
+                                            {% if target_word %}
+                                                {% if prediction.predicted_label == target_word %}
+                                                    <i class="fas fa-check text-success"></i>
+                                                {% else %}
+                                                    <i class="fas fa-times text-danger"></i>
+                                                {% endif %}
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if prediction.probabilities %}
+                                                <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#probs-{{ prediction.id }}" aria-expanded="false">
+                                                    <i class="fas fa-eye"></i> View
+                                                </button>
+                                                <div class="collapse mt-2" id="probs-{{ prediction.id }}">
+                                                    <div class="small">
+                                                        {% for prob in prediction.probabilities %}
+                                                            <div class="d-flex justify-content-between">
+                                                                <span>Class {{ forloop.counter0 }}:</span>
+                                                                <span>{{ prob|floatformat:3 }}</span>
+                                                            </div>
+                                                        {% endfor %}
+                                                    </div>
+                                                </div>
+                                            {% else %}
+                                                <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center text-muted py-4">
+                            <i class="fas fa-clock fa-3x mb-3"></i>
+                            <p>No predictions recorded during this trial</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Analysis & Recommendations -->
+    {% if total_predictions > 0 %}
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-lightbulb me-2"></i>Analysis & Recommendations
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-chart-line me-2"></i>Performance Analysis</h6>
+                            <ul class="list-unstyled">
+                                {% if avg_confidence >= 0.8 %}
+                                    <li class="text-success mb-2">
+                                        <i class="fas fa-check-circle me-2"></i>
+                                        <strong>Excellent confidence levels</strong> - Your P300 responses are very clear
+                                    </li>
+                                {% elif avg_confidence >= 0.6 %}
+                                    <li class="text-warning mb-2">
+                                        <i class="fas fa-exclamation-triangle me-2"></i>
+                                        <strong>Good confidence levels</strong> - Some variability in P300 responses
+                                    </li>
+                                {% else %}
+                                    <li class="text-danger mb-2">
+                                        <i class="fas fa-times-circle me-2"></i>
+                                        <strong>Low confidence levels</strong> - P300 responses may be unclear
+                                    </li>
+                                {% endif %}
+                                
+                                {% if accuracy == True %}
+                                    <li class="text-success mb-2">
+                                        <i class="fas fa-bullseye me-2"></i>
+                                        <strong>Target correctly identified</strong> - Perfect trial execution
+                                    </li>
+                                {% elif accuracy == False %}
+                                    <li class="text-warning mb-2">
+                                        <i class="fas fa-exclamation-circle me-2"></i>
+                                        <strong>Target incorrectly identified</strong> - Consider retry or training
+                                    </li>
+                                {% endif %}
+                                
+                                {% if high_confidence_predictions > 0 %}
+                                    <li class="text-info mb-2">
+                                        <i class="fas fa-star me-2"></i>
+                                        <strong>{{ high_confidence_predictions }} high-confidence predictions</strong> out of {{ total_predictions }} total
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <h6><i class="fas fa-tips me-2"></i>Recommendations</h6>
+                            <ul class="list-unstyled">
+                                {% if avg_confidence < 0.6 %}
+                                    <li class="mb-2">
+                                        <i class="fas fa-brain me-2 text-info"></i>
+                                        Try to focus more intensely on the highlighted words
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-eye me-2 text-info"></i>
+                                        Ensure you're looking directly at the center of the screen
+                                    </li>
+                                {% endif %}
+                                
+                                {% if accuracy == False %}
+                                    <li class="mb-2">
+                                        <i class="fas fa-redo me-2 text-info"></i>
+                                        Consider running the trial again for better results
+                                    </li>
+                                {% endif %}
+                                
+                                <li class="mb-2">
+                                    <i class="fas fa-clock me-2 text-info"></i>
+                                    Maintain steady focus during each word presentation
+                                </li>
+                                
+                                <li class="mb-2">
+                                    <i class="fas fa-user-cog me-2 text-info"></i>
+                                    Ensure comfortable seating and minimal movement
+                                </li>
+                                
+                                {% if total_predictions < 5 %}
+                                    <li class="mb-2">
+                                        <i class="fas fa-exclamation-triangle me-2 text-warning"></i>
+                                        Few predictions recorded - check EEG connection
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<!-- Chart.js for visualizations -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Word Predictions Chart
+    {% if word_counts %}
+    const wordChartCtx = document.getElementById('wordChart');
+    if (wordChartCtx) {
+        const wordData = {{ word_counts|safe }};
+        const wordLabels = Object.keys(wordData).map(word => word.charAt(0).toUpperCase() + word.slice(1));
+        const wordValues = Object.values(wordData);
+        
+        new Chart(wordChartCtx, {
+            type: 'pie',
+            data: {
+                labels: wordLabels,
+                datasets: [{
+                    data: wordValues,
+                    backgroundColor: [
+                        '#28a745', // green
+                        '#6f42c1', // purple  
+                        '#ffc107', // yellow
+                        '#dc3545', // red
+                        '#007bff', // blue
+                        '#6c757d'  // other
+                    ],
+                    borderWidth: 2,
+                    borderColor: '#fff'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = Math.round((context.parsed / total) * 100);
+                                return `${context.label}: ${context.parsed} (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    {% endif %}
+    
+    // Confidence Distribution Chart
+    {% if confidence_distribution %}
+    const confidenceChartCtx = document.getElementById('confidenceChart');
+    if (confidenceChartCtx) {
+        const confData = {{ confidence_distribution|safe }};
+        
+        new Chart(confidenceChartCtx, {
+            type: 'bar',
+            data: {
+                labels: ['High (≥70%)', 'Medium (50-69%)', 'Low (<50%)'],
+                datasets: [{
+                    label: 'Number of Predictions',
+                    data: [confData.high || 0, confData.medium || 0, confData.low || 0],
+                    backgroundColor: ['#28a745', '#ffc107', '#dc3545'],
+                    borderColor: ['#1e7e34', '#e0a800', '#c82333'],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            stepSize: 1
+                        }
+                    }
+                },
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const percentage = total > 0 ? Math.round((context.parsed.y / total) * 100) : 0;
+                                return `${context.parsed.y} predictions (${percentage}%)`;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+    {% endif %}
+});
+</script>
+
+{% endblock %}

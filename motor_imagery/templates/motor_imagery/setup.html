@@ -1,101 +1,211 @@
+<!--
+motor_imagery/templates/motor_imagery/setup.html
+Updated Motor Imagery Setup Page - Matches other trial styling
+-->
 {% extends 'motor_imagery/base.html' %}
 
-{% block title %}Setup Motor Imagery Session{% endblock %}
+{% block title %}Motor Imagery Setup{% endblock %}
 
 {% block content %}
-<div class="row">
-    <div class="col-lg-8 mx-auto">
-        <div class="card imagery-card">
-            <div class="card-header bg-primary text-white">
-                <h2 class="mb-0">
-                    <i class="bi bi-gear-fill me-2"></i>Setup Motor Imagery Session
-                </h2>
+<div class="container mt-5">
+    <div class="card shadow">
+        <div class="card-header bg-warning text-dark">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="mb-0">Motor Imagery Trial Setup</h1>
+                <a href="{% url 'motor_imagery:home' %}" class="btn btn-outline-dark">
+                    <i class="bi bi-arrow-left me-2"></i>Back to Motor Imagery
+                </a>
             </div>
-            <div class="card-body">
-                {% if messages %}
-                    {% for message in messages %}
-                        <div class="alert alert-{{ message.tags }}">{{ message }}</div>
-                    {% endfor %}
-                {% endif %}
+        </div>
+        <div class="card-body">
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle-fill me-2"></i>
+                        <strong>Motor Imagery:</strong> Brain-computer interface with imagined movements (left hand, right hand, feet) using kinesthetic imagery.
+                    </div>
+                </div>
+            </div>
 
-                <form method="post">
-                    {% csrf_token %}
-                    
-                    <div class="row g-4">
-                        <div class="col-md-6">
-                            <label for="participant_name" class="form-label">Participant Name</label>
-                            <input type="text" class="form-control" id="participant_name" name="participant_name" 
-                                   value="{{ default_participant }}" required>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <label for="session_name" class="form-label">Session Name</label>
-                            <input type="text" class="form-control" id="session_name" name="session_name" 
-                                   placeholder="e.g., Training Session 1" required>
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label for="imagery_duration" class="form-label">Imagery Duration (ms)</label>
-                            <input type="number" class="form-control" id="imagery_duration" name="imagery_duration" 
-                                   value="4000" min="2000" max="8000" step="500">
-                            <div class="form-text">Time to perform motor imagery (2-8 seconds)</div>
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label for="cue_duration" class="form-label">Cue Duration (ms)</label>
-                            <input type="number" class="form-control" id="cue_duration" name="cue_duration" 
-                                   value="2000" min="1000" max="5000" step="250">
-                            <div class="form-text">Time to display instruction (1-5 seconds)</div>
-                        </div>
-                        
-                        <div class="col-md-4">
-                            <label for="rest_duration" class="form-label">Rest Duration (ms)</label>
-                            <input type="number" class="form-control" id="rest_duration" name="rest_duration" 
-                                   value="2000" min="1000" max="5000" step="250">
-                            <div class="form-text">Time between trials (1-5 seconds)</div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <label for="trials_per_class" class="form-label">Trials per Class</label>
-                            <input type="number" class="form-control" id="trials_per_class" name="trials_per_class" 
-                                   value="20" min="5" max="50">
-                            <div class="form-text">Number of trials for each motor imagery class</div>
-                        </div>
-                        
-                        <div class="col-md-6">
-                            <div class="alert alert-info">
-                                <strong>Total Duration:</strong> 
-                                <span id="total_duration">Calculating...</span>
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                        {{ message }}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            <form method="post" id="motorImagerySetupForm">
+                {% csrf_token %}
+                
+                <!-- Participant Information -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Participant Information</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="participant_name" class="form-label">Participant Name</label>
+                                    <input type="text" class="form-control" id="participant_name" name="participant_name" 
+                                           value="{{ default_participant }}" placeholder="Enter participant name" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group">
+                                    <label for="session_name" class="form-label">Session Name</label>
+                                    <input type="text" class="form-control" id="session_name" name="session_name" 
+                                           placeholder="e.g., Training Session 1" required>
+                                </div>
                             </div>
                         </div>
                     </div>
+                </div>
 
-                    <hr class="my-4">
-                    
-                    <div class="alert alert-warning">
-                        <h5><i class="bi bi-info-circle-fill me-2"></i>Important Instructions</h5>
-                        <ul class="mb-0">
-                            <li>Ensure your EEG headset is properly connected and signal quality is good</li>
-                            <li>Find a quiet environment free from distractions</li>
-                            <li>Use kinesthetic imagery - focus on the FEELING of movement, not visualization</li>
-                            <li>Keep your muscles relaxed during imagery - avoid actual movement</li>
-                            <li>Take breaks between sessions to avoid fatigue</li>
-                        </ul>
+                <!-- Trial Configuration -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Trial Configuration</h5>
                     </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label for="imagery_duration" class="form-label">Imagery Duration (ms)</label>
+                                <input type="number" class="form-control" id="imagery_duration" name="imagery_duration" 
+                                       value="4000" min="2000" max="8000" step="500">
+                                <div class="form-text">Time to perform motor imagery (2-8 seconds)</div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="cue_duration" class="form-label">Cue Duration (ms)</label>
+                                <input type="number" class="form-control" id="cue_duration" name="cue_duration" 
+                                       value="2000" min="1000" max="5000" step="250">
+                                <div class="form-text">Time to display instruction (1-5 seconds)</div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <label for="rest_duration" class="form-label">Rest Duration (ms)</label>
+                                <input type="number" class="form-control" id="rest_duration" name="rest_duration" 
+                                       value="2000" min="1000" max="5000" step="250">
+                                <div class="form-text">Time between trials (1-5 seconds)</div>
+                            </div>
+                            
+                            <div class="col-md-6">
+                                <label for="trials_per_class" class="form-label">Trials per Class</label>
+                                <input type="number" class="form-control" id="trials_per_class" name="trials_per_class" 
+                                       value="20" min="5" max="50">
+                                <div class="form-text">Number of trials for each motor imagery class</div>
+                            </div>
+                        </div>
+                        
+                        <div class="row mt-3">
+                            <div class="col-12">
+                                <div class="alert alert-info">
+                                    <strong>Estimated Total Duration:</strong> 
+                                    <span id="total_duration">Calculating...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
 
-                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
-                        <a href="{% url 'motor_imagery:home' %}" class="btn btn-secondary me-md-2">Cancel</a>
-                        <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="bi bi-play-circle-fill me-2"></i>Start Session
-                        </button>
+                <!-- Motor Imagery Classes Info -->
+                <div class="card mb-4">
+                    <div class="card-header bg-light">
+                        <h5 class="mb-0">Motor Imagery Classes</h5>
                     </div>
-                </form>
-            </div>
+                    <div class="card-body">
+                        <div class="row text-center">
+                            <div class="col-md-3 mb-3">
+                                <div class="p-3 border rounded">
+                                    <i class="bi bi-hand-index text-primary" style="font-size: 2rem;"></i>
+                                    <h6 class="mt-2">Left Hand</h6>
+                                    <small class="text-muted">Imagine clenching left fist</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="p-3 border rounded">
+                                    <i class="bi bi-hand-index text-warning" style="font-size: 2rem;"></i>
+                                    <h6 class="mt-2">Right Hand</h6>
+                                    <small class="text-muted">Imagine clenching right fist</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="p-3 border rounded">
+                                    <i class="bi bi-person-walking text-success" style="font-size: 2rem;"></i>
+                                    <h6 class="mt-2">Both Feet</h6>
+                                    <small class="text-muted">Imagine flexing both feet</small>
+                                </div>
+                            </div>
+                            <div class="col-md-3 mb-3">
+                                <div class="p-3 border rounded">
+                                    <i class="bi bi-circle text-secondary" style="font-size: 2rem;"></i>
+                                    <h6 class="mt-2">Rest Periods</h6>
+                                    <small class="text-muted">Between trials</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Instructions -->
+                <div class="card mb-4">
+                    <div class="card-header bg-warning text-dark">
+                        <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill me-2"></i>Important Instructions</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <h6>Before Starting:</h6>
+                                <ul class="list-unstyled">
+                                    <li><i class="bi bi-check-circle text-success me-2"></i>Ensure EEG headset is properly connected</li>
+                                    <li><i class="bi bi-check-circle text-success me-2"></i>Find a quiet, distraction-free environment</li>
+                                    <li><i class="bi bi-check-circle text-success me-2"></i>Sit comfortably with relaxed posture</li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>During Imagery:</h6>
+                                <ul class="list-unstyled">
+                                    <li><i class="bi bi-check-circle text-success me-2"></i>Focus on the FEELING of movement</li>
+                                    <li><i class="bi bi-check-circle text-success me-2"></i>Keep muscles relaxed - avoid actual movement</li>
+                                    <li><i class="bi bi-check-circle text-success me-2"></i>Use kinesthetic imagery, not visualization</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Start Button -->
+                <div class="d-grid gap-2">
+                    <button type="submit" class="btn btn-lg btn-warning" id="startMotorImageryBtn">
+                        <i class="bi bi-gear-fill me-2"></i>Start Motor Imagery Session
+                    </button>
+                </div>
+            </form>
         </div>
     </div>
 </div>
 
 <script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.getElementById('motorImagerySetupForm');
+    form.addEventListener('submit', function(e) {
+        const participantName = document.getElementById('participant_name').value.trim();
+        const sessionName = document.getElementById('session_name').value.trim();
+        
+        if (!participantName || !sessionName) {
+            e.preventDefault();
+            alert('Please provide both participant name and session name.');
+            return false;
+        }
+    });
+
+    // Duration calculation
     function updateTotalDuration() {
         const imagery = parseInt(document.getElementById('imagery_duration').value);
         const cue = parseInt(document.getElementById('cue_duration').value);
@@ -113,12 +223,13 @@
             `~${minutes}m ${seconds}s (${totalTrials} trials)`;
     }
     
-    document.addEventListener('DOMContentLoaded', function() {
-        const inputs = ['imagery_duration', 'cue_duration', 'rest_duration', 'trials_per_class'];
-        inputs.forEach(id => {
-            document.getElementById(id).addEventListener('input', updateTotalDuration);
-        });
-        updateTotalDuration();
+    // Add event listeners for duration calculation
+    const inputs = ['imagery_duration', 'cue_duration', 'rest_duration', 'trials_per_class'];
+    inputs.forEach(id => {
+        document.getElementById(id).addEventListener('input', updateTotalDuration);
     });
+    updateTotalDuration();
+});
 </script>
+
 {% endblock %}

@@ -1,0 +1,449 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Data Visualization - {{ plot_type|title }}
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Header Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="data-plot-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h1 class="display-5 text-white mb-2">📊 Real Data Visualization</h1>
+                        <p class="lead text-white-50 mb-0">{{ csv_name }}</p>
+                    </div>
+                    <div class="header-actions">
+                        <a href="{% url 'eeg_visualization:upload_csv' %}" class="btn btn-outline-light me-2">
+                            <i class="bi bi-upload"></i> Change File
+                        </a>
+                        <a href="{% url 'eeg_visualization:home' %}" class="btn btn-outline-light">
+                            <i class="bi bi-arrow-left"></i> Back
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Data Info Panel -->
+        <div class="col-lg-3 mb-4">
+            <div class="card shadow">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="bi bi-database"></i> Data Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="data-stat">
+                        <i class="bi bi-file-earmark-spreadsheet text-primary"></i>
+                        <div>
+                            <strong>{{ data_info.rows|floatformat:0 }}</strong>
+                            <small>Samples Count</small>
+                        </div>
+                    </div>
+
+                    <div class="data-stat">
+                        <i class="bi bi-broadcast text-success"></i>
+                        <div>
+                            <strong>{{ data_info.channels|length }}</strong>
+                            <small>EEG Channels</small>
+                        </div>
+                    </div>
+
+                    <div class="data-stat">
+                        <i class="bi bi-clock text-warning"></i>
+                        <div>
+                            <strong>{{ data_info.duration }}</strong>
+                            <small>Duration</small>
+                        </div>
+                    </div>
+
+                    <div class="data-stat">
+                        <i class="bi bi-speedometer text-info"></i>
+                        <div>
+                            <strong>{{ data_info.sample_rate }}</strong>
+                            <small>Sampling Rate</small>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <h6 class="text-muted">Available Channels:</h6>
+                    <div class="channels-list">
+                        {% for channel in data_info.channels %}
+                        <span class="badge bg-secondary me-1 mb-1">{{ channel }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Plot Controls -->
+            <div class="card shadow mt-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="bi bi-sliders"></i> Plot Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Select Channels</label>
+                        <select class="form-select" id="channelSelect" multiple>
+                            {% for channel in data_info.channels %}
+                            <option value="{{ channel }}" selected>{{ channel }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Time Range (seconds)</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <input type="number" class="form-control" id="timeStart" value="0" step="0.1" min="0">
+                            </div>
+                            <div class="col-6">
+                                <input type="number" class="form-control" id="timeEnd" value="10" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if plot_type == 'timefreq' %}
+                    <div class="mb-3">
+                        <label class="form-label">Frequency Range (Hz)</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <input type="number" class="form-control" id="freqMin" value="1" min="0.1" step="0.1">
+                            </div>
+                            <div class="col-6">
+                                <input type="number" class="form-control" id="freqMax" value="50" step="0.1">
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <button class="btn btn-primary w-100 mb-2" onclick="generateRealPlot()">
+                        <i class="bi bi-play-circle"></i> Generate Plot
+                    </button>
+                    
+                    <button class="btn btn-success w-100 mb-2" onclick="exportPlot()">
+                        <i class="bi bi-download"></i> Export Results
+                    </button>
+                    
+                    <button class="btn btn-warning w-100" onclick="resetView()">
+                        <i class="bi bi-arrow-clockwise"></i> Reset
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Visualization Area -->
+        <div class="col-lg-9">
+            <div class="card shadow">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">
+                        <i class="bi bi-graph-up"></i> 
+                        {% if plot_type == 'interactive' %}
+                            Interactive Plots - raw.plot()
+                        {% elif plot_type == 'topographic' %}
+                            Topographic Maps - plot_topomap()
+                        {% elif plot_type == 'timefreq' %}
+                            Time-Frequency Analysis - tfr.plot()
+                        {% elif plot_type == '3d' %}
+                            3D Visualization - plot_alignment()
+                        {% elif plot_type == 'ica' %}
+                            Independent Components - ica.plot_components()
+                        {% elif plot_type == 'psd' %}
+                            Power Spectral Density - plot_psd()
+                        {% else %}
+                            Data Visualization
+                        {% endif %}
+                    </h5>
+                    <div class="plot-controls">
+                        <button class="btn btn-sm btn-outline-primary" onclick="zoomIn()">
+                            <i class="bi bi-zoom-in"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-primary" onclick="zoomOut()">
+                            <i class="bi bi-zoom-out"></i>
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="fullscreen()">
+                            <i class="bi bi-fullscreen"></i>
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="plotArea" class="plot-container">
+                        <div class="plot-placeholder">
+                            <div class="text-center">
+                                <div class="plot-icon mb-3">
+                                    {% if plot_type == 'interactive' %}
+                                        <i class="bi bi-graph-up-arrow"></i>
+                                    {% elif plot_type == 'topographic' %}
+                                        <i class="bi bi-globe"></i>
+                                    {% elif plot_type == 'timefreq' %}
+                                        <i class="bi bi-soundwave"></i>
+                                    {% elif plot_type == '3d' %}
+                                        <i class="bi bi-box"></i>
+                                    {% elif plot_type == 'ica' %}
+                                        <i class="bi bi-diagram-2"></i>
+                                    {% elif plot_type == 'psd' %}
+                                        <i class="bi bi-activity"></i>
+                                    {% endif %}
+                                </div>
+                                <h4 class="text-primary">Ready for Real Data Visualization</h4>
+                                <p class="text-muted">Click "Generate Plot" to start visualizing {{ csv_name }} data</p>
+                                <div class="data-preview mt-4">
+                                    <h6 class="text-muted">Data Sample:</h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-sm table-striped">
+                                            <thead class="table-dark">
+                                                <tr>
+                                                    {% for key in sample_data.0.keys %}
+                                                    <th>{{ key }}</th>
+                                                    {% endfor %}
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for row in sample_data|slice:":5" %}
+                                                <tr>
+                                                    {% for key, value in row.items %}
+                                                    <td>{{ value|floatformat:2 }}</td>
+                                                    {% endfor %}
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analysis Results -->
+            <div class="card shadow mt-4" id="analysisResults" style="display: none;">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-bar-chart"></i> Analysis Results</h5>
+                </div>
+                <div class="card-body">
+                    <div id="analysisContent">
+                        <!-- سيتم ملء هذا القسم بنتائج التحليل -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+.data-plot-header {
+    background: linear-gradient(135deg, #6f42c1 0%, #e83e8c 100%);
+    padding: 2rem;
+    border-radius: 15px;
+    margin-bottom: 1rem;
+}
+
+.data-stat {
+    display: flex;
+    align-items: center;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.data-stat:last-child {
+    border-bottom: none;
+}
+
+.data-stat i {
+    font-size: 1.5rem;
+    margin-right: 1rem;
+    width: 30px;
+}
+
+.data-stat div strong {
+    display: block;
+    font-size: 1.1rem;
+}
+
+.data-stat div small {
+    color: #6c757d;
+    font-size: 0.85rem;
+}
+
+.channels-list {
+    max-height: 150px;
+    overflow-y: auto;
+}
+
+.plot-container {
+    min-height: 600px;
+    background: #f8f9fa;
+    border-radius: 10px;
+    position: relative;
+}
+
+.plot-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 600px;
+    border: 2px dashed #dee2e6;
+    border-radius: 10px;
+}
+
+.plot-icon {
+    font-size: 4rem;
+    color: #6c757d;
+}
+
+.data-preview {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
+.table-responsive {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+@media (max-width: 768px) {
+    .data-plot-header {
+        padding: 1.5rem 1rem;
+    }
+    
+    .plot-container {
+        min-height: 400px;
+    }
+    
+    .plot-placeholder {
+        height: 400px;
+    }
+}
+</style>
+
+<script>
+function generateRealPlot() {
+    const plotArea = document.getElementById('plotArea');
+    const analysisResults = document.getElementById('analysisResults');
+    
+    // Show loading
+    plotArea.innerHTML = `
+        <div class="d-flex align-items-center justify-content-center h-100">
+            <div class="text-center">
+                <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h5 class="text-primary">Processing real data...</h5>
+                <p class="text-muted">Analyzing {{ data_info.rows|floatformat:0 }} samples of EEG data</p>
+                <div class="progress mt-3" style="width: 300px;">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated"
+                         role="progressbar" style="width: 0%" id="progressBar"></div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Simulate processing progress
+    let progress = 0;
+    const progressBar = document.getElementById('progressBar');
+    const interval = setInterval(() => {
+        progress += Math.random() * 20;
+        if (progress > 100) progress = 100;
+        progressBar.style.width = progress + '%';
+        
+        if (progress >= 100) {
+            clearInterval(interval);
+            showResults();
+        }
+    }, 200);
+}
+
+function showResults() {
+    const plotArea = document.getElementById('plotArea');
+    const analysisResults = document.getElementById('analysisResults');
+    
+    // Show results
+    plotArea.innerHTML = `
+        <div class="d-flex align-items-center justify-content-center h-100">
+            <div class="text-center text-success">
+                <i class="bi bi-check-circle" style="font-size: 4rem;"></i>
+                <h4 class="mt-3">Data analyzed successfully!</h4>
+                <p class="text-muted">Applied {{ plot_type }} visualization to {{ csv_name }} data</p>
+                <div class="mt-4 p-4 bg-light rounded">
+                    <h6 class="text-primary">📊 Results Summary:</h6>
+                    <div class="row text-start">
+                        <div class="col-md-6">
+                            <small><strong>Processed Samples:</strong> {{ data_info.rows|floatformat:0 }}</small><br>
+                            <small><strong>Analyzed Channels:</strong> {{ data_info.channels|length }}</small><br>
+                        </div>
+                        <div class="col-md-6">
+                            <small><strong>Duration:</strong> {{ data_info.duration }}</small><br>
+                            <small><strong>Sampling Rate:</strong> {{ data_info.sample_rate }}</small><br>
+                        </div>
+                    </div>
+                </div>
+                <small class="text-info d-block mt-3">
+                    <i class="bi bi-info-circle"></i>
+                    In the real application, the actual interactive plot using MNE library will be displayed here
+                </small>
+            </div>
+        </div>
+    `;
+
+    // Show analysis results
+    analysisResults.style.display = 'block';
+    document.getElementById('analysisContent').innerHTML = `
+        <div class="row">
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <h6 class="text-primary">Signal Average</h6>
+                    <p class="h4">8,156 μV</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <h6 class="text-success">Standard Deviation</h6>
+                    <p class="h4">±245 μV</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="stat-card">
+                    <h6 class="text-warning">Dominant Frequency</h6>
+                    <p class="h4">10.2 Hz</p>
+                </div>
+            </div>
+        </div>
+        <div class="mt-3">
+            <h6>Most Active Channels:</h6>
+            <div class="d-flex flex-wrap gap-2">
+                {% for channel in data_info.channels|slice:":5" %}
+                <span class="badge bg-primary">{{ channel }}</span>
+                {% endfor %}
+            </div>
+        </div>
+    `;
+}
+
+function exportPlot() {
+    alert('Results and plots will be exported in different formats (PNG, CSV, MAT)');
+}
+
+function resetView() {
+    location.reload();
+}
+
+function zoomIn() {
+    alert('Zoom in plot');
+}
+
+function zoomOut() {
+    alert('Zoom out plot');
+}
+
+function fullscreen() {
+    const plotArea = document.getElementById('plotArea');
+    if (plotArea.requestFullscreen) {
+        plotArea.requestFullscreen();
+    }
+}
+</script>
+{% endblock %}

@@ -1,4 +1,6 @@
-{% extends 'bci/session_list.html' %}
+<!-- bci/templates/bci/p300/sessions.html -->
+{% extends 'bci/base.html' %}
+{% load bci_filters %}
 
 {% block title %}P300 Sessions - BCI{% endblock %}
 
@@ -17,19 +19,322 @@
     <div class="col-12">
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h1>
-                <i class="fas fa-eye me-2 text-info"></i>P300 Sessions
+                <i class="fas fa-eye me-2 text-info"></i>P300 Visual Trial Sessions
             </h1>
-            <div>
-                <a href="{% url 'bci:session_upload' %}?approach=p300" class="btn btn-info me-2">
+            <div class="btn-group">
+                <a href="{% url 'bci:session_upload' %}?approach=p300" class="btn btn-info">
                     <i class="fas fa-upload me-1"></i>Upload Session
                 </a>
                 <a href="{% url 'bci:multiple_session_upload' %}?approach=p300" class="btn btn-outline-info">
-                    <i class="fas fa-upload me-1"></i>Upload Multiple
+                    <i class="fas fa-upload me-1"></i>Batch Upload
                 </a>
             </div>
         </div>
     </div>
 </div>
 
-{{ block.super }}
+<!-- Sessions Stats -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card bg-info text-white">
+            <div class="card-body text-center">
+                <h3>{{ object_list.count }}</h3>
+                <p class="mb-0">Total Sessions</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-success text-white">
+            <div class="card-body text-center">
+                <h3>{{ object_list|length }}</h3>
+                <p class="mb-0">Loaded Sessions</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-warning text-white">
+            <div class="card-body text-center">
+                <h3>6</h3>
+                <p class="mb-0">Target Classes</p>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card bg-primary text-white">
+            <div class="card-body text-center">
+                <h3>14</h3>
+                <p class="mb-0">EEG Channels</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Upload Instructions -->
+{% if not object_list %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="alert alert-info">
+            <h5><i class="fas fa-info-circle me-2"></i>Getting Started with P300 Sessions</h5>
+            <p class="mb-3">P300 sessions should contain visual trial data where participants focused on specific words. 
+            Your CSV files should include:</p>
+            <ul class="mb-3">
+                <li><strong>EEG Channels:</strong> F3, FC5, AF3, F7, T7, P7, O1, O2, P8, T8, F8, AF4, FC6, F4</li>
+                <li><strong>Word Column:</strong> Contains the target words (green, purple, yellow, red, blue) or "XXXXX" for rest</li>
+                <li><strong>Timestamp:</strong> Time information for proper epoching</li>
+                <li><strong>Sampling Rate:</strong> 128 Hz (recommended)</li>
+            </ul>
+            <div class="d-flex gap-2">
+                <a href="{% url 'bci:session_upload' %}?approach=p300" class="btn btn-info">
+                    <i class="fas fa-upload me-1"></i>Upload Your First Session
+                </a>
+                <a href="#" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#formatHelpModal">
+                    <i class="fas fa-question-circle me-1"></i>Data Format Help
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Sessions List -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="card-title mb-0">
+                    <i class="fas fa-list me-2"></i>P300 Sessions
+                    {% if object_list %}
+                        <span class="badge bg-info ms-2">{{ object_list.count }}</span>
+                    {% endif %}
+                </h5>
+            </div>
+            <div class="card-body p-0">
+                {% if object_list %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Session Name</th>
+                                    <th>Description</th>
+                                    <th>Samples</th>
+                                    <th>Classes</th>
+                                    <th>Uploaded</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for session in object_list %}
+                                <tr>
+                                    <td>
+                                        <strong>{{ session.name }}</strong>
+                                        <br>
+                                        <small class="text-muted">
+                                            <i class="fas fa-eye me-1"></i>P300 Visual Trial
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {% if session.description %}
+                                            {{ session.description|truncatechars:80 }}
+                                        {% else %}
+                                            <span class="text-muted">No description</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-primary">
+                                            {{ session.total_samples|default:"--" }}
+                                        </span>
+                                        <br>
+                                        <small class="text-muted">{{ session.sampling_rate }}Hz</small>
+                                    </td>
+                                    <td>
+                                        {% if session.classes %}
+                                            <div class="d-flex flex-wrap gap-1">
+                                                {% for class_name in session.classes %}
+                                                    {% bootstrap_color_cycle forloop.counter0 as color %}
+                                                    <span class="badge bg-{{ color }} badge-sm">
+                                                        {{ class_name }}
+                                                    </span>
+                                                {% endfor %}
+                                            </div>
+                                        {% else %}
+                                            <span class="text-muted">--</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <span data-bs-toggle="tooltip" title="{{ session.created_at }}">
+                                            {{ session.created_at|timesince_short }} ago
+                                        </span>
+                                        <br>
+                                        <small class="text-muted">by {{ session.user.username }}</small>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group btn-group-sm">
+                                            <a href="{% url 'bci:session_detail' session.pk %}" 
+                                               class="btn btn-outline-primary" 
+                                               data-bs-toggle="tooltip" title="View Details">
+                                                <i class="fas fa-eye"></i>
+                                            </a>
+                                            <a href="{% url 'bci:session_preview' session.pk %}" 
+                                               class="btn btn-outline-info"
+                                               data-bs-toggle="tooltip" title="Preview Data">
+                                                <i class="fas fa-chart-line"></i>
+                                            </a>
+                                            <a href="{% url 'bci:download_session' session.pk %}" 
+                                               class="btn btn-outline-success"
+                                               data-bs-toggle="tooltip" title="Download">
+                                                <i class="fas fa-download"></i>
+                                            </a>
+                                            <a href="{% url 'bci:session_delete' session.pk %}" 
+                                               class="btn btn-outline-danger"
+                                               data-bs-toggle="tooltip" title="Delete"
+                                               onclick="return confirm('Are you sure you want to delete this session?')">
+                                                <i class="fas fa-trash"></i>
+                                            </a>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- Pagination -->
+                    {% if is_paginated %}
+                    <div class="card-footer">
+                        <nav aria-label="Page navigation">
+                            <ul class="pagination pagination-sm justify-content-center mb-0">
+                                {% if page_obj.has_previous %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page=1">&laquo; First</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}">Previous</a>
+                                    </li>
+                                {% endif %}
+                                
+                                <li class="page-item active">
+                                    <span class="page-link">
+                                        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+                                    </span>
+                                </li>
+                                
+                                {% if page_obj.has_next %}
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.next_page_number }}">Next</a>
+                                    </li>
+                                    <li class="page-item">
+                                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}">Last &raquo;</a>
+                                    </li>
+                                {% endif %}
+                            </ul>
+                        </nav>
+                    </div>
+                    {% endif %}
+                {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-eye fa-4x text-muted mb-3"></i>
+                        <h4 class="text-muted">No P300 Sessions Yet</h4>
+                        <p class="text-muted mb-4">Upload your visual trial data to get started with P300 classification.</p>
+                        <a href="{% url 'bci:session_upload' %}?approach=p300" class="btn btn-info">
+                            <i class="fas fa-upload me-1"></i>Upload First Session
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Data Format Help Modal -->
+<div class="modal fade" id="formatHelpModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="fas fa-info-circle me-2"></i>P300 Data Format Requirements
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6><i class="fas fa-table me-2 text-primary"></i>Required CSV Structure</h6>
+                <p>Your P300 visual trial data should be in CSV format with the following columns:</p>
+                
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Column Name</th>
+                                <th>Description</th>
+                                <th>Example Values</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <td><code>Timestamp</code></td>
+                                <td>Time information</td>
+                                <td>0.0078125, 0.015625, ...</td>
+                            </tr>
+                            <tr>
+                                <td><code>F3, FC5, AF3, F7, T7, P7, O1, O2, P8, T8, F8, AF4, FC6, F4</code></td>
+                                <td>EEG channel data (μV)</td>
+                                <td>-12.5, 8.3, -15.2, ...</td>
+                            </tr>
+                            <tr>
+                                <td><code>word</code></td>
+                                <td>Target word or rest period</td>
+                                <td>green, purple, yellow, red, blue, XXXXX</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                
+                <h6><i class="fas fa-palette me-2 text-success"></i>Target Words</h6>
+                <p>The system supports the following target words:</p>
+                <div class="d-flex flex-wrap gap-2 mb-3">
+                    <span class="badge bg-success">green</span>
+                    <span class="badge bg-primary">purple</span>
+                    <span class="badge bg-warning">yellow</span>
+                    <span class="badge bg-danger">red</span>
+                    <span class="badge bg-info">blue</span>
+                    <span class="badge bg-secondary">XXXXX (rest/silence)</span>
+                </div>
+                
+                <h6><i class="fas fa-cogs me-2 text-warning"></i>Technical Specifications</h6>
+                <ul>
+                    <li><strong>Sampling Rate:</strong> 128 Hz (recommended)</li>
+                    <li><strong>Channels:</strong> 14 EEG channels from EPOC+ device</li>
+                    <li><strong>Data Type:</strong> Continuous EEG recording during visual word presentation</li>
+                    <li><strong>File Format:</strong> CSV with headers</li>
+                    <li><strong>Encoding:</strong> UTF-8</li>
+                </ul>
+                
+                <div class="alert alert-info">
+                    <i class="fas fa-lightbulb me-2"></i>
+                    <strong>Tip:</strong> Ensure your visual trial data contains sufficient examples of each target word 
+                    for effective P300 model training. A balanced dataset with equal representation of all words 
+                    will yield the best results.
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <a href="{% url 'bci:session_upload' %}?approach=p300" class="btn btn-info">
+                    <i class="fas fa-upload me-1"></i>Upload Session
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Initialize tooltips
+document.addEventListener('DOMContentLoaded', function() {
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+});
+</script>
 {% endblock %}

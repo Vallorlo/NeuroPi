@@ -1,4 +1,0 @@
-COUNTER,F3,FC5,AF3,F7,T7,P7,O1,O2,P8,T8,F8,AF4,FC6,F4,Timestamp,word_label,account_event,participant_id,word,stage,attempt,goodbye_event,hello_event,no_event,yes_event
-27,8148,8149,8160,8128,8120,8173,8107,8196,8108,8112,8183,8185,8196,8122,0.0070078372955322,sil,False,Abdallah,account,1,1,False,False,False,False
-28,8146,8162,8164,8146,8127,8153,8116,8164,8127,8127,8154,8148,8169,8108,0.014000654220581,sil,False,Abdallah,account,1,1,False,False,False,False
-28,8146,8162,8164,8146,8127,8153,8116,8164,8127,8127,8154,8148,8169,8108,0.0150001049041748,sil,False,Abdallah,account,1,1,False,False,False,False

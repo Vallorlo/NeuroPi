@@ -86,7 +86,7 @@ Updated to include Motor Imagery sessions and fix numbering bug
                                     <!-- <p class="text-muted">No traditional trial data found. Start a new trial to see results here.</p>
                                     <a href="{% url 'trials:start_trial' %}" class="btn btn-primary"> -->
                                     <p class="text-muted">No traditional trials found. Start a new trial to see results here.</p>
-                                    <a href="{% url 'start_trial' %}" class="btn btn-primary">
+                                    <a href="{% url 'trials:start_trial' %}" class="btn btn-primary">
                                         <i class="bi bi-plus-circle me-2"></i>Start First Trial
                                     </a>
                                 </div>
@@ -136,7 +136,7 @@ Updated to include Motor Imagery sessions and fix numbering bug
                                                     <i class="bi bi-three-dots me-2"></i>Actions
                                                 </button>
                                                 <ul class="dropdown-menu dropdown-menu-end">
-                                                    <li><a class="dropdown-item" href="{% url 'visual_trial_complete' session.id %}"><i class="bi bi-eye me-2"></i> View Details</a></li>
+                                                    <li><a class="dropdown-item" href="{% url 'trials:visual_trial_complete' session.id %}"><i class="bi bi-eye me-2"></i> View Details</a></li>
                                                     <li><a class="dropdown-item" href="#"><i class="bi bi-download me-2"></i> Download EEG Data</a></li>
                                                     <li><a class="dropdown-item" href="#"><i class="bi bi-graph-up me-2"></i> View Analysis</a></li>
                                                     <li><hr class="dropdown-divider"></li>
@@ -144,7 +144,7 @@ Updated to include Motor Imagery sessions and fix numbering bug
                                                     <!-- <li><a class="dropdown-item" href="{% url 'trials:visual_trial_setup' %}"><i class="bi bi-arrow-repeat"></i> Repeat Setup</a></li>
                                                     <li><hr class="dropdown-divider"></li>
                                                     <li><a class="dropdown-item text-danger" href="#"><i class="bi bi-trash"></i> Delete Session</a></li> -->
-                                                    <li><a class="dropdown-item" href="{% url 'visual_trial_setup' %}"><i class="bi bi-arrow-repeat me-2"></i> Repeat Setup</a></li>
+                                                    <li><a class="dropdown-item" href="{% url 'trials:visual_trial_setup' %}"><i class="bi bi-arrow-repeat me-2"></i> Repeat Setup</a></li>
                                                 </ul>
                                             </div>
                                         </div>

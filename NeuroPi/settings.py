@@ -44,7 +44,6 @@ INSTALLED_APPS = [
     'accounts',
     'motor_imagery',
     'bci',
-    'pi_main',
     'user_management',
     'eeg_visualization',
 ]

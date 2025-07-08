@@ -55,10 +55,10 @@ Updated homepage reflecting current application structure
                 </div>
                 {% else %}
                 <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
-                    <a href="{% url 'start_trial' %}" class="btn btn-primary btn-lg px-4 me-sm-3">
+                    <a href="{% url 'trials:start_trial' %}" class="btn btn-primary btn-lg px-4 me-sm-3">
                         <i class="bi bi-play-circle-fill"></i> Start New Trial
                     </a>
-                    <a href="{% url 'completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
+                    <a href="{% url 'trials:completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
                         <i class="bi bi-list-check"></i> View Completed Trials
                     </a>
                 </div>
@@ -91,7 +91,7 @@ Updated homepage reflecting current application structure
                             <li>Motor imagery data collection</li>
                             <li>Synchronized EEG and audio recording</li>
                         </ul>
-                        <a href="{% url 'start_trial' %}" class="btn btn-primary">
+                        <a href="{% url 'trials:start_trial' %}" class="btn btn-primary">
                             <i class="bi bi-play-circle"></i> Start Trial
                         </a>
                     </div>
@@ -157,7 +157,7 @@ Updated homepage reflecting current application structure
                             <li>Data export and analysis</li>
                             <li>Participant management</li>
                         </ul>
-                        <a href="{% url 'completed_trials' %}" class="btn btn-warning">
+                        <a href="{% url 'trials:completed_trials' %}" class="btn btn-warning">
                             <i class="bi bi-folder-check"></i> View Sessions
                         </a>
                     </div>

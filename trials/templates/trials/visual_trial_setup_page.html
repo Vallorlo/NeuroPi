@@ -14,7 +14,7 @@ Separate Visual Trial Setup Page for consistency
         <div class="card-header bg-success text-white">
             <div class="d-flex justify-content-between align-items-center">
                 <h1 class="mb-0">Visual Word Focus Trial Setup</h1>
-                <a href="{% url 'start_trial' %}" class="btn btn-outline-light">
+                <a href="{% url 'trials:start_trial' %}" class="btn btn-outline-light">
                     <i class="bi bi-arrow-left me-2"></i>Back to Trial Selection
                 </a>
             </div>
@@ -29,7 +29,7 @@ Separate Visual Trial Setup Page for consistency
                 </div>
             </div>
 
-            <form method="post" action="{% url 'visual_trial_setup' %}" id="visualTrialForm">
+            <form method="post" action="{% url 'trials:visual_trial_setup' %}" id="visualTrialForm">
                 {% csrf_token %}
                 
                 <!-- Participant Selection -->

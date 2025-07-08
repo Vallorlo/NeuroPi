@@ -51,7 +51,7 @@
                 </div>
                 {% else %}
                 <div class="d-grid gap-3 d-sm-flex justify-content-sm-center">
-                    <a href="{% url 'start_trial' %}" class="btn btn-primary btn-lg px-4 me-sm-3">
+                    <a href="{% url 'trials:start_trial' %}" class="btn btn-primary btn-lg px-4 me-sm-3">
                         <i class="bi bi-play-circle-fill"></i> Start New Trial
                     </a>
                     <a href="{% url 'trials:completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
@@ -80,7 +80,7 @@
                     </div>
                     <h3>Data Collection</h3>
                     <p>Collect synchronized EEG and audio data across multiple trial stages with traditional, visual, and motor imagery approaches.</p>
-                    <a href="{% url 'start_trial' %}" class="card-link">Start Collection <i class="bi bi-arrow-right"></i></a>
+                    <a href="{% url 'trials:start_trial' %}" class="card-link">Start Collection <i class="bi bi-arrow-right"></i></a>
                 </div>
             </div>
 
@@ -125,7 +125,7 @@
                     </div>
                     <h3>Trial Management</h3>
                     <p>Review and manage completed trials across all approaches including traditional, visual, and motor imagery sessions.</p>
-                    <a href="{% url 'completed_trials' %}" class="card-link">View Trials <i class="bi bi-arrow-right"></i></a>
+                    <a href="{% url 'trials:completed_trials' %}" class="card-link">View Trials <i class="bi bi-arrow-right"></i></a>
                 </div>
             </div>
         </div>

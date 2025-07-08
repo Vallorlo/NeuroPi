@@ -4,6 +4,8 @@
 from django.urls import path
 from . import views
 
+app_name = 'trials'
+
 urlpatterns = [
     # Main trial selection page
     path('', views.start_trial, name='start_trial'),

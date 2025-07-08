@@ -85,10 +85,10 @@
                     </h1>
                     <p class="lead">Excellent work! Data collection is complete.</p>
                     <div class="mt-4">
-                        <a href="{% url 'start_trial' %}" class="btn btn-lg btn-primary me-3">
+                        <a href="{% url 'trials:start_trial' %}" class="btn btn-lg btn-primary me-3">
                             <i class="bi bi-arrow-left"></i> Back to Trials
                         </a>
-                        <a href="{% url 'completed_trials' %}" class="btn btn-lg btn-outline-success">
+                        <a href="{% url 'trials:completed_trials' %}" class="btn btn-lg btn-outline-success">
                             <i class="bi bi-list-check"></i> View Completed Trials
                         </a>
                     </div>
@@ -231,7 +231,7 @@
             debugBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Debugging...';
             
             try {
-                const response = await fetch('{% url "debug_visual_eeg" %}');
+                const response = await fetch('{% url "trials:debug_visual_eeg" %}');
                 const data = await response.json();
                 
                 if (data.success) {
@@ -338,7 +338,7 @@
         
         async markTrialStart() {
             try {
-                const response = await fetch('{% url "mark_visual_trial_start" %}', {
+                const response = await fetch('{% url "trials:mark_visual_trial_start" %}', {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
@@ -360,7 +360,7 @@
         async runTrialLoop() {
                     while (this.isRunning) {
                         try {
-                            const response = await fetch('{% url "visual_trial_next_word" %}', {
+                            const response = await fetch('{% url "trials:visual_trial_next_word" %}', {
                                 method: 'POST',
                                 headers: {
                                     'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
@@ -400,7 +400,7 @@
             async showRestPeriod(duration) {
                 // First, tell the backend we're in rest period
                 try {
-                    await fetch('{% url "visual_trial_set_current_word" %}', {
+                    await fetch('{% url "trials:visual_trial_set_current_word" %}', {
                         method: 'POST',
                         headers: {
                             'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
@@ -426,7 +426,7 @@
                 async showWord(word, duration) {
             // First, tell the backend we're displaying this word NOW
             try {
-                await fetch('{% url "visual_trial_set_current_word" %}', {
+                await fetch('{% url "trials:visual_trial_set_current_word" %}', {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
@@ -498,7 +498,7 @@
             
             await this.stopEEGRecording();
             
-            window.location.href = '{% url "start_trial" %}';
+            window.location.href = '{% url "trials:start_trial" %}';
         }
         
         async completeTrial() {
@@ -531,7 +531,7 @@
             checkBtn.innerHTML = '<i class="bi bi-hourglass-split me-2"></i>Checking...';
             
             try {
-                const response = await fetch('{% url "check_eeg_connection" %}');
+                const response = await fetch('{% url "trials:check_eeg_connection" %}');
                 const data = await response.json();
                 
                 if (data.success) {
@@ -558,7 +558,7 @@
             try {
                 statusDiv.innerHTML = '<div class="alert alert-info"><i class="bi bi-hourglass-split me-2"></i>Initializing EEG connection and starting recording...</div>';
                 
-                const response = await fetch('{% url "start_visual_eeg_collection" %}', {
+                const response = await fetch('{% url "trials:start_visual_eeg_collection" %}', {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,
@@ -588,7 +588,7 @@
         
         async stopEEGRecording() {
             try {
-                const response = await fetch('{% url "stop_visual_eeg_collection" %}', {
+                const response = await fetch('{% url "trials:stop_visual_eeg_collection" %}', {
                     method: 'POST',
                     headers: {
                         'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value,

@@ -1,0 +1,408 @@
+{% extends 'layout.html' %}
+{% load static %}
+
+{% block title %}Sign Consent Form - {{ consent_form.title }} - NeuroPi{% endblock %}
+
+{% block extra_css %}
+<style>
+    .consent-signing-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    
+    .signing-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 15px 15px 0 0;
+        text-align: center;
+    }
+    
+    .consent-summary {
+        background: #f8f9fa;
+        padding: 25px;
+        border-left: 4px solid #28a745;
+        margin-bottom: 30px;
+    }
+    
+    .acknowledgment-section {
+        background: white;
+        padding: 30px;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        margin-bottom: 30px;
+    }
+    
+    .acknowledgment-item {
+        padding: 15px;
+        margin-bottom: 15px;
+        border: 1px solid #e9ecef;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+    
+    .acknowledgment-item:hover {
+        background: #f8f9fa;
+    }
+    
+    .acknowledgment-item.checked {
+        background: #d4edda;
+        border-color: #28a745;
+    }
+    
+    .form-check-input:checked + .form-check-label {
+        color: #155724;
+        font-weight: 600;
+    }
+    
+    .signature-section {
+        background: #fff3cd;
+        border: 2px solid #ffc107;
+        padding: 25px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+    }
+    
+    .signature-input {
+        font-size: 1.2rem;
+        padding: 15px;
+        border: 2px solid #28a745;
+        border-radius: 8px;
+        background: white;
+    }
+    
+    .signature-input:focus {
+        box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+        border-color: #28a745;
+    }
+    
+    .final-confirmation {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+        text-align: center;
+    }
+    
+    .action-buttons {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 15px 15px;
+        text-align: center;
+        border-top: 1px solid #e9ecef;
+    }
+    
+    .btn-submit {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin: 0 10px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+    }
+    
+    .btn-submit:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
+        color: white;
+    }
+    
+    .btn-submit:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+    
+    .btn-back {
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 50px;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+        margin: 0 10px;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-back:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        color: white;
+        text-decoration: none;
+    }
+    
+    .progress-indicator {
+        background: #e9ecef;
+        height: 8px;
+        border-radius: 4px;
+        margin-bottom: 30px;
+        overflow: hidden;
+    }
+    
+    .progress-bar {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        height: 100%;
+        width: 0%;
+        transition: width 0.3s ease;
+    }
+    
+    .error-message {
+        background: #f8d7da;
+        color: #721c24;
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        border: 1px solid #f5c6cb;
+    }
+    
+    .participant-rights {
+        background: #d1ecf1;
+        border: 1px solid #bee5eb;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 30px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="consent-signing-container">
+        <!-- Header -->
+        <div class="signing-header">
+            <h1><i class="bi bi-pen"></i> Sign Consent Form</h1>
+            <h3>{{ consent_form.title }}</h3>
+            <p class="mb-0">Please complete all acknowledgments and provide your digital signature</p>
+        </div>
+        
+        <!-- Progress Indicator -->
+        <div class="progress-indicator">
+            <div class="progress-bar" id="progressBar"></div>
+        </div>
+        
+        <!-- Consent Summary -->
+        <div class="consent-summary">
+            <h5><i class="bi bi-info-circle"></i> Consent Form Summary</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <p><strong>Form Type:</strong> {{ consent_form.get_form_type_display }}</p>
+                    <p><strong>Version:</strong> {{ consent_form.version }}</p>
+                </div>
+                <div class="col-md-6">
+                    <p><strong>Expires After:</strong> {{ consent_form.expiration_period }} days</p>
+                    {% if assignment %}
+                    <p><strong>Assigned by:</strong> {{ assignment.researcher.user.get_full_name|default:assignment.researcher.user.username }}</p>
+                    {% endif %}
+                </div>
+            </div>
+            {% if consent_form.summary %}
+            <div class="alert alert-info mt-3">
+                <strong>Summary:</strong> {{ consent_form.summary }}
+            </div>
+            {% endif %}
+        </div>
+        
+        <!-- Participant Rights -->
+        <div class="participant-rights">
+            <h6><i class="bi bi-shield-check"></i> Your Rights as a Research Participant</h6>
+            <ul class="mb-0">
+                <li>Your participation is completely voluntary</li>
+                <li>You can withdraw from the study at any time without penalty</li>
+                <li>You have the right to ask questions about the research</li>
+                <li>Your data will be kept confidential and secure</li>
+                <li>You can request a copy of your signed consent form</li>
+            </ul>
+        </div>
+        
+        <!-- Signing Form -->
+        <form method="post" id="consentSigningForm">
+            {% csrf_token %}
+            
+            <!-- Error Messages -->
+            {% if form.non_field_errors %}
+            <div class="error-message">
+                {% for error in form.non_field_errors %}
+                    <p class="mb-0">{{ error }}</p>
+                {% endfor %}
+            </div>
+            {% endif %}
+            
+            <!-- Acknowledgments Section -->
+            <div class="acknowledgment-section">
+                <h5><i class="bi bi-check-square"></i> Required Acknowledgments</h5>
+                <p class="text-muted mb-4">Please read and check each statement to confirm your understanding:</p>
+                
+                {% for field in form %}
+                    {% if field.name != 'digital_signature' and field.name != 'final_confirmation' %}
+                    <div class="acknowledgment-item" data-field="{{ field.name }}">
+                        <div class="form-check">
+                            {{ field }}
+                            <label class="form-check-label" for="{{ field.id_for_label }}">
+                                {{ field.label }}
+                            </label>
+                        </div>
+                        {% if field.errors %}
+                        <div class="text-danger mt-2">
+                            {% for error in field.errors %}
+                                <small>{{ error }}</small>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                {% endfor %}
+            </div>
+            
+            <!-- Digital Signature Section -->
+            <div class="signature-section">
+                <h5><i class="bi bi-signature"></i> Digital Signature</h5>
+                <p class="mb-3">By typing your full legal name below, you are providing your digital signature and consent to participate in this research.</p>
+                
+                <div class="mb-3">
+                    <label for="{{ form.digital_signature.id_for_label }}" class="form-label">
+                        {{ form.digital_signature.label }}
+                    </label>
+                    {{ form.digital_signature }}
+                    {% if form.digital_signature.help_text %}
+                    <div class="form-text">{{ form.digital_signature.help_text }}</div>
+                    {% endif %}
+                    {% if form.digital_signature.errors %}
+                    <div class="text-danger">
+                        {% for error in form.digital_signature.errors %}
+                            <small>{{ error }}</small>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            
+            <!-- Final Confirmation -->
+            <div class="final-confirmation">
+                <div class="form-check">
+                    {{ form.final_confirmation }}
+                    <label class="form-check-label" for="{{ form.final_confirmation.id_for_label }}">
+                        <strong>{{ form.final_confirmation.label }}</strong>
+                    </label>
+                </div>
+                {% if form.final_confirmation.errors %}
+                <div class="text-light mt-2">
+                    {% for error in form.final_confirmation.errors %}
+                        <small>{{ error }}</small>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            
+            <!-- Action Buttons -->
+            <div class="action-buttons">
+                <a href="{% url 'user_management:dashboard' %}" class="btn-back">
+                    <i class="bi bi-arrow-left"></i> Cancel
+                </a>
+                
+                <button type="submit" class="btn-submit" id="submitButton" disabled>
+                    <i class="bi bi-check-circle"></i> Sign Consent Form
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('consentSigningForm');
+    const submitButton = document.getElementById('submitButton');
+    const progressBar = document.getElementById('progressBar');
+    const acknowledgmentItems = document.querySelectorAll('.acknowledgment-item');
+    
+    // Update progress and enable/disable submit button
+    function updateProgress() {
+        const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+        const signatureField = form.querySelector('input[name="digital_signature"]');
+        
+        let checkedCount = 0;
+        checkboxes.forEach(checkbox => {
+            if (checkbox.checked) {
+                checkedCount++;
+            }
+        });
+        
+        const hasSignature = signatureField && signatureField.value.trim().length >= 2;
+        const totalRequired = checkboxes.length + (hasSignature ? 1 : 0);
+        const completed = checkedCount + (hasSignature ? 1 : 0);
+        
+        const progress = (completed / (totalRequired)) * 100;
+        progressBar.style.width = progress + '%';
+        
+        // Enable submit button only when all requirements are met
+        const allChecked = checkedCount === checkboxes.length;
+        submitButton.disabled = !(allChecked && hasSignature);
+    }
+    
+    // Add event listeners to checkboxes
+    form.addEventListener('change', function(e) {
+        if (e.target.type === 'checkbox') {
+            const item = e.target.closest('.acknowledgment-item');
+            if (item) {
+                if (e.target.checked) {
+                    item.classList.add('checked');
+                } else {
+                    item.classList.remove('checked');
+                }
+            }
+        }
+        updateProgress();
+    });
+    
+    // Add event listener to signature field
+    const signatureField = form.querySelector('input[name="digital_signature"]');
+    if (signatureField) {
+        signatureField.addEventListener('input', updateProgress);
+    }
+    
+    // Form submission validation
+    form.addEventListener('submit', function(e) {
+        const checkboxes = form.querySelectorAll('input[type="checkbox"]');
+        const signature = signatureField.value.trim();
+        
+        // Check all acknowledgments
+        for (let checkbox of checkboxes) {
+            if (!checkbox.checked) {
+                e.preventDefault();
+                alert('Please check all required acknowledgments before signing.');
+                checkbox.focus();
+                return false;
+            }
+        }
+        
+        // Check signature
+        if (signature.length < 2) {
+            e.preventDefault();
+            alert('Please provide your full legal name as your digital signature.');
+            signatureField.focus();
+            return false;
+        }
+        
+        // Final confirmation
+        if (!confirm(`By clicking OK, you confirm that:\n\n• You have read and understood the consent form\n• You voluntarily agree to participate in this research\n• Your digital signature "${signature}" is legally binding\n\nDo you want to proceed with signing this consent form?`)) {
+            e.preventDefault();
+            return false;
+        }
+        
+        // Disable submit button to prevent double submission
+        submitButton.disabled = true;
+        submitButton.innerHTML = '<i class="bi bi-hourglass-split"></i> Processing...';
+    });
+    
+    // Initial progress update
+    updateProgress();
+});
+</script>
+{% endblock %}

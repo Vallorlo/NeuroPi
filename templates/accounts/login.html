@@ -1,66 +1,268 @@
 {% extends "layout.html" %}
 
 {% block title %}
-    Login
+    Login - NeuroPi
 {% endblock title %}
 
 {% block content %}
 <div class="container mt-5 mb-5">
-    <div class="row">
-        <div class="col-lg-6 offset-lg-3">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h1 class="mb-0">Login</h1>
+    <div class="row justify-content-center">
+        <div class="col-lg-5 col-md-7">
+            <!-- Header Section -->
+            <div class="text-center mb-4">
+                <div class="login-logo mb-3">
+                    <i class="bi bi-shield-lock-fill"></i>
                 </div>
-                <div class="card-body">
+                <h1 class="display-5 fw-bold text-primary mb-2">Welcome Back</h1>
+                <p class="text-muted">Sign in to your Neuro<span class="text-danger fw-bold">π</span> account</p>
+            </div>
+
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-gradient-primary text-white text-center py-4">
+                    <h2 class="mb-0"><i class="bi bi-box-arrow-in-right"></i> Login</h2>
+                </div>
+                <div class="card-body p-5">
                     {% if messages %}
                         {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }}">
-                                {{ message }}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                <i class="bi bi-info-circle-fill"></i> {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
                         {% endfor %}
                     {% endif %}
 
-                    <form method="post">
+                    <form method="post" class="login-form">
                         {% csrf_token %}
 
                         {% if form.errors %}
-                            <div class="alert alert-danger">
-                                <strong>Error:</strong> Please correct the errors below.
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <i class="bi bi-exclamation-triangle-fill"></i>
+                                <strong>Login Failed:</strong> Please check your credentials and try again.
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
                         {% endif %}
 
-                        <div class="mb-3">
-                            <label for="id_username" class="form-label">Username</label>
-                            <input type="text" name="username" class="form-control {% if form.username.errors %}is-invalid{% endif %}" id="id_username" required>
-                            {% if form.username.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.username.errors }}
-                                </div>
-                            {% endif %}
+                        <div class="mb-4">
+                            <label for="id_username" class="form-label fw-semibold">
+                                <i class="bi bi-person-fill text-primary"></i> Username
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light border-end-0">
+                                    <i class="bi bi-person text-muted"></i>
+                                </span>
+                                <input type="text" name="username"
+                                       class="form-control border-start-0 {% if form.username.errors %}is-invalid{% endif %}"
+                                       id="id_username" placeholder="Enter your username" required>
+                                {% if form.username.errors %}
+                                    <div class="invalid-feedback">
+                                        {{ form.username.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="id_password" class="form-label">Password</label>
-                            <input type="password" name="password" class="form-control {% if form.password.errors %}is-invalid{% endif %}" id="id_password" required>
-                            {% if form.password.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.password.errors }}
-                                </div>
-                            {% endif %}
+                        <div class="mb-4">
+                            <label for="id_password" class="form-label fw-semibold">
+                                <i class="bi bi-lock-fill text-primary"></i> Password
+                            </label>
+                            <div class="input-group input-group-lg">
+                                <span class="input-group-text bg-light border-end-0">
+                                    <i class="bi bi-lock text-muted"></i>
+                                </span>
+                                <input type="password" name="password"
+                                       class="form-control border-start-0 {% if form.password.errors %}is-invalid{% endif %}"
+                                       id="id_password" placeholder="Enter your password" required>
+                                <button class="btn btn-outline-secondary" type="button" id="togglePassword">
+                                    <i class="bi bi-eye" id="toggleIcon"></i>
+                                </button>
+                                {% if form.password.errors %}
+                                    <div class="invalid-feedback">
+                                        {{ form.password.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
                         </div>
 
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">Login</button>
+                        <div class="d-grid gap-2 mb-4">
+                            <button type="submit" class="btn btn-primary btn-lg py-3">
+                                <i class="bi bi-box-arrow-in-right"></i> Sign In
+                            </button>
                         </div>
                     </form>
 
-                    <div class="mt-4 text-center">
-                        <p>Don't have an account? <a href="{% url 'register' %}">Register here</a></p>
+                    <div class="text-center">
+                        <p class="text-muted mb-3">New to NeuroPi?</p>
+                        <a href="{% url 'register' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-person-plus"></i> Create Account
+                        </a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<style>
+/* Enhanced Login Page Styles */
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #0d6efd, #6610f2) !important;
+}
+
+.login-logo {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto;
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    color: white;
+    box-shadow: 0 8px 25px rgba(13, 110, 253, 0.3);
+}
+
+.card {
+    border-radius: 16px;
+    overflow: hidden;
+}
+
+.input-group-text {
+    border-radius: 12px 0 0 12px;
+}
+
+.form-control {
+    border-radius: 0 12px 12px 0;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+.input-group-lg .form-control {
+    padding: 0.75rem 1rem;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(13, 110, 253, 0.3);
+}
+
+.btn-outline-primary {
+    border: 2px solid #0d6efd;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-outline-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(13, 110, 253, 0.2);
+}
+
+.form-label {
+    color: #495057;
+    margin-bottom: 0.75rem;
+}
+
+/* Animation for form elements */
+.login-form {
+    animation: slideInUp 0.6s ease-out;
+}
+
+@keyframes slideInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Responsive adjustments */
+@media (max-width: 576px) {
+    .card-body {
+        padding: 2rem !important;
+    }
+
+    .login-logo {
+        width: 60px;
+        height: 60px;
+        font-size: 2rem;
+    }
+}
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Password visibility toggle
+    const togglePassword = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('id_password');
+    const toggleIcon = document.getElementById('toggleIcon');
+
+    if (togglePassword) {
+        togglePassword.addEventListener('click', function() {
+            const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+            passwordInput.setAttribute('type', type);
+
+            // Toggle icon
+            if (type === 'text') {
+                toggleIcon.classList.remove('bi-eye');
+                toggleIcon.classList.add('bi-eye-slash');
+            } else {
+                toggleIcon.classList.remove('bi-eye-slash');
+                toggleIcon.classList.add('bi-eye');
+            }
+        });
+    }
+
+    // Form validation enhancement
+    const form = document.querySelector('.login-form');
+    const inputs = form.querySelectorAll('input[required]');
+
+    inputs.forEach(input => {
+        input.addEventListener('blur', function() {
+            if (this.value.trim() === '') {
+                this.classList.add('is-invalid');
+            } else {
+                this.classList.remove('is-invalid');
+            }
+        });
+
+        input.addEventListener('input', function() {
+            if (this.classList.contains('is-invalid') && this.value.trim() !== '') {
+                this.classList.remove('is-invalid');
+            }
+        });
+    });
+
+    // Add loading state to submit button
+    form.addEventListener('submit', function() {
+        const submitBtn = this.querySelector('button[type="submit"]');
+        const originalText = submitBtn.innerHTML;
+
+        submitBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Signing In...';
+        submitBtn.disabled = true;
+
+        // Re-enable button after 3 seconds (in case of validation errors)
+        setTimeout(() => {
+            submitBtn.innerHTML = originalText;
+            submitBtn.disabled = false;
+        }, 3000);
+    });
+});
+</script>
 {% endblock content %}

@@ -1,0 +1,276 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Create Consent Form - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item"><a href="{% url 'user_management:consent_management' %}">Consent Management</a></li>
+<li class="breadcrumb-item active" aria-current="page">Create Consent Form</li>
+{% endblock %}
+
+{% block page_content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+            <h1>
+                <i class="fas fa-file-plus me-3"></i>
+                Create Consent Form
+            </h1>
+            <p class="subtitle">Design and create consent forms for research participants</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'user_management:consent_management' %}" class="action-button">
+                <i class="fas fa-arrow-left"></i>
+                Back to Consent Management
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Main Content -->
+<div class="row">
+    <div class="col-lg-10 mx-auto">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-file-plus me-2"></i>
+                    Create New Consent Form
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="post" class="needs-validation" novalidate>
+                    {% csrf_token %}
+
+                    <!-- Basic Information Section -->
+                    <div class="form-section mb-4">
+                        <h6 class="section-title">
+                            <i class="fas fa-info-circle me-2"></i>
+                            Basic Information
+                        </h6>
+
+                        <div class="row">
+                            <div class="col-md-8">
+                                <div class="form-group mb-3">
+                                    <label for="{{ form.title.id_for_label }}" class="form-label required">
+                                        <i class="fas fa-heading me-1"></i>
+                                        Title
+                                    </label>
+                                    {{ form.title }}
+                                    {% if form.title.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.title.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text">
+                                        Enter a clear, descriptive title for this consent form
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <div class="form-group mb-3">
+                                    <label for="{{ form.version.id_for_label }}" class="form-label required">
+                                        <i class="fas fa-tag me-1"></i>
+                                        Version
+                                    </label>
+                                    {{ form.version }}
+                                    {% if form.version.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.version.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text">
+                                        e.g., 1.0, 2.1
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="{{ form.form_type.id_for_label }}" class="form-label required">
+                                        <i class="fas fa-list me-1"></i>
+                                        Form Type
+                                    </label>
+                                    {{ form.form_type }}
+                                    {% if form.form_type.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.form_type.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text">
+                                        Select the type of consent form
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-group mb-3">
+                                    <label for="{{ form.expiration_period.id_for_label }}" class="form-label required">
+                                        <i class="fas fa-calendar-times me-1"></i>
+                                        Expiration Period (Days)
+                                    </label>
+                                    {{ form.expiration_period }}
+                                    {% if form.expiration_period.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.expiration_period.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    <div class="form-text">
+                                        Number of days until consent expires (default: 365)
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Summary Section -->
+                    <div class="form-section mb-4">
+                        <h6 class="section-title">
+                            <i class="fas fa-file-alt me-2"></i>
+                            Summary & Description
+                        </h6>
+
+                        <div class="form-group mb-3">
+                            <label for="{{ form.summary.id_for_label }}" class="form-label">
+                                <i class="fas fa-align-left me-1"></i>
+                                Summary
+                            </label>
+                            {{ form.summary }}
+                            {% if form.summary.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.summary.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                Brief summary of what this consent form covers (optional)
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Content Section -->
+                    <div class="form-section mb-4">
+                        <h6 class="section-title">
+                            <i class="fas fa-file-text me-2"></i>
+                            Consent Form Content
+                        </h6>
+
+                        <div class="form-group mb-3">
+                            <label for="{{ form.content.id_for_label }}" class="form-label required">
+                                <i class="fas fa-edit me-1"></i>
+                                Content
+                            </label>
+                            {{ form.content }}
+                            {% if form.content.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.content.errors.0 }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                Enter the full consent form content. You can use HTML formatting for better presentation.
+                            </div>
+                        </div>
+
+                        <!-- Content Preview -->
+                        <div class="content-preview mt-3">
+                            <button type="button" class="btn btn-outline-info btn-sm" id="previewBtn">
+                                <i class="fas fa-eye me-1"></i>
+                                Preview Content
+                            </button>
+                            <div id="contentPreview" class="preview-box mt-3" style="display: none;">
+                                <h6>Preview:</h6>
+                                <div class="preview-content border p-3 bg-light rounded"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Form Actions -->
+                    <div class="form-actions">
+                        <div class="d-flex gap-3 justify-content-end">
+                            <a href="{% url 'user_management:consent_management' %}" class="btn btn-outline-secondary">
+                                <i class="fas fa-times me-2"></i>
+                                Cancel
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save me-2"></i>
+                                Create Consent Form
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Form validation
+    const form = document.querySelector('.needs-validation');
+
+    form.addEventListener('submit', function(event) {
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+        form.classList.add('was-validated');
+    });
+
+    // Content preview functionality
+    const previewBtn = document.getElementById('previewBtn');
+    const contentPreview = document.getElementById('contentPreview');
+    const contentTextarea = document.querySelector('#{{ form.content.id_for_label }}');
+    const previewContent = document.querySelector('.preview-content');
+
+    if (previewBtn && contentPreview && contentTextarea && previewContent) {
+        previewBtn.addEventListener('click', function() {
+            const content = contentTextarea.value.trim();
+
+            if (content) {
+                previewContent.innerHTML = content;
+                contentPreview.style.display = 'block';
+                previewBtn.innerHTML = '<i class="fas fa-eye-slash me-1"></i> Hide Preview';
+            } else {
+                contentPreview.style.display = 'none';
+                previewBtn.innerHTML = '<i class="fas fa-eye me-1"></i> Preview Content';
+            }
+
+            // Toggle preview visibility
+            if (contentPreview.style.display === 'none') {
+                contentPreview.style.display = 'block';
+                previewBtn.innerHTML = '<i class="fas fa-eye-slash me-1"></i> Hide Preview';
+            } else {
+                contentPreview.style.display = 'none';
+                previewBtn.innerHTML = '<i class="fas fa-eye me-1"></i> Preview Content';
+            }
+        });
+
+        // Auto-update preview when content changes
+        contentTextarea.addEventListener('input', function() {
+            if (contentPreview.style.display !== 'none') {
+                const content = this.value.trim();
+                previewContent.innerHTML = content || '<em class="text-muted">No content to preview</em>';
+            }
+        });
+    }
+
+    // Add loading state to submit button
+    const submitBtn = form.querySelector('button[type="submit"]');
+    form.addEventListener('submit', function() {
+        if (form.checkValidity()) {
+            submitBtn.disabled = true;
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i>Creating...';
+
+            // Re-enable after timeout (fallback)
+            setTimeout(() => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+            }, 10000);
+        }
+    });
+});
+</script>
+{% endblock %}

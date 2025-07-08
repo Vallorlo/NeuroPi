@@ -54,7 +54,7 @@
                     <a href="{% url 'start_trial' %}" class="btn btn-primary btn-lg px-4 me-sm-3">
                         <i class="bi bi-play-circle-fill"></i> Start New Trial
                     </a>
-                    <a href="{% url 'completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
+                    <a href="{% url 'trials:completed_trials' %}" class="btn btn-outline-light btn-lg px-4">
                         <i class="bi bi-list-check"></i> View Completed Trials
                     </a>
                 </div>
@@ -365,6 +365,124 @@
 .btn-cta-secondary:hover {
     background-color: rgba(255, 255, 255, 0.25);
     color: white;
+}
+
+/* Welcome Back Section Styles */
+.welcome-back-container {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+}
+
+.welcome-card {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 249, 250, 0.95));
+    border-radius: 20px;
+    overflow: hidden;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.welcome-content {
+    padding: 2.5rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+    flex-wrap: wrap;
+}
+
+.welcome-avatar {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    color: white;
+    box-shadow: 0 8px 25px rgba(13, 110, 253, 0.3);
+    flex-shrink: 0;
+}
+
+.welcome-text {
+    flex: 1;
+    min-width: 300px;
+}
+
+.welcome-text h3 {
+    font-size: 1.75rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    color: #333;
+}
+
+.welcome-text p {
+    color: #6c757d;
+    margin-bottom: 1rem;
+    line-height: 1.6;
+}
+
+.welcome-stats {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+}
+
+.stat-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+    color: #495057;
+    font-weight: 500;
+}
+
+.welcome-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    flex-shrink: 0;
+}
+
+.btn-welcome-primary {
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    color: white;
+    padding: 0.75rem 1.5rem;
+    border-radius: 50px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(13, 110, 253, 0.3);
+}
+
+.btn-welcome-primary:hover {
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(13, 110, 253, 0.4);
+}
+
+.btn-welcome-secondary {
+    background: rgba(108, 117, 125, 0.1);
+    color: #6c757d;
+    padding: 0.75rem 1.5rem;
+    border-radius: 50px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    border: 2px solid rgba(108, 117, 125, 0.2);
+}
+
+.btn-welcome-secondary:hover {
+    background: rgba(108, 117, 125, 0.15);
+    color: #495057;
+    transform: translateY(-2px);
 }
 
 /* Feature Card Styles */

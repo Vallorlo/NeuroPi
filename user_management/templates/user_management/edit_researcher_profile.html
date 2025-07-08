@@ -1,0 +1,221 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Edit Researcher Profile - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Edit Researcher Profile</li>
+{% endblock %}
+
+{% block page_content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+            <h1>
+                <i class="fas fa-user-edit me-3"></i>
+                Edit Researcher Profile
+            </h1>
+            <p class="subtitle">Update your research information and preferences</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'user_management:dashboard' %}" class="action-button">
+                <i class="fas fa-arrow-left"></i>
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- Profile Form -->
+<div class="row justify-content-center">
+    <div class="col-lg-8">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <i class="fas fa-microscope me-2"></i>
+                Researcher Information
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+                    
+                    <!-- Institution Information -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="mb-3">
+                                <i class="fas fa-university me-2"></i>
+                                Institution Information
+                            </h5>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.institution.id_for_label }}" class="form-label">
+                                    Institution/Organization
+                                </label>
+                                {{ form.institution }}
+                                <div class="form-text">Your affiliated research institution</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.department.id_for_label }}" class="form-label">
+                                    Department
+                                </label>
+                                {{ form.department }}
+                                <div class="form-text">Your department or research group</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.position.id_for_label }}" class="form-label">
+                                    Position/Title
+                                </label>
+                                {{ form.position }}
+                                <div class="form-text">Your academic or professional title</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.research_area.id_for_label }}" class="form-label">
+                                    Research Area
+                                </label>
+                                {{ form.research_area }}
+                                <div class="form-text">Your primary research focus</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Contact Information -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="mb-3">
+                                <i class="fas fa-address-card me-2"></i>
+                                Contact Information
+                            </h5>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.phone_number.id_for_label }}" class="form-label">
+                                    Phone Number
+                                </label>
+                                {{ form.phone_number }}
+                                <div class="form-text">Contact number for participants</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="{{ form.office_location.id_for_label }}" class="form-label">
+                                    Office Location
+                                </label>
+                                {{ form.office_location }}
+                                <div class="form-text">Your office or lab location</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Research Permissions -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="mb-3">
+                                <i class="fas fa-shield-alt me-2"></i>
+                                Research Permissions
+                            </h5>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mb-3">
+                                {{ form.can_create_studies }}
+                                <label class="form-check-label" for="{{ form.can_create_studies.id_for_label }}">
+                                    Can create research studies
+                                </label>
+                            </div>
+                            <div class="form-check mb-3">
+                                {{ form.can_manage_participants }}
+                                <label class="form-check-label" for="{{ form.can_manage_participants.id_for_label }}">
+                                    Can manage participants
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check mb-3">
+                                {{ form.can_export_data }}
+                                <label class="form-check-label" for="{{ form.can_export_data.id_for_label }}">
+                                    Can export participant data
+                                </label>
+                            </div>
+                            <div class="form-check mb-3">
+                                {{ form.is_active }}
+                                <label class="form-check-label" for="{{ form.is_active.id_for_label }}">
+                                    Profile is active
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Bio/Description -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h5 class="mb-3">
+                                <i class="fas fa-user-circle me-2"></i>
+                                Professional Bio
+                            </h5>
+                            <div class="mb-3">
+                                <label for="{{ form.bio.id_for_label }}" class="form-label">
+                                    Bio/Description
+                                </label>
+                                {{ form.bio }}
+                                <div class="form-text">
+                                    Brief description of your research background and interests (visible to participants)
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Buttons -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'user_management:dashboard' %}" class="btn btn-modern btn-outline-secondary me-md-2">
+                            <i class="fas fa-times"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-modern action-button success loading-btn">
+                            <i class="fas fa-save"></i>
+                            Save Profile
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Profile Tips -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header" style="background: var(--info-gradient);">
+                <i class="fas fa-lightbulb me-2"></i>
+                Profile Tips
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-eye me-2"></i>Visibility</h6>
+                        <ul class="mb-3">
+                            <li>Your bio and research area are visible to participants</li>
+                            <li>Contact information is only shared with approved participants</li>
+                            <li>Institution details help build trust with participants</li>
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <h6><i class="fas fa-cogs me-2"></i>Permissions</h6>
+                        <ul class="mb-3">
+                            <li>Study creation allows you to design new research protocols</li>
+                            <li>Participant management enables recruitment and scheduling</li>
+                            <li>Data export permissions are controlled by administrators</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consent Form Signed - NeuroPi</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .email-container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 3px solid #007bff;
+        }
+        .logo {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+        .title {
+            color: #2d3748;
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+        .notification-badge {
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 50px;
+            display: inline-block;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+        .content {
+            margin-bottom: 30px;
+        }
+        .participant-info {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .info-item {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .info-label {
+            font-weight: bold;
+            color: #4a5568;
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .info-value {
+            color: #2d3748;
+            font-size: 1.1rem;
+            margin-top: 5px;
+        }
+        .action-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 50px;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 5px;
+            box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
+        }
+        .action-button:hover {
+            opacity: 0.9;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #e2e8f0;
+            color: #718096;
+            font-size: 0.9rem;
+        }
+        .next-actions {
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        @media (max-width: 600px) {
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            .action-button {
+                display: block;
+                margin: 10px 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="logo">Neuro<span style="color: #e53e3e;">π</span></div>
+            <h1 class="title">Consent Form Signed</h1>
+            <div class="notification-badge">
+                <i class="fas fa-check-circle"></i> New Participant Ready
+            </div>
+        </div>
+
+        <div class="content">
+            <p>Hello {{ researcher.user.get_full_name|default:researcher.user.username }},</p>
+            
+            <p>Great news! A participant has successfully signed the consent form you assigned and is now ready to participate in your research study.</p>
+
+            <div class="participant-info">
+                <h4>Participant Information:</h4>
+                <p><strong>Name:</strong> {{ participant.user.get_full_name|default:participant.user.username }}</p>
+                <p><strong>Email:</strong> {{ participant.user.email }}</p>
+                <p><strong>Registration Date:</strong> {{ participant.date_registered|date:"F d, Y" }}</p>
+                {% if participant.age %}
+                <p><strong>Age:</strong> {{ participant.age }} years</p>
+                {% endif %}
+                {% if participant.gender %}
+                <p><strong>Gender:</strong> {{ participant.get_gender_display }}</p>
+                {% endif %}
+            </div>
+
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Consent Form</div>
+                    <div class="info-value">{{ consent_form.title }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Form Type</div>
+                    <div class="info-value">{{ consent_form.get_form_type_display }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Signed Date</div>
+                    <div class="info-value">{{ consent_record.signed_at|date:"F d, Y" }}</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Expires On</div>
+                    <div class="info-value">{{ consent_record.expires_at|date:"F d, Y" }}</div>
+                </div>
+            </div>
+
+            {% if assignment.assignment_message %}
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                <h4 style="color: #856404; margin-top: 0;">Your Assignment Message:</h4>
+                <p style="color: #856404; margin-bottom: 0;">{{ assignment.assignment_message }}</p>
+            </div>
+            {% endif %}
+
+            <div class="next-actions">
+                <h4>Next Steps:</h4>
+                <ul>
+                    <li>The participant is now eligible for your research studies</li>
+                    <li>You can schedule research sessions through the platform</li>
+                    <li>Review the participant's profile for study compatibility</li>
+                    <li>Send study invitations or session requests</li>
+                </ul>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+                <a href="{{ domain }}{% url 'user_management:participant_detail' participant.id %}" class="action-button">
+                    View Participant Profile
+                </a>
+                <a href="{{ domain }}{% url 'user_management:dashboard' %}" class="action-button" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%);">
+                    Go to Dashboard
+                </a>
+            </div>
+
+            <div style="background: #d4edda; border: 1px solid #c3e6cb; border-radius: 8px; padding: 15px; margin: 20px 0;">
+                <h4 style="color: #155724; margin-top: 0;">Compliance Notes:</h4>
+                <ul style="color: #155724; margin-bottom: 0;">
+                    <li>Digital signature and timestamp have been recorded</li>
+                    <li>Consent is valid for {{ consent_form.expiration_period }} days</li>
+                    <li>Participant can withdraw consent at any time</li>
+                    <li>All consent activities are logged for audit purposes</li>
+                </ul>
+            </div>
+
+            <p><strong>Questions?</strong> If you need to contact the participant or have questions about the consent process, please use the NeuroPi platform messaging system.</p>
+        </div>
+
+        <div class="footer">
+            <p>This email was sent from the NeuroPi Research Platform.</p>
+            <p>If you have any technical questions, please contact the system administrator.</p>
+            <p>&copy; {% now "Y" %} NeuroPi. All rights reserved.</p>
+        </div>
+    </div>
+</body>
+</html>

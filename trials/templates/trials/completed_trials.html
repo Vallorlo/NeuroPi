@@ -83,6 +83,8 @@ Updated to include Motor Imagery sessions and fix numbering bug
                                 <div class="card-body">
                                     <i class="bi bi-mic display-4 text-muted mb-3"></i>
                                     <h4 class="text-muted">No Traditional Trials Completed</h4>
+                                    <!-- <p class="text-muted">No traditional trial data found. Start a new trial to see results here.</p>
+                                    <a href="{% url 'trials:start_trial' %}" class="btn btn-primary"> -->
                                     <p class="text-muted">No traditional trials found. Start a new trial to see results here.</p>
                                     <a href="{% url 'start_trial' %}" class="btn btn-primary">
                                         <i class="bi bi-plus-circle me-2"></i>Start First Trial
@@ -138,6 +140,10 @@ Updated to include Motor Imagery sessions and fix numbering bug
                                                     <li><a class="dropdown-item" href="#"><i class="bi bi-download me-2"></i> Download EEG Data</a></li>
                                                     <li><a class="dropdown-item" href="#"><i class="bi bi-graph-up me-2"></i> View Analysis</a></li>
                                                     <li><hr class="dropdown-divider"></li>
+                                                    <!-- change -->
+                                                    <!-- <li><a class="dropdown-item" href="{% url 'trials:visual_trial_setup' %}"><i class="bi bi-arrow-repeat"></i> Repeat Setup</a></li>
+                                                    <li><hr class="dropdown-divider"></li>
+                                                    <li><a class="dropdown-item text-danger" href="#"><i class="bi bi-trash"></i> Delete Session</a></li> -->
                                                     <li><a class="dropdown-item" href="{% url 'visual_trial_setup' %}"><i class="bi bi-arrow-repeat me-2"></i> Repeat Setup</a></li>
                                                 </ul>
                                             </div>
@@ -153,7 +159,7 @@ Updated to include Motor Imagery sessions and fix numbering bug
                                     <i class="bi bi-eye display-4 text-muted mb-3"></i>
                                     <h4 class="text-muted">No Visual Trials Completed</h4>
                                     <p class="text-muted">No visual word focus trials found. Start a new visual trial to see results here.</p>
-                                    <a href="{% url 'start_trial' %}" class="btn btn-success">
+                                    <a href="{% url 'trials:start_trial' %}" class="btn btn-success">
                                         <i class="bi bi-eye-fill me-2"></i>Start First Visual Trial
                                     </a>
                                 </div>
@@ -265,7 +271,7 @@ Updated to include Motor Imagery sessions and fix numbering bug
             </div>
 
             <div class="text-center mt-4">
-                <a href="{% url 'start_trial' %}" class="btn btn-lg btn-primary">
+                <a href="{% url 'trials:start_trial' %}" class="btn btn-lg btn-primary">
                     <i class="bi bi-plus-circle-fill me-2"></i>Start New Trial
                 </a>
             </div>

@@ -1,0 +1,403 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Schedule Session - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Schedule Session</li>
+{% endblock %}
+
+{% block page_content %}
+<!-- Enhanced Page Header -->
+<div class="page-header mb-4">
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            <div class="col-md-8">
+                <div class="d-flex align-items-center mb-3">
+                    <div class="icon-wrapper me-3">
+                        <i class="fas fa-calendar-plus"></i>
+                    </div>
+                    <div>
+                        <h1 class="mb-1">Schedule Research Session</h1>
+                        <p class="subtitle mb-0">Plan and organize research sessions with participants</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 text-md-end">
+                <a href="{% url 'user_management:dashboard' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-arrow-left me-2"></i>
+                    Back to Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-lg-10">
+        <!-- Session Planning Steps -->
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <div class="step-content">
+                        <h6>Select Participant</h6>
+                        <p class="small text-muted">Choose from available participants</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <div class="step-content">
+                        <h6>Set Date & Time</h6>
+                        <p class="small text-muted">Schedule based on availability</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <div class="step-content">
+                        <h6>Add Details</h6>
+                        <p class="small text-muted">Include location and equipment notes</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Session Form -->
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h4 class="mb-0">
+                    <i class="fas fa-calendar-alt me-2"></i>
+                    Session Details
+                </h4>
+            </div>
+            <div class="card-body">
+                <form method="post" id="sessionForm">
+                    {% csrf_token %}
+                    
+                    <!-- Participant Selection -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.participant.id_for_label }}" class="form-label fw-medium">
+                                    <i class="fas fa-user me-1 text-primary"></i>
+                                    Participant <span class="text-danger">*</span>
+                                </label>
+                                {{ form.participant }}
+                                <div class="form-text">Select the participant for this session</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.title.id_for_label }}" class="form-label fw-medium">
+                                    <i class="fas fa-tag me-1 text-success"></i>
+                                    Session Title <span class="text-danger">*</span>
+                                </label>
+                                {{ form.title }}
+                                <div class="form-text">Brief descriptive title for the session</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Session Description -->
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <div class="form-group">
+                                <label for="{{ form.description.id_for_label }}" class="form-label fw-medium">
+                                    <i class="fas fa-align-left me-1 text-info"></i>
+                                    Description
+                                </label>
+                                {{ form.description }}
+                                <div class="form-text">Detailed description of what the session involves</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Date, Time and Duration -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.scheduled_date.id_for_label }}" class="form-label fw-medium">
+                                    <i class="fas fa-calendar me-1 text-warning"></i>
+                                    Scheduled Date & Time <span class="text-danger">*</span>
+                                </label>
+                                {{ form.scheduled_date }}
+                                <div class="form-text">When the session will take place</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.estimated_duration.id_for_label }}" class="form-label fw-medium">
+                                    <i class="fas fa-clock me-1 text-secondary"></i>
+                                    Duration (minutes) <span class="text-danger">*</span>
+                                </label>
+                                {{ form.estimated_duration }}
+                                <div class="form-text">Expected duration of the session</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Location and Equipment -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.location.id_for_label }}" class="form-label fw-medium">
+                                    <i class="fas fa-map-marker-alt me-1 text-danger"></i>
+                                    Location
+                                </label>
+                                {{ form.location }}
+                                <div class="form-text">Where the session will be conducted</div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="{{ form.equipment_notes.id_for_label }}" class="form-label fw-medium">
+                                    <i class="fas fa-tools me-1 text-dark"></i>
+                                    Equipment Notes
+                                </label>
+                                {{ form.equipment_notes }}
+                                <div class="form-text">Special equipment or setup requirements</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Submit Buttons -->
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{% url 'user_management:dashboard' %}" class="btn btn-outline-secondary me-md-2">
+                            <i class="fas fa-times me-2"></i>
+                            Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-calendar-check me-2"></i>
+                            Schedule Session
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Quick Tips -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card border-info">
+                    <div class="card-header bg-info text-white">
+                        <h6 class="mb-0">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            Scheduling Tips
+                        </h6>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <ul class="list-unstyled mb-0">
+                                    <li class="mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        Check participant availability before scheduling
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        Allow buffer time between sessions
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <ul class="list-unstyled mb-0">
+                                    <li class="mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        Include detailed equipment requirements
+                                    </li>
+                                    <li class="mb-2">
+                                        <i class="fas fa-check text-success me-2"></i>
+                                        Send confirmation emails to participants
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.icon-wrapper {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+    box-shadow: 0 4px 15px rgba(23, 162, 184, 0.3);
+}
+
+.page-header {
+    background: linear-gradient(135deg, rgba(23, 162, 184, 0.1), rgba(19, 132, 150, 0.05));
+    border-radius: 15px;
+    padding: 2rem;
+    margin-bottom: 2rem;
+}
+
+.step-card {
+    background: white;
+    border-radius: 15px;
+    padding: 1.5rem;
+    text-align: center;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+    height: 100%;
+    border: 2px solid #e9ecef;
+}
+
+.step-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+    border-color: #17a2b8;
+}
+
+.step-number {
+    width: 50px;
+    height: 50px;
+    background: linear-gradient(135deg, #17a2b8, #138496);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+    font-weight: bold;
+    margin: 0 auto 1rem;
+}
+
+.step-content h6 {
+    color: #495057;
+    margin-bottom: 0.5rem;
+}
+
+.card {
+    border: none;
+    border-radius: 15px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.08);
+    transition: all 0.3s ease;
+}
+
+.card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+}
+
+.card-header {
+    border-radius: 15px 15px 0 0 !important;
+    border-bottom: none;
+    padding: 1.25rem 1.5rem;
+}
+
+.form-group {
+    margin-bottom: 1.5rem;
+}
+
+.form-control, .form-select {
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: #17a2b8;
+    box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+}
+
+.btn {
+    border-radius: 10px;
+    padding: 0.75rem 1.5rem;
+    font-weight: 500;
+    transition: all 0.3s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.form-label {
+    color: #495057;
+    margin-bottom: 0.75rem;
+    font-weight: 500;
+}
+
+.form-text {
+    font-size: 0.875rem;
+    color: #6c757d;
+    margin-top: 0.5rem;
+}
+
+.subtitle {
+    color: #6c757d;
+    font-size: 1.1rem;
+}
+
+/* Date/time input styling */
+input[type="datetime-local"] {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 0.75rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+input[type="datetime-local"]:focus {
+    background: white;
+    border-color: #17a2b8;
+    box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+}
+
+/* Number input styling */
+input[type="number"] {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    border-radius: 10px;
+    padding: 0.75rem;
+    font-size: 1rem;
+    transition: all 0.3s ease;
+}
+
+input[type="number"]:focus {
+    background: white;
+    border-color: #17a2b8;
+    box-shadow: 0 0 0 0.2rem rgba(23, 162, 184, 0.25);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .page-header {
+        padding: 1.5rem;
+    }
+
+    .icon-wrapper {
+        width: 50px;
+        height: 50px;
+        font-size: 1.2rem;
+    }
+
+    .step-card {
+        margin-bottom: 1rem;
+    }
+
+    .step-number {
+        width: 40px;
+        height: 40px;
+        font-size: 1.2rem;
+    }
+}
+</style>
+{% endblock %}

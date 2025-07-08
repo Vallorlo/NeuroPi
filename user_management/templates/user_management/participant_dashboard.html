@@ -1,0 +1,713 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Participant Dashboard - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+{% endblock %}
+
+{% block page_content %}
+<!-- Welcome Hero Section -->
+<div class="participant-hero mb-5">
+    <div class="container">
+        <div class="row align-items-center">
+            <div class="col-lg-8">
+                <div class="hero-content">
+                    <div class="hero-badge mb-3">
+                        <i class="fas fa-star me-2"></i>
+                        Research Participant
+                    </div>
+                    <h1 class="hero-title mb-3">
+                        Welcome back, {{ user.get_full_name|default:user.username }}!
+                    </h1>
+                    <p class="hero-subtitle mb-4">
+                        Ready to contribute to groundbreaking research? Your participation helps advance scientific discovery
+                        and our understanding of the human brain.
+                    </p>
+                    <div class="d-flex gap-3 flex-wrap">
+                        <a href="{% url 'user_management:join_research_study' %}" class="btn btn-modern btn-primary">
+                            <i class="fas fa-plus me-2"></i>
+                            Join New Research
+                        </a>
+                        <a href="{% url 'user_management:edit_profile' %}" class="btn btn-modern btn-outline-secondary">
+                            <i class="fas fa-user-edit me-2"></i>
+                            Update Profile
+                        </a>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-4">
+                <div class="dashboard-card">
+                    <div class="card-body text-center">
+                        <div class="profile-avatar mb-3">
+                            <div class="avatar-circle mx-auto" style="width: 80px; height: 80px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 50%; display: flex; align-items: center; justify-content: center; color: white; font-size: 2rem; font-weight: 600;">
+                                {{ user.username|slice:":1"|upper }}
+                            </div>
+                        </div>
+                        <h4 class="mb-2">{{ user.get_full_name|default:user.username }}</h4>
+                        <p class="text-muted mb-3">{{ user.email }}</p>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="stat-card">
+                                    <div class="stat-number">{{ participation_requests.count|default:0 }}</div>
+                                    <div class="stat-label">Requests</div>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="stat-card">
+                                    <div class="stat-number">{{ upcoming_sessions.count|default:0 }}</div>
+                                    <div class="stat-label">Sessions</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Dashboard Overview -->
+<div class="dashboard-overview mb-5">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-3 col-md-6 mb-4">
+                <div class="overview-card research-card">
+                    <div class="card-icon">
+                        <i class="fas fa-flask"></i>
+                    </div>
+                    <div class="card-content">
+                        <div class="card-number">{{ participation_requests.count|default:0 }}</div>
+                        <div class="card-label">Research Requests</div>
+                        <div class="card-trend">
+                            <i class="fas fa-arrow-up"></i>
+                            <span>+2 this week</span>
+                        </div>
+                    </div>
+                    <div class="card-action">
+                        <a href="{% url 'user_management:participation_requests' %}">View All</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-4">
+                <div class="overview-card sessions-card">
+                    <div class="card-icon">
+                        <i class="fas fa-calendar-alt"></i>
+                    </div>
+                    <div class="card-content">
+                        <div class="card-number">{{ upcoming_sessions.count|default:0 }}</div>
+                        <div class="card-label">Upcoming Sessions</div>
+                        <div class="card-trend">
+                            <i class="fas fa-clock"></i>
+                            <span>Next: Tomorrow</span>
+                        </div>
+                    </div>
+                    <div class="card-action">
+                        <a href="{% url 'user_management:manage_availability' %}">Manage</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-4">
+                <div class="overview-card consent-card">
+                    <div class="card-icon">
+                        <i class="fas fa-file-signature"></i>
+                    </div>
+                    <div class="card-content">
+                        <div class="card-number">{{ pending_consents.count|default:0 }}</div>
+                        <div class="card-label">Pending Consents</div>
+                        <div class="card-trend">
+                            <i class="fas fa-exclamation-triangle"></i>
+                            <span>Action needed</span>
+                        </div>
+                    </div>
+                    <div class="card-action">
+                        <a href="{% url 'user_management:consent_management' %}">Review</a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-3 col-md-6 mb-4">
+                <div class="overview-card consent-status-card">
+                    <div class="card-icon">
+                        {% if participant_profile.has_valid_consent %}
+                            <i class="fas fa-check-circle text-success"></i>
+                        {% else %}
+                            <i class="fas fa-times-circle text-danger"></i>
+                        {% endif %}
+                    </div>
+                    <div class="card-content">
+                        <div class="card-number">
+                            {% if participant_profile.has_valid_consent %}
+                                Valid
+                            {% else %}
+                                Required
+                            {% endif %}
+                        </div>
+                        <div class="card-label">Consent Status</div>
+                        <div class="card-trend">
+                            {% if participant_profile.has_valid_consent %}
+                                <i class="fas fa-shield-check"></i>
+                                <span>All set</span>
+                            {% else %}
+                                <i class="fas fa-exclamation"></i>
+                                <span>Sign required</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="card-action">
+                        <a href="{% url 'user_management:consent_management' %}">Manage</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <i class="fas fa-bolt me-2"></i>
+                Quick Actions
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:create_participation_request' %}" class="btn btn-modern btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 120px;">
+                            <i class="fas fa-user-plus fa-2x mb-2"></i>
+                            <span>Join Research Study</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:manage_availability' %}" class="btn btn-modern btn-outline-success w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 120px;">
+                            <i class="fas fa-calendar-check fa-2x mb-2"></i>
+                            <span>Manage Availability</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:participation_requests' %}" class="btn btn-modern btn-outline-info w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 120px;">
+                            <i class="fas fa-list fa-2x mb-2"></i>
+                            <span>View My Requests</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:participant_sessions' %}" class="btn btn-modern btn-outline-warning w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 120px;">
+                            <i class="fas fa-brain fa-2x mb-2"></i>
+                            <span>My Sessions</span>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- Pending Consents Alert -->
+{% if pending_consents %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header" style="background: var(--warning-gradient);">
+                <i class="fas fa-exclamation-triangle me-2"></i>
+                Action Required: Pending Consent Forms
+            </div>
+            <div class="card-body">
+                <p class="mb-3">Please review and sign the following consent forms to participate in research studies:</p>
+                <div class="row">
+                    {% for consent in pending_consents %}
+                    <div class="col-md-6 mb-3">
+                        <div class="request-card">
+                            <div class="card-header">
+                                <h6 class="mb-0">{{ consent.consent_form.title }}</h6>
+                                <small class="text-muted">{{ consent.created_at|date:"M d, Y" }}</small>
+                            </div>
+                            <div class="card-body">
+                                <p class="text-muted mb-3">{{ consent.consent_form.summary|truncatewords:15 }}</p>
+                                <a href="{% url 'user_management:sign_consent' consent.id %}"
+                                   class="action-button warning">
+                                    <i class="fas fa-pen"></i>
+                                    Review & Sign
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Recent Activity -->
+<div class="row mb-4">
+    <div class="col-lg-6 mb-4">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <i class="fas fa-clock me-2"></i>
+                Recent Participation Requests
+            </div>
+            <div class="card-body">
+                {% if participation_requests %}
+                    {% for request in participation_requests %}
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-3" style="background: #f8f9fa; border-radius: 10px;">
+                        <div>
+                            <h6 class="mb-1">
+                                {% if request.researcher %}
+                                    {{ request.researcher.user.get_full_name|default:request.researcher.user.username }}
+                                {% else %}
+                                    Open to All Researchers
+                                {% endif %}
+                            </h6>
+                            <small class="text-muted">{{ request.created_at|date:"M d, Y" }}</small>
+                        </div>
+                        <span class="status-badge {{ request.status }}">
+                            {{ request.get_status_display }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                    <a href="{% url 'user_management:participation_requests' %}" class="btn btn-modern btn-outline-primary btn-sm">
+                        View All Requests
+                    </a>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-inbox fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">No participation requests yet</p>
+                        <a href="{% url 'user_management:create_participation_request' %}" class="action-button success">
+                            <i class="fas fa-plus"></i>
+                            Create Your First Request
+                        </a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6 mb-4">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <i class="fas fa-calendar me-2"></i>
+                Upcoming Sessions
+            </div>
+            <div class="card-body">
+                {% if upcoming_sessions %}
+                    {% for session in upcoming_sessions %}
+                    <div class="d-flex justify-content-between align-items-center mb-3 p-3" style="background: #f8f9fa; border-radius: 10px;">
+                        <div>
+                            <h6 class="mb-1">{{ session.title }}</h6>
+                            <small class="text-muted">
+                                <i class="fas fa-calendar me-1"></i>
+                                {{ session.scheduled_date|date:"M d, Y H:i" }}
+                            </small>
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-user me-1"></i>
+                                {{ session.researcher.user.get_full_name|default:session.researcher.user.username }}
+                            </small>
+                        </div>
+                        <span class="status-badge {{ session.status }}">
+                            {{ session.get_status_display }}
+                        </span>
+                    </div>
+                    {% endfor %}
+                    <a href="{% url 'user_management:participant_sessions' %}" class="btn btn-modern btn-outline-info btn-sm">
+                        View All Sessions
+                    </a>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-calendar-times fa-2x text-muted mb-2"></i>
+                        <p class="text-muted">No upcoming sessions</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Profile Summary -->
+<div class="row">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <i class="fas fa-user me-2"></i>
+                Profile Summary
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="mb-3">
+                            <strong>Participant ID:</strong>
+                            <span class="text-muted">{{ participant_profile.participant_id }}</span>
+                        </div>
+                        <div class="mb-3">
+                            <strong>Registration Date:</strong>
+                            <span class="text-muted">{{ participant_profile.date_registered|date:"F d, Y" }}</span>
+                        </div>
+                        {% if participant_profile.age %}
+                        <div class="mb-3">
+                            <strong>Age:</strong>
+                            <span class="text-muted">{{ participant_profile.age }} years</span>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="col-md-6">
+                        {% if participant_profile.gender %}
+                        <div class="mb-3">
+                            <strong>Gender:</strong>
+                            <span class="text-muted">{{ participant_profile.get_gender_display }}</span>
+                        </div>
+                        {% endif %}
+                        {% if participant_profile.handedness %}
+                        <div class="mb-3">
+                            <strong>Handedness:</strong>
+                            <span class="text-muted">{{ participant_profile.get_handedness_display }}</span>
+                        </div>
+                        {% endif %}
+                        <div class="mb-3">
+                            <strong>Open to Invitations:</strong>
+                            <span class="badge bg-{% if participant_profile.is_open_to_invitations %}success{% else %}secondary{% endif %}">
+                                {% if participant_profile.is_open_to_invitations %}Yes{% else %}No{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* Dashboard Hero Section */
+.dashboard-hero {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 4rem 0;
+    position: relative;
+    overflow: hidden;
+}
+
+.dashboard-hero::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="brain-pattern" width="50" height="50" patternUnits="userSpaceOnUse"><circle cx="25" cy="25" r="2" fill="rgba(255,255,255,0.1)"/><circle cx="10" cy="10" r="1" fill="rgba(255,255,255,0.05)"/><circle cx="40" cy="15" r="1.5" fill="rgba(255,255,255,0.08)"/></pattern></defs><rect width="100" height="100" fill="url(%23brain-pattern)"/></svg>');
+    opacity: 0.3;
+}
+
+.welcome-content {
+    position: relative;
+    z-index: 2;
+}
+
+.welcome-badge {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(10px);
+    padding: 0.5rem 1rem;
+    border-radius: 50px;
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.welcome-title {
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 1.5rem;
+}
+
+.welcome-subtitle {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    opacity: 0.9;
+    max-width: 600px;
+}
+
+.welcome-actions {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.btn-primary-custom {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+    color: white;
+    padding: 1rem 2rem;
+    border-radius: 50px;
+    text-decoration: none;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.3s ease;
+    border: none;
+    box-shadow: 0 4px 15px rgba(255, 107, 107, 0.3);
+}
+
+.btn-primary-custom:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
+    color: white;
+    text-decoration: none;
+}
+
+.btn-secondary-custom {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 1rem 2rem;
+    border-radius: 50px;
+    text-decoration: none;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    transition: all 0.3s ease;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(10px);
+}
+
+.btn-secondary-custom:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    color: white;
+    text-decoration: none;
+}
+
+/* Profile Card */
+.profile-card {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 20px;
+    padding: 2rem;
+    text-align: center;
+    position: relative;
+    z-index: 2;
+}
+
+.profile-avatar {
+    margin-bottom: 1.5rem;
+}
+
+.avatar-circle {
+    width: 80px;
+    height: 80px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.1));
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 1rem;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+}
+
+.avatar-text {
+    font-size: 2rem;
+    font-weight: 700;
+    color: white;
+}
+
+.status-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #28a745;
+    animation: pulse 2s infinite;
+}
+
+.profile-info h4 {
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.profile-info p {
+    opacity: 0.8;
+    margin-bottom: 1.5rem;
+}
+
+.profile-stats {
+    display: flex;
+    justify-content: space-around;
+    gap: 1rem;
+}
+
+.stat-item {
+    text-align: center;
+}
+
+.stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1;
+}
+
+.stat-label {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    margin-top: 0.25rem;
+}
+
+/* Dashboard Overview */
+.dashboard-overview {
+    padding: 2rem 0;
+    background: #f8f9fa;
+}
+
+.overview-card {
+    background: white;
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    transition: all 0.4s ease;
+    height: 100%;
+    border: 3px solid transparent;
+    position: relative;
+    overflow: hidden;
+}
+
+.overview-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #667eea, #764ba2);
+    transition: all 0.3s ease;
+}
+
+.overview-card:hover {
+    transform: translateY(-10px);
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+    border-color: #667eea;
+}
+
+.overview-card:hover::before {
+    height: 8px;
+}
+
+.card-icon {
+    width: 60px;
+    height: 60px;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    border-radius: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 1.5rem;
+    margin-bottom: 1.5rem;
+    box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+}
+
+.research-card .card-icon {
+    background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+    box-shadow: 0 8px 25px rgba(255, 107, 107, 0.3);
+}
+
+.sessions-card .card-icon {
+    background: linear-gradient(135deg, #4ecdc4, #44a08d);
+    box-shadow: 0 8px 25px rgba(78, 205, 196, 0.3);
+}
+
+.consent-card .card-icon {
+    background: linear-gradient(135deg, #feca57, #ff9ff3);
+    box-shadow: 0 8px 25px rgba(254, 202, 87, 0.3);
+}
+
+.consent-status-card .card-icon {
+    background: linear-gradient(135deg, #48dbfb, #0abde3);
+    box-shadow: 0 8px 25px rgba(72, 219, 251, 0.3);
+}
+
+.card-number {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #2d3748;
+    margin-bottom: 0.5rem;
+    line-height: 1;
+}
+
+.card-label {
+    font-size: 1rem;
+    color: #718096;
+    margin-bottom: 1rem;
+    font-weight: 500;
+}
+
+.card-trend {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: #4a5568;
+    margin-bottom: 1.5rem;
+}
+
+.card-trend i {
+    color: #667eea;
+}
+
+.card-action a {
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: all 0.3s ease;
+}
+
+.card-action a:hover {
+    color: #764ba2;
+    text-decoration: underline;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .welcome-title {
+        font-size: 2rem;
+    }
+
+    .welcome-actions {
+        flex-direction: column;
+    }
+
+    .btn-primary-custom,
+    .btn-secondary-custom {
+        text-align: center;
+        justify-content: center;
+    }
+
+    .profile-stats {
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .overview-card {
+        margin-bottom: 1.5rem;
+    }
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+</style>
+{% endblock %}

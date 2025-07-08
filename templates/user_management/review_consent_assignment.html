@@ -1,0 +1,310 @@
+{% extends 'layout.html' %}
+{% load static %}
+
+{% block title %}Review Consent Form - {{ consent_form.title }} - NeuroPi{% endblock %}
+
+{% block extra_css %}
+<style>
+    .consent-review-container {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    
+    .assignment-header {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        padding: 30px;
+        border-radius: 15px 15px 0 0;
+        text-align: center;
+    }
+    
+    .urgent-banner {
+        background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        color: white;
+        padding: 15px;
+        text-align: center;
+        font-weight: bold;
+        margin-bottom: 0;
+        animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.8; }
+        100% { opacity: 1; }
+    }
+    
+    .assignment-details {
+        background: #f8f9fa;
+        padding: 25px;
+        border-left: 4px solid #28a745;
+        margin-bottom: 30px;
+    }
+    
+    .detail-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #e9ecef;
+    }
+    
+    .detail-item:last-child {
+        border-bottom: none;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: #495057;
+    }
+    
+    .detail-value {
+        color: #6c757d;
+    }
+    
+    .consent-content {
+        background: white;
+        padding: 40px;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        margin-bottom: 30px;
+        max-height: 500px;
+        overflow-y: auto;
+        line-height: 1.8;
+    }
+    
+    .consent-content h1, .consent-content h2, .consent-content h3 {
+        color: #28a745;
+        margin-top: 25px;
+        margin-bottom: 15px;
+    }
+    
+    .consent-content p {
+        margin-bottom: 15px;
+    }
+    
+    .consent-content ul, .consent-content ol {
+        margin-bottom: 20px;
+        padding-left: 30px;
+    }
+    
+    .action-buttons {
+        background: #f8f9fa;
+        padding: 30px;
+        border-radius: 0 0 15px 15px;
+        text-align: center;
+        border-top: 1px solid #e9ecef;
+    }
+    
+    .btn-sign {
+        background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        color: white;
+        border: none;
+        padding: 15px 40px;
+        border-radius: 50px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        margin: 0 10px;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+    }
+    
+    .btn-sign:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.6);
+        color: white;
+    }
+    
+    .btn-back {
+        background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        color: white;
+        border: none;
+        padding: 12px 30px;
+        border-radius: 50px;
+        font-weight: 600;
+        text-decoration: none;
+        display: inline-block;
+        margin: 0 10px;
+        transition: all 0.3s ease;
+    }
+    
+    .btn-back:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        color: white;
+        text-decoration: none;
+    }
+    
+    .researcher-message {
+        background: linear-gradient(135deg, #17a2b8 0%, #138496 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+    }
+    
+    .priority-indicator {
+        display: inline-block;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+    
+    .priority-low { background: #d4edda; color: #155724; }
+    .priority-medium { background: #fff3cd; color: #856404; }
+    .priority-high { background: #f8d7da; color: #721c24; }
+    
+    .reading-time {
+        background: #e9ecef;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        margin-bottom: 20px;
+        font-style: italic;
+        color: #6c757d;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="consent-review-container">
+        <!-- Urgent Banner -->
+        {% if assignment.is_urgent %}
+        <div class="urgent-banner">
+            <i class="bi bi-exclamation-triangle"></i>
+            URGENT: This consent form requires immediate attention
+        </div>
+        {% endif %}
+        
+        <!-- Header -->
+        <div class="assignment-header">
+            <h1><i class="bi bi-file-earmark-text"></i> {{ consent_form.title }}</h1>
+            <p class="mb-0">Please review this consent form carefully before signing</p>
+        </div>
+        
+        <!-- Assignment Details -->
+        <div class="assignment-details">
+            <h5 class="mb-3"><i class="bi bi-info-circle"></i> Assignment Details</h5>
+            
+            <div class="detail-item">
+                <span class="detail-label"><i class="bi bi-person"></i> Assigned by:</span>
+                <span class="detail-value">{{ researcher.user.get_full_name|default:researcher.user.username }}</span>
+            </div>
+            
+            <div class="detail-item">
+                <span class="detail-label"><i class="bi bi-calendar"></i> Due Date:</span>
+                <span class="detail-value">
+                    {{ assignment.due_date|date:"F d, Y" }}
+                    {% if assignment.is_overdue %}
+                        <span class="text-danger">(OVERDUE)</span>
+                    {% endif %}
+                </span>
+            </div>
+            
+            <div class="detail-item">
+                <span class="detail-label"><i class="bi bi-flag"></i> Priority:</span>
+                <span class="detail-value">
+                    <span class="priority-indicator {% if assignment.priority_level == 1 %}priority-low{% elif assignment.priority_level == 2 %}priority-medium{% else %}priority-high{% endif %}">
+                        {% if assignment.priority_level == 1 %}Low Priority
+                        {% elif assignment.priority_level == 2 %}Medium Priority
+                        {% else %}High Priority{% endif %}
+                    </span>
+                </span>
+            </div>
+            
+            <div class="detail-item">
+                <span class="detail-label"><i class="bi bi-tag"></i> Form Type:</span>
+                <span class="detail-value">{{ consent_form.get_form_type_display }}</span>
+            </div>
+            
+            <div class="detail-item">
+                <span class="detail-label"><i class="bi bi-hash"></i> Version:</span>
+                <span class="detail-value">{{ consent_form.version }}</span>
+            </div>
+            
+            <div class="detail-item">
+                <span class="detail-label"><i class="bi bi-clock"></i> Expires After:</span>
+                <span class="detail-value">{{ consent_form.expiration_period }} days</span>
+            </div>
+        </div>
+        
+        <!-- Researcher Message -->
+        {% if assignment.assignment_message %}
+        <div class="researcher-message">
+            <h6><i class="bi bi-chat-text"></i> Message from Researcher:</h6>
+            <p class="mb-0">{{ assignment.assignment_message }}</p>
+        </div>
+        {% endif %}
+        
+        <!-- Reading Time Estimate -->
+        <div class="reading-time">
+            <i class="bi bi-clock"></i>
+            Estimated reading time: 5-10 minutes. Please read the entire form before signing.
+        </div>
+        
+        <!-- Consent Form Content -->
+        <div class="consent-content">
+            {{ consent_form.content|safe }}
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <a href="{% url 'user_management:dashboard' %}" class="btn-back">
+                <i class="bi bi-arrow-left"></i> Back to Dashboard
+            </a>
+            
+            <a href="{% url 'user_management:sign_consent' consent_record.id %}" class="btn btn-sign">
+                <i class="bi bi-pen"></i> Proceed to Sign Consent Form
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Track reading time
+    let startTime = Date.now();
+    let hasScrolledToBottom = false;
+    
+    // Check if user has scrolled to bottom of consent content
+    const consentContent = document.querySelector('.consent-content');
+    if (consentContent) {
+        consentContent.addEventListener('scroll', function() {
+            if (consentContent.scrollTop + consentContent.clientHeight >= consentContent.scrollHeight - 10) {
+                hasScrolledToBottom = true;
+            }
+        });
+    }
+    
+    // Add confirmation before proceeding to sign
+    const signButton = document.querySelector('.btn-sign');
+    if (signButton) {
+        signButton.addEventListener('click', function(e) {
+            const readingTime = (Date.now() - startTime) / 1000; // seconds
+            
+            if (readingTime < 30) { // Less than 30 seconds
+                e.preventDefault();
+                alert('Please take time to read through the consent form carefully before proceeding.');
+                return false;
+            }
+            
+            if (!hasScrolledToBottom && consentContent.scrollHeight > consentContent.clientHeight) {
+                e.preventDefault();
+                alert('Please scroll through the entire consent form before proceeding to sign.');
+                return false;
+            }
+            
+            // Final confirmation
+            if (!confirm('Have you read and understood the entire consent form? Click OK to proceed to the signing page.')) {
+                e.preventDefault();
+                return false;
+            }
+        });
+    }
+});
+</script>
+{% endblock %}

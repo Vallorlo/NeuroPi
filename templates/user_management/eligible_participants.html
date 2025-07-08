@@ -1,0 +1,291 @@
+{% extends 'layout.html' %}
+{% load static %}
+
+{% block title %}Eligible Participants - NeuroPi{% endblock %}
+
+{% block extra_css %}
+<style>
+    .participant-card {
+        transition: all 0.3s ease;
+        border: 1px solid #e3e6f0;
+    }
+    
+    .participant-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+    
+    .consent-badge {
+        font-size: 0.75rem;
+        margin-right: 0.25rem;
+        margin-bottom: 0.25rem;
+    }
+    
+    .filter-section {
+        background: #f8f9fa;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 30px;
+    }
+    
+    .stats-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+        margin-bottom: 20px;
+    }
+    
+    .action-buttons .btn {
+        margin-right: 5px;
+        margin-bottom: 5px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <!-- Page Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h1 class="h3 mb-0 text-gray-800">
+                <i class="fas fa-user-check text-success"></i>
+                Participants Eligible for Research
+            </h1>
+            <p class="text-muted">Participants with active consent forms ready for research studies</p>
+        </div>
+        <div>
+            <a href="{% url 'user_management:dashboard' %}" class="btn btn-secondary">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+            <a href="{% url 'user_management:assign_consent_form_general' %}" class="btn btn-primary">
+                <i class="fas fa-paper-plane"></i> Assign Consent Forms
+            </a>
+        </div>
+    </div>
+    
+    <!-- Statistics -->
+    <div class="row mb-4">
+        <div class="col-md-12">
+            <div class="stats-card">
+                <div class="row">
+                    <div class="col-md-3">
+                        <h3>{{ total_eligible }}</h3>
+                        <p class="mb-0">Total Eligible</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h3>{{ participants.paginator.count }}</h3>
+                        <p class="mb-0">Showing Results</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h3>{{ participants.paginator.num_pages }}</h3>
+                        <p class="mb-0">Total Pages</p>
+                    </div>
+                    <div class="col-md-3">
+                        <h3>{{ participants.number }}</h3>
+                        <p class="mb-0">Current Page</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="filter-section">
+        <form method="get" class="row align-items-end">
+            <div class="col-md-4">
+                <label for="type" class="form-label">Filter by Research Type:</label>
+                <select name="type" id="type" class="form-select">
+                    <option value="">All Types</option>
+                    <option value="eeg" {% if research_type == 'eeg' %}selected{% endif %}>EEG Studies</option>
+                    <option value="audio" {% if research_type == 'audio' %}selected{% endif %}>Audio Studies</option>
+                    <option value="data_sharing" {% if research_type == 'data_sharing' %}selected{% endif %}>Data Sharing</option>
+                </select>
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-filter"></i> Apply Filter
+                </button>
+                <a href="{% url 'user_management:eligible_participants_view' %}" class="btn btn-outline-secondary">
+                    <i class="fas fa-times"></i> Clear
+                </a>
+            </div>
+        </form>
+    </div>
+    
+    <!-- Participants List -->
+    {% if participants %}
+        <div class="row">
+            {% for participant in participants %}
+            <div class="col-lg-6 col-xl-4 mb-4">
+                <div class="card participant-card h-100">
+                    <div class="card-header bg-light">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h6 class="mb-0">
+                                <i class="fas fa-user text-primary"></i>
+                                {{ participant.user.get_full_name|default:participant.user.username }}
+                            </h6>
+                            <span class="badge bg-success">
+                                {{ participant.consent_count }} Consent{{ participant.consent_count|pluralize }}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="mb-3">
+                            <small class="text-muted">
+                                <i class="fas fa-envelope"></i> {{ participant.user.email }}
+                            </small>
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-calendar"></i> Registered: {{ participant.date_registered|date:"M d, Y" }}
+                            </small>
+                            <br>
+                            <small class="text-muted">
+                                <i class="fas fa-signature"></i> Latest Consent: {{ participant.latest_consent_date|date:"M d, Y" }}
+                            </small>
+                        </div>
+                        
+                        <!-- Consent Types -->
+                        <div class="mb-3">
+                            <h6 class="text-muted mb-2">Available for:</h6>
+                            <div>
+                                {% if participant.eeg_consent %}
+                                    <span class="badge bg-primary consent-badge">
+                                        <i class="fas fa-brain"></i> EEG Studies
+                                    </span>
+                                {% endif %}
+                                {% if participant.audio_consent %}
+                                    <span class="badge bg-info consent-badge">
+                                        <i class="fas fa-microphone"></i> Audio Studies
+                                    </span>
+                                {% endif %}
+                                {% if participant.data_sharing_consent %}
+                                    <span class="badge bg-warning consent-badge">
+                                        <i class="fas fa-share-alt"></i> Data Sharing
+                                    </span>
+                                {% endif %}
+                                <span class="badge bg-success consent-badge">
+                                    <i class="fas fa-check-circle"></i> General Research
+                                </span>
+                            </div>
+                        </div>
+                        
+                        <!-- Participant Details -->
+                        {% if participant.age %}
+                        <div class="mb-2">
+                            <small class="text-muted">
+                                <i class="fas fa-birthday-cake"></i> Age: {{ participant.age }} years
+                            </small>
+                        </div>
+                        {% endif %}
+                        
+                        {% if participant.gender %}
+                        <div class="mb-2">
+                            <small class="text-muted">
+                                <i class="fas fa-user"></i> Gender: {{ participant.get_gender_display }}
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer bg-light">
+                        <div class="action-buttons d-flex justify-content-between">
+                            <div>
+                                <a href="{% url 'user_management:invite_participant_to_study' participant.participant_id %}"
+                                   class="btn btn-success btn-sm">
+                                    <i class="fas fa-paper-plane"></i> Invite to Study
+                                </a>
+                                <a href="{% url 'user_management:schedule_session' %}?participant={{ participant.user.username }}"
+                                   class="btn btn-primary btn-sm">
+                                    <i class="fas fa-calendar-plus"></i> Schedule Session
+                                </a>
+                            </div>
+                            <div>
+                                <a href="{% url 'user_management:participant_detail' participant.participant_id %}"
+                                   class="btn btn-outline-info btn-sm">
+                                    <i class="fas fa-eye"></i> View Profile
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        
+        <!-- Pagination -->
+        {% if participants.has_other_pages %}
+        <nav aria-label="Participants pagination" class="mt-4">
+            <ul class="pagination justify-content-center">
+                {% if participants.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% if research_type %}&type={{ research_type }}{% endif %}">
+                            <i class="fas fa-angle-double-left"></i> First
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ participants.previous_page_number }}{% if research_type %}&type={{ research_type }}{% endif %}">
+                            <i class="fas fa-angle-left"></i> Previous
+                        </a>
+                    </li>
+                {% endif %}
+                
+                <li class="page-item active">
+                    <span class="page-link">
+                        Page {{ participants.number }} of {{ participants.paginator.num_pages }}
+                    </span>
+                </li>
+                
+                {% if participants.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ participants.next_page_number }}{% if research_type %}&type={{ research_type }}{% endif %}">
+                            Next <i class="fas fa-angle-right"></i>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ participants.paginator.num_pages }}{% if research_type %}&type={{ research_type }}{% endif %}">
+                            Last <i class="fas fa-angle-double-right"></i>
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        
+    {% else %}
+        <!-- No Participants -->
+        <div class="text-center py-5">
+            <i class="fas fa-user-slash fa-5x text-muted mb-4"></i>
+            <h3 class="text-muted">No Eligible Participants Found</h3>
+            {% if research_type %}
+                <p class="text-muted">No participants with {{ research_type|upper }} consent forms found.</p>
+                <a href="{% url 'user_management:eligible_participants_view' %}" class="btn btn-outline-primary">
+                    <i class="fas fa-list"></i> View All Participants
+                </a>
+            {% else %}
+                <p class="text-muted">No participants have signed consent forms yet.</p>
+                <a href="{% url 'user_management:assign_consent_form_general' %}" class="btn btn-primary">
+                    <i class="fas fa-paper-plane"></i> Assign Consent Forms
+                </a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add tooltips to action buttons
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Auto-refresh every 5 minutes to show updated consent status
+    setTimeout(function() {
+        location.reload();
+    }, 300000); // 5 minutes
+});
+</script>
+{% endblock %}

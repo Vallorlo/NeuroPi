@@ -7,128 +7,193 @@
 {% block content %}
 <div class="container mt-5 mb-5">
     <div class="row">
-        <div class="col-lg-8 offset-lg-2">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h1 class="mb-0">Join NeuroPi</h1>
-                </div>
-                <div class="card-body">
-                    <h4 class="text-center mb-4">Choose your role</h4>
+        <div class="col-lg-10 offset-lg-1">
+            <!-- Header Section -->
+            <div class="text-center mb-5">
+                <h1 class="display-4 fw-bold text-primary mb-3">Join Neuro<span class="text-danger">π</span></h1>
+                <p class="lead text-muted">Choose your role and unlock the power of EEG research</p>
+            </div>
 
-                    <div class="row mb-4">
-                        <!-- User Role Card -->
-                        <div class="col-md-6">
-                            <div class="card h-100 role-card" id="user-role-card">
-                                <div class="card-body text-center">
-                                    <h5 class="card-title">User</h5>
-                                    <div class="icon-container mb-3">
-                                        <i class="bi bi-person-circle fs-1"></i>
-                                    </div>
-                                    <p class="card-text">Access to Home, About, and Trials</p>
-                                    <ul class="list-unstyled text-start">
-                                        <li><i class="bi bi-check-circle text-success"></i> View trials data</li>
-                                        <li><i class="bi bi-check-circle text-success"></i> Basic functionality</li>
-                                        <li><i class="bi bi-x-circle text-muted"></i> Advanced features</li>
-                                    </ul>
-                                </div>
-                                <div class="card-footer bg-transparent border-0">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="role_select" id="userRole" value="user" checked>
-                                        <label class="form-check-label" for="userRole">
-                                            Select User Role
-                                        </label>
-                                    </div>
-                                </div>
-                            </div>
+            <!-- Role Selection Cards -->
+            <div class="row mb-5">
+                <div class="col-md-6 mb-4">
+                    <div class="role-card"  data-role="user">
+                        <div class="role-icon">
+                            <i class="bi bi-person-circle"></i>
                         </div>
-
-                        <!-- Trainer Role Card -->
-                        <div class="col-md-6">
-                            <div class="card h-100 role-card" id="trainer-role-card">
-                                <div class="card-body text-center">
-                                    <h5 class="card-title">Trainer</h5>
-                                    <div class="icon-container mb-3">
-                                        <i class="bi bi-lightning-charge-fill fs-1"></i>
-                                    </div>
-                                    <p class="card-text">Full access to all features</p>
-                                    <ul class="list-unstyled text-start">
-                                        <li><i class="bi bi-check-circle text-success"></i> All User features</li>
-                                        <li><i class="bi bi-check-circle text-success"></i> Plot visualization</li>
-                                        <li><i class="bi bi-check-circle text-success"></i> Neural network training</li>
-                                    </ul>
-                                </div>
-                                <div class="card-footer bg-transparent border-0">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="radio" name="role_select" id="trainerRole" value="trainer">
-                                        <label class="form-check-label" for="trainerRole">
-                                            Select Trainer Role
-                                        </label>
-                                    </div>
-                                </div>
+                        <h3>Regular User</h3>
+                        <p class="role-description">Perfect for researchers and students getting started with EEG data collection</p>
+                        <div class="role-features">
+                            <div class="feature-item">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span>Home & About pages</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span>Trials data collection</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span>Basic EEG recording</span>
                             </div>
                         </div>
                     </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="role-card featured" data-role="trainer">
+                        <div class="featured-badge">
+                            <i class="bi bi-star-fill"></i>
+                            <span>Recommended</span>
+                        </div>
+                        <div class="role-icon">
+                            <i class="bi bi-mortarboard-fill"></i>
+                        </div>
+                        <h3>Trainer</h3>
+                        <p class="role-description">Full access for advanced researchers and trainers conducting comprehensive studies</p>
+                        <div class="role-features">
+                            <div class="feature-item">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span>All User features</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span>Data visualization & plots</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span>Data preprocessing tools</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span>Neural network training</span>
+                            </div>
+                            <div class="feature-item">
+                                <i class="bi bi-check-circle-fill text-success"></i>
+                                <span>Advanced analytics</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Registration Form -->
+            <div class="card shadow-lg border-0">
+                <div class="card-header bg-gradient-primary text-white text-center py-4">
+                    <h2 class="mb-0">Create Your Account</h2>
+                </div>
+                <div class="card-body p-5">
+
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
 
                     <form method="post" id="registrationForm">
                         {% csrf_token %}
-                        <input type="hidden" name="role" id="selectedRole" value="user">
 
                         {% if form.errors %}
-                            <div class="alert alert-danger">
-                                <strong>Error:</strong> Please correct the errors below.
+                            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                                <strong><i class="bi bi-exclamation-triangle-fill"></i> Error:</strong> Please correct the errors below.
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
                             </div>
                         {% endif %}
 
-                        <div class="mb-3">
-                            <label for="id_username" class="form-label">Username</label>
-                            <input type="text" name="username" class="form-control {% if form.username.errors %}is-invalid{% endif %}" id="id_username" required>
-                            {% if form.username.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.username.errors }}
-                                </div>
-                            {% endif %}
-                        </div>
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="id_username" class="form-label fw-semibold">
+                                    <i class="bi bi-person-fill text-primary"></i> Username
+                                </label>
+                                <input type="text" name="username" class="form-control form-control-lg {% if form.username.errors %}is-invalid{% endif %}"
+                                       id="id_username" placeholder="Enter your username" required>
+                                {% if form.username.errors %}
+                                    <div class="invalid-feedback">
+                                        {{ form.username.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
 
-                        <div class="mb-3">
-                            <label for="id_email" class="form-label">Email</label>
-                            <input type="email" name="email" class="form-control {% if form.email.errors %}is-invalid{% endif %}" id="id_email" required>
-                            {% if form.email.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.email.errors }}
-                                </div>
-                            {% endif %}
-                        </div>
-
-                        <div class="mb-3">
-                            <label for="id_password1" class="form-label">Password</label>
-                            <input type="password" name="password1" class="form-control {% if form.password1.errors %}is-invalid{% endif %}" id="id_password1" required>
-                            {% if form.password1.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.password1.errors }}
-                                </div>
-                            {% endif %}
-                            <div class="form-text small">
-                                Your password must contain at least 8 characters and can't be entirely numeric.
+                            <div class="col-md-6 mb-3">
+                                <label for="id_email" class="form-label fw-semibold">
+                                    <i class="bi bi-envelope-fill text-primary"></i> Email Address
+                                </label>
+                                <input type="email" name="email" class="form-control form-control-lg {% if form.email.errors %}is-invalid{% endif %}"
+                                       id="id_email" placeholder="Enter your email" required>
+                                {% if form.email.errors %}
+                                    <div class="invalid-feedback">
+                                        {{ form.email.errors }}
+                                    </div>
+                                {% endif %}
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <label for="id_password2" class="form-label">Confirm Password</label>
-                            <input type="password" name="password2" class="form-control {% if form.password2.errors %}is-invalid{% endif %}" id="id_password2" required>
-                            {% if form.password2.errors %}
-                                <div class="invalid-feedback">
-                                    {{ form.password2.errors }}
+                        <div class="row">
+                            <div class="col-md-6 mb-3">
+                                <label for="id_password1" class="form-label fw-semibold">
+                                    <i class="bi bi-lock-fill text-primary"></i> Password
+                                </label>
+                                <input type="password" name="password1" class="form-control form-control-lg {% if form.password1.errors %}is-invalid{% endif %}"
+                                       id="id_password1" placeholder="Create a password" required>
+                                {% if form.password1.errors %}
+                                    <div class="invalid-feedback">
+                                        {{ form.password1.errors }}
+                                    </div>
+                                {% endif %}
+                                <div class="form-text small">
+                                    <i class="bi bi-info-circle"></i> At least 8 characters, not entirely numeric
                                 </div>
-                            {% endif %}
+                            </div>
+
+                            <div class="col-md-6 mb-3">
+                                <label for="id_password2" class="form-label fw-semibold">
+                                    <i class="bi bi-shield-check text-primary"></i> Confirm Password
+                                </label>
+                                <input type="password" name="password2" class="form-control form-control-lg {% if form.password2.errors %}is-invalid{% endif %}"
+                                       id="id_password2" placeholder="Confirm your password" required>
+                                {% if form.password2.errors %}
+                                    <div class="invalid-feedback">
+                                        {{ form.password2.errors }}
+                                    </div>
+                                {% endif %}
+                            </div>
                         </div>
 
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary btn-lg">Create Account</button>
+                        <div class="mb-4">
+                            <label for="id_role" class="form-label fw-semibold">
+                                <i class="bi bi-person-badge text-primary"></i> Select Your Role
+                            </label>
+                            <select name="role" class="form-select form-select-lg {% if form.role.errors %}is-invalid{% endif %}"
+                                    id="id_role" required>
+                                <option value="">Choose your role...</option>
+                                <option value="user">Regular User - Basic access to trials and data collection</option>
+                                <option value="trainer">Trainer - Full access to all features and tools</option>
+                            </select>
+                            {% if form.role.errors %}
+                                <div class="invalid-feedback">
+                                    {{ form.role.errors }}
+                                </div>
+                            {% endif %}
+                            <div class="form-text">
+                                <i class="bi bi-lightbulb"></i> You can change your role later in your profile settings
+                            </div>
+                        </div>
+
+                        <div class="d-grid gap-2 mb-3">
+                            <button type="submit" class="btn btn-primary btn-lg py-3">
+                                <i class="bi bi-person-plus-fill"></i> Create My Account
+                            </button>
                         </div>
                     </form>
 
-                    <div class="mt-4 text-center">
-                        <p>Already have an account? <a href="{% url 'login' %}">Login here</a></p>
+                    <div class="text-center mt-4">
+                        <p class="text-muted">Already have an account?
+                            <a href="{% url 'login' %}" class="text-decoration-none fw-semibold">
+                                <i class="bi bi-box-arrow-in-right"></i> Login here
+                            </a>
+                        </p>
                     </div>
                 </div>
             </div>
@@ -137,72 +202,233 @@
 </div>
 
 <style>
+/* Enhanced Registration Page Styles */
+.bg-gradient-primary {
+    background: linear-gradient(135deg, #0d6efd, #6610f2) !important;
+}
+
+.role-card {
+    padding: 1.2rem;
+    border: 3px solid #e9ecef;
+    border-radius: 16px;
+    transition: all 0.3s ease;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+}
+
+.role-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15);
+    border-color: #0d6efd;
+}
+
+.role-card.featured {
+    /* border-color: #0d6efd; */
+    background: linear-gradient(135deg, #f8f9ff, #ffffff);
+}
+
+.role-card.featured::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #0d6efd, #6610f2);
+}
+
+.featured-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: linear-gradient(135deg, #ffc107, #fd7e14);
+    color: white;
+    padding: 0.25rem 0.75rem;
+    border-radius: 50px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    box-shadow: 0 2px 8px rgba(255, 193, 7, 0.3);
+}
+
+.role-icon {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 1.5rem;
+    background: linear-gradient(135deg, #e3f2fd, #f3e5f5);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    color: #0d6efd;
+    position: relative;
+}
+
+.role-card.featured .role-icon {
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    color: white;
+    box-shadow: 0 8px 25px rgba(13, 110, 253, 0.3);
+}
+
+.role-card h3 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 1rem;
+    color: #333;
+}
+
+.role-description {
+    color: #6c757d;
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+}
+
+.role-features {
+    text-align: left;
+}
+
+.feature-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+    font-size: 0.95rem;
+}
+
+.feature-item:last-child {
+    margin-bottom: 0;
+}
+
+.form-control-lg, .form-select-lg {
+    border-radius: 12px;
+    border: 2px solid #e9ecef;
+    transition: all 0.3s ease;
+}
+
+.form-control-lg:focus, .form-select-lg:focus {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
+}
+
+.form-label {
+    color: #495057;
+    margin-bottom: 0.75rem;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #0d6efd, #6610f2);
+    border: none;
+    border-radius: 12px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 25px rgba(13, 110, 253, 0.3);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
     .role-card {
-        cursor: pointer;
-        transition: all 0.3s ease;
-        border: 2px solid #dee2e6;
+        margin-bottom: 1.5rem;
     }
 
-    .role-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    .featured-badge {
+        position: static;
+        display: inline-flex;
+        margin-bottom: 1rem;
     }
-
-    .role-card.border-primary {
-        border: 2px solid #0d6efd;
-    }
-
-    .icon-container {
-        height: 80px;
-        width: 80px;
-        margin: 0 auto;
-        background-color: #f8f9fa;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
+}
 </style>
 
 <script>
-    // JavaScript to handle role selection
-    document.addEventListener('DOMContentLoaded', function() {
-        const userCard = document.getElementById('user-role-card');
-        const trainerCard = document.getElementById('trainer-role-card');
-        const userRadio = document.getElementById('userRole');
-        const trainerRadio = document.getElementById('trainerRole');
-        const selectedRoleInput = document.getElementById('selectedRole');
+document.addEventListener('DOMContentLoaded', function() {
+    // Enhanced role selection with visual feedback
+    const roleCards = document.querySelectorAll('.role-card');
+    const roleSelect = document.getElementById('id_role');
 
-        // Function to update card styling
-        function updateCardStyles() {
-            if (userRadio.checked) {
-                userCard.classList.add('border-primary');
-                trainerCard.classList.remove('border-primary');
-                selectedRoleInput.value = 'user';
-            } else {
-                trainerCard.classList.add('border-primary');
-                userCard.classList.remove('border-primary');
-                selectedRoleInput.value = 'trainer';
+    // Add click handlers to role cards
+    roleCards.forEach(card => {
+        card.addEventListener('click', function() {
+            const role = this.dataset.role;
+            if (role) {
+                roleSelect.value = role;
+                updateRoleSelection();
             }
-        }
-
-        // Initial styling
-        updateCardStyles();
-
-        // Event listeners for radio buttons
-        userRadio.addEventListener('change', updateCardStyles);
-        trainerRadio.addEventListener('change', updateCardStyles);
-
-        // Make entire cards clickable
-        userCard.addEventListener('click', function() {
-            userRadio.checked = true;
-            updateCardStyles();
-        });
-
-        trainerCard.addEventListener('click', function() {
-            trainerRadio.checked = true;
-            updateCardStyles();
         });
     });
+
+    // Update role selection visual feedback
+    function updateRoleSelection() {
+        const selectedRole = roleSelect.value;
+        roleCards.forEach(card => {
+            if (card.dataset.role === selectedRole) {
+                card.style.borderColor = '#0d6efd';
+                card.style.transform = 'translateY(-5px)';
+                card.style.boxShadow = '0 15px 35px rgba(13, 110, 253, 0.2)';
+            } else {
+                card.style.borderColor = '#e9ecef';
+                card.style.transform = 'translateY(0)';
+                card.style.boxShadow = 'none';
+            }
+        });
+    }
+
+    // Listen for role select changes
+    roleSelect.addEventListener('change', updateRoleSelection);
+
+    // Form validation enhancement
+    const form = document.getElementById('registrationForm');
+    form.setAttribute('data-custom-handler', 'true'); // Prevent global handler
+
+    form.addEventListener('submit', function(e) {
+        console.log('Registration form submission attempted');
+
+        const role = roleSelect.value;
+        if (!role) {
+            console.log('Role validation failed');
+            e.preventDefault();
+            roleSelect.focus();
+            roleSelect.classList.add('is-invalid');
+
+            // Show error message
+            let errorDiv = roleSelect.parentNode.querySelector('.invalid-feedback');
+            if (!errorDiv) {
+                errorDiv = document.createElement('div');
+                errorDiv.className = 'invalid-feedback';
+                roleSelect.parentNode.appendChild(errorDiv);
+            }
+            errorDiv.textContent = 'Please select a role to continue.';
+            return false;
+        }
+
+        console.log('Registration form validation passed');
+
+        // Add loading state
+        const submitBtn = form.querySelector('button[type="submit"]');
+        if (submitBtn) {
+            submitBtn.disabled = true;
+            const originalText = submitBtn.innerHTML;
+            submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Creating Account...';
+
+            // Fallback re-enable
+            setTimeout(() => {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = originalText;
+            }, 30000);
+        }
+    });
+
+    // Remove error styling when role is selected
+    roleSelect.addEventListener('change', function() {
+        this.classList.remove('is-invalid');
+    });
+});
 </script>
 {% endblock content %}

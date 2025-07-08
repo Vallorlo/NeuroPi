@@ -1,0 +1,283 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Workflow Guide - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Workflow Guide</li>
+{% endblock %}
+
+{% block page_content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+            <h1>
+                <i class="fas fa-map-signs me-3"></i>
+                NeuroPi Workflow Guide
+            </h1>
+            <p class="subtitle">Complete guide to using the research participation system</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'user_management:dashboard' %}" class="action-button">
+                <i class="fas fa-arrow-left"></i>
+                Back to Dashboard
+            </a>
+        </div>
+    </div>
+</div>
+
+{% if user_profile.role == 'user' %}
+<!-- Participant Workflow -->
+<div class="row">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header" style="background: var(--success-gradient);">
+                <i class="fas fa-user me-2"></i>
+                Participant Workflow Guide
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-lg-6">
+                        <h5><i class="fas fa-play-circle me-2"></i>Getting Started</h5>
+                        <ol class="mb-4">
+                            <li><strong>Complete Your Profile</strong>
+                                <ul>
+                                    <li>Add demographic information</li>
+                                    <li>Specify health conditions</li>
+                                    <li>Set participation preferences</li>
+                                </ul>
+                            </li>
+                            <li><strong>Set Your Availability</strong>
+                                <ul>
+                                    <li>Choose available days and times</li>
+                                    <li>Set session limits</li>
+                                    <li>Add special requirements</li>
+                                </ul>
+                            </li>
+                            <li><strong>Join Research Studies</strong>
+                                <ul>
+                                    <li>Create participation requests</li>
+                                    <li>Choose specific researchers or open invitations</li>
+                                    <li>Wait for researcher approval</li>
+                                </ul>
+                            </li>
+                        </ol>
+                    </div>
+                    <div class="col-lg-6">
+                        <h5><i class="fas fa-clipboard-check me-2"></i>Research Process</h5>
+                        <ol class="mb-4">
+                            <li><strong>Consent Forms</strong>
+                                <ul>
+                                    <li>Review assigned consent forms</li>
+                                    <li>Ask questions if unclear</li>
+                                    <li>Sign digitally when ready</li>
+                                </ul>
+                            </li>
+                            <li><strong>Session Participation</strong>
+                                <ul>
+                                    <li>Attend scheduled EEG sessions</li>
+                                    <li>Follow researcher instructions</li>
+                                    <li>Provide feedback after sessions</li>
+                                </ul>
+                            </li>
+                            <li><strong>Ongoing Management</strong>
+                                <ul>
+                                    <li>Update availability as needed</li>
+                                    <li>Withdraw consent if desired</li>
+                                    <li>View your participation history</li>
+                                </ul>
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="alert alert-info">
+                    <h6><i class="fas fa-info-circle me-2"></i>Important Notes</h6>
+                    <ul class="mb-0">
+                        <li>Participation is completely voluntary</li>
+                        <li>You can withdraw from studies at any time</li>
+                        <li>All data is kept confidential and secure</li>
+                        <li>You have the right to ask questions about any procedure</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% elif user_profile.role == 'trainer' %}
+<!-- Researcher Workflow -->
+<div class="row">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header" style="background: var(--primary-gradient);">
+                <i class="fas fa-microscope me-2"></i>
+                Researcher Workflow Guide
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-lg-6">
+                        <h5><i class="fas fa-cog me-2"></i>Setup & Preparation</h5>
+                        <ol class="mb-4">
+                            <li><strong>Complete Researcher Profile</strong>
+                                <ul>
+                                    <li>Add institution information</li>
+                                    <li>Specify research areas</li>
+                                    <li>Set contact details</li>
+                                </ul>
+                            </li>
+                            <li><strong>Create Consent Forms</strong>
+                                <ul>
+                                    <li>Design study-specific consent forms</li>
+                                    <li>Include all required information</li>
+                                    <li>Set expiration periods</li>
+                                </ul>
+                            </li>
+                            <li><strong>Review Participation Requests</strong>
+                                <ul>
+                                    <li>Check participant eligibility</li>
+                                    <li>Approve suitable candidates</li>
+                                    <li>Provide feedback messages</li>
+                                </ul>
+                            </li>
+                        </ol>
+                    </div>
+                    <div class="col-lg-6">
+                        <h5><i class="fas fa-users me-2"></i>Participant Management</h5>
+                        <ol class="mb-4">
+                            <li><strong>Assign Consent Forms</strong>
+                                <ul>
+                                    <li>Send forms to approved participants</li>
+                                    <li>Set due dates and priorities</li>
+                                    <li>Monitor signing status</li>
+                                </ul>
+                            </li>
+                            <li><strong>Schedule Sessions</strong>
+                                <ul>
+                                    <li>Coordinate with participant availability</li>
+                                    <li>Set session details and location</li>
+                                    <li>Send reminders and confirmations</li>
+                                </ul>
+                            </li>
+                            <li><strong>Conduct Research</strong>
+                                <ul>
+                                    <li>Follow approved protocols</li>
+                                    <li>Ensure participant comfort</li>
+                                    <li>Document session outcomes</li>
+                                </ul>
+                            </li>
+                        </ol>
+                    </div>
+                </div>
+                
+                <div class="alert alert-warning">
+                    <h6><i class="fas fa-exclamation-triangle me-2"></i>Compliance Requirements</h6>
+                    <ul class="mb-0">
+                        <li>Ensure all participants have valid consent before data collection</li>
+                        <li>Respect participant withdrawal requests immediately</li>
+                        <li>Maintain confidentiality of all participant data</li>
+                        <li>Follow institutional review board (IRB) guidelines</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Quick Actions -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <i class="fas fa-rocket me-2"></i>
+                Quick Actions
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    {% if user_profile.role == 'user' %}
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:create_participation_request' %}" class="btn btn-modern btn-outline-success w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 100px;">
+                            <i class="fas fa-plus fa-2x mb-2"></i>
+                            <span>Join Research</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:manage_availability' %}" class="btn btn-modern btn-outline-info w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 100px;">
+                            <i class="fas fa-calendar fa-2x mb-2"></i>
+                            <span>Set Availability</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:edit_profile' %}" class="btn btn-modern btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 100px;">
+                            <i class="fas fa-user-edit fa-2x mb-2"></i>
+                            <span>Edit Profile</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:participation_requests' %}" class="btn btn-modern btn-outline-warning w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 100px;">
+                            <i class="fas fa-list fa-2x mb-2"></i>
+                            <span>My Requests</span>
+                        </a>
+                    </div>
+                    {% elif user_profile.role == 'trainer' %}
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:researcher_requests' %}" class="btn btn-modern btn-outline-primary w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 100px;">
+                            <i class="fas fa-inbox fa-2x mb-2"></i>
+                            <span>Review Requests</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:create_consent_form' %}" class="btn btn-modern btn-outline-success w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 100px;">
+                            <i class="fas fa-file-plus fa-2x mb-2"></i>
+                            <span>Create Consent</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:schedule_session' %}" class="btn btn-modern btn-outline-info w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 100px;">
+                            <i class="fas fa-calendar-plus fa-2x mb-2"></i>
+                            <span>Schedule Session</span>
+                        </a>
+                    </div>
+                    <div class="col-lg-3 col-md-6 mb-3">
+                        <a href="{% url 'user_management:participant_list' %}" class="btn btn-modern btn-outline-warning w-100 h-100 d-flex flex-column align-items-center justify-content-center" style="min-height: 100px;">
+                            <i class="fas fa-users fa-2x mb-2"></i>
+                            <span>Manage Participants</span>
+                        </a>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Support Information -->
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="dashboard-card">
+            <div class="card-header" style="background: var(--info-gradient);">
+                <i class="fas fa-question-circle me-2"></i>
+                Need Help?
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6><i class="fas fa-book me-2"></i>Documentation</h6>
+                        <p>Comprehensive guides and tutorials are available in the help section.</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><i class="fas fa-envelope me-2"></i>Support</h6>
+                        <p>Contact the system administrator for technical support and questions.</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><i class="fas fa-phone me-2"></i>Emergency</h6>
+                        <p>For urgent issues during research sessions, contact your researcher directly.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

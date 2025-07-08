@@ -71,6 +71,28 @@ Updated Main Trial Selection Page - Choose between Traditional, Visual, and Moto
                 </div>
             </div>
 
+            <!-- change             -->
+<!-- Traditional Trial Form -->
+            <!-- <div class="collapse" id="traditionalForm">
+                <div class="card border-primary">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0">Traditional Trial Setup</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'trials:word_trials' %}" id="traditionalTrialForm">
+                            {% csrf_token %}
+                            
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="participant_select" class="form-label">Select Existing Participant:</label>
+                                        <select class="form-select" id="participant_select" name="existing_participant">
+                                            <option value="">-- Select Existing Participant --</option>
+                                            {% for participant in existing_participants %}
+                                                <option value="{{ participant }}">{{ participant }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div> -->
             <!-- Quick Info Section -->
             <div class="row">
                 <div class="col-12">
@@ -112,6 +134,87 @@ Updated Main Trial Selection Page - Choose between Traditional, Visual, and Moto
                     </div>
                 </div>
             </div>
+            <!-- change - none -->
+            <!-- Visual Trial Form
+            <div class="collapse" id="visualForm">
+                <div class="card border-success">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0">Visual Word Focus Trial Setup</h5>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{% url 'trials:visual_trial_setup' %}" id="visualTrialForm">
+                            {% csrf_token %}
+                            
+                            <div class="row mb-4">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="visual_participant_select" class="form-label">Select Existing Participant:</label>
+                                        <select class="form-select" id="visual_participant_select" name="existing_participant">
+                                            <option value="">-- Select Existing Participant --</option>
+                                            {% for participant in existing_participants %}
+                                                <option value="{{ participant }}">{{ participant }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="visual_participant_name" class="form-label">Or Create New Participant:</label>
+                                        <input type="text" class="form-control" name="participant_name" id="visual_participant_name" placeholder="Enter new participant name">
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-group mb-4">
+                                <label class="form-label">Select Word Set:</label>
+                                <div class="row">
+                                    {% for word_set in word_sets %}
+                                        <div class="col-md-6 mb-3">
+                                            <div class="card word-set-card">
+                                                <div class="card-body">
+                                                    <div class="form-check">
+                                                        <input class="form-check-input" type="radio" name="word_set_id" id="wordset_{{ word_set.id }}" value="{{ word_set.id }}" required>
+                                                        <label class="form-check-label" for="wordset_{{ word_set.id }}">
+                                                            <h5>{{ word_set.name }}</h5>
+                                                            <p class="text-muted">{{ word_set.description }}</p>
+                                                            <small class="text-info">Words: {% for word in word_set.words.all %}{{ word.word }}{% if not forloop.last %}, {% endif %}{% endfor %}</small>
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    {% empty %}
+                                        <div class="col-12">
+                                            <div class="alert alert-warning">
+                                                No word sets available. Please create word sets in the admin panel first.
+                                            </div>
+                                        </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            
+                            {% if word_sets %}
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-lg btn-success" id="startVisualTrialBtn">
+                                    <i class="bi bi-eye-fill me-2"></i>Setup Visual Trial
+                                </button>
+                            </div>
+                            {% endif %}
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+ Debug link at the bottom 
+<div class="container mt-3 mb-5">
+    <div class="row">
+        <div class="col text-center">
+            <a href="{% url 'trials:debug_audio_devices' %}" target="_blank" class="btn btn-sm btn-outline-secondary">
+                <i class="bi bi-wrench"></i> Debug Audio Devices
+            </a> -->
         </div>
     </div>
 </div>
@@ -141,4 +244,138 @@ Updated Main Trial Selection Page - Choose between Traditional, Visual, and Moto
 }
 </style>
 
+<!-- <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load microphones for traditional trials
+        loadMicrophones();
+        
+        // Refresh microphones button
+        const refreshMicsBtn = document.getElementById('refreshMicsBtn');
+        if (refreshMicsBtn) {
+            refreshMicsBtn.addEventListener('click', loadMicrophones);
+        }
+        
+        // Make the entire word card clickable for traditional trials
+        const wordCards = document.querySelectorAll('.word-card');
+        wordCards.forEach(card => {
+            card.addEventListener('click', function() {
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+                
+                // Update all labels to show selection state
+                document.querySelectorAll('.word-radio').forEach(input => {
+                    const label = input.nextElementSibling;
+                    if (input.checked) {
+                        label.classList.remove('btn-outline-primary');
+                        label.classList.add('btn-primary');
+                    } else {
+                        label.classList.remove('btn-primary');
+                        label.classList.add('btn-outline-primary');
+                    }
+                });
+            });
+        });
+        
+        // Make word set cards clickable
+        const wordSetCards = document.querySelectorAll('.word-set-card');
+        wordSetCards.forEach(card => {
+            card.addEventListener('click', function() {
+                const radio = this.querySelector('input[type="radio"]');
+                radio.checked = true;
+            });
+        });
+        
+        // Form validation for traditional trials
+        const traditionalForm = document.getElementById('traditionalTrialForm');
+        if (traditionalForm) {
+            traditionalForm.addEventListener('submit', function(e) {
+                const existingParticipant = document.getElementById('participant_select').value;
+                const newParticipant = document.getElementById('participant_name').value.trim();
+                
+                if (!existingParticipant && !newParticipant) {
+                    e.preventDefault();
+                    alert('Please select an existing participant or enter a new participant name.');
+                    return false;
+                }
+                
+                const wordSelected = document.querySelector('input[name="word"]:checked');
+                if (!wordSelected) {
+                    e.preventDefault();
+                    alert('Please select a word for the trial.');
+                    return false;
+                }
+            });
+        }
+        
+        // Form validation for visual trials
+        const visualForm = document.getElementById('visualTrialForm');
+        if (visualForm) {
+            visualForm.addEventListener('submit', function(e) {
+                const existingParticipant = document.getElementById('visual_participant_select').value;
+                const newParticipant = document.getElementById('visual_participant_name').value.trim();
+                
+                if (!existingParticipant && !newParticipant) {
+                    e.preventDefault();
+                    alert('Please select an existing participant or enter a new participant name.');
+                    return false;
+                }
+                
+                const wordSetSelected = document.querySelector('input[name="word_set_id"]:checked');
+                if (!wordSetSelected) {
+                    e.preventDefault();
+                    alert('Please select a word set for the trial.');
+                    return false;
+                }
+            });
+        }
+        
+        // Collapse management
+        const collapses = document.querySelectorAll('.collapse');
+        collapses.forEach(collapse => {
+            collapse.addEventListener('show.bs.collapse', function() {
+                // Hide other collapses when one is shown
+                collapses.forEach(otherCollapse => {
+                    if (otherCollapse !== this && otherCollapse.classList.contains('show')) {
+                        new bootstrap.Collapse(otherCollapse).hide();
+                    }
+                });
+            });
+        });
+    });
+    
+    // Load microphones function
+    function loadMicrophones() {
+        const microphoneSelect = document.getElementById('microphoneSelect');
+        const statusDiv = document.getElementById('microphoneStatus');
+        
+        if (!microphoneSelect) return;
+        
+        microphoneSelect.innerHTML = '<option value="">Loading microphones...</option>';
+        
+        fetch('{% url "trials:get_microphones" %}')
+            .then(response => response.json())
+            .then(data => {
+                microphoneSelect.innerHTML = '';
+                
+                if (data.success && data.microphones.length > 0) {
+                    microphoneSelect.innerHTML = '<option value="">-- Select Microphone --</option>';
+                    data.microphones.forEach(mic => {
+                        const option = document.createElement('option');
+                        option.value = mic.index;
+                        option.textContent = `${mic.name} (${mic.channels} channels)`;
+                        microphoneSelect.appendChild(option);
+                    });
+                    statusDiv.innerHTML = '<div class="alert alert-success alert-sm">Microphones loaded successfully</div>';
+                } else {
+                    microphoneSelect.innerHTML = '<option value="">No microphones found</option>';
+                    statusDiv.innerHTML = '<div class="alert alert-warning alert-sm">No microphones detected</div>';
+                }
+            })
+            .catch(error => {
+                microphoneSelect.innerHTML = '<option value="">Error loading microphones</option>';
+                statusDiv.innerHTML = '<div class="alert alert-danger alert-sm">Error loading microphones</div>';
+                console.error('Error loading microphones:', error);
+            });
+    }
+</script> -->
 {% endblock content %}

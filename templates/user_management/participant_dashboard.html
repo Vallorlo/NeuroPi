@@ -1,0 +1,600 @@
+{% extends "layout.html" %}
+
+{% block title %}
+    Participant Dashboard
+{% endblock title %}
+
+{% block content %}
+<div class="container mt-4 mb-5">
+    <div class="row">
+        <div class="col-lg-3">
+            <div class="card shadow mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Participant Profile</h5>
+                </div>
+                <div class="card-body">
+                    <div class="text-center mb-3">
+                        <div class="avatar-circle">
+                            <span class="avatar-initials">{{ user.username|slice:":1"|upper }}</span>
+                        </div>
+                        <h4 class="mt-2">{{ user.username }}</h4>
+                        <p class="text-muted">{{ user.email }}</p>
+                    </div>
+
+                    <div class="profile-status mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Profile Completion</span>
+                            <span class="badge {% if profile_complete %}bg-success{% else %}bg-warning{% endif %}">
+                                {% if profile_complete %}Complete{% else %}Incomplete{% endif %}
+                            </span>
+                        </div>
+                        <div class="progress">
+                            <div class="progress-bar {% if profile_complete %}bg-success{% else %}bg-warning{% endif %}"
+                                 role="progressbar"
+                                 style="width: {{ profile_completion_percentage|default:0 }}%;"
+                                 aria-valuenow="{{ profile_completion_percentage|default:0 }}"
+                                 aria-valuemin="0"
+                                 aria-valuemax="100">
+                                {{ profile_completion_percentage|default:0 }}%
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="profile-status mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span>Consent Status</span>
+                            <span class="badge {% if has_valid_consent %}bg-success{% else %}bg-danger{% endif %}">
+                                {% if has_valid_consent %}Valid{% else %}Required{% endif %}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <a href="{% url 'user_management:edit_profile' %}" class="btn btn-outline-primary">
+                            <i class="bi bi-pencil-square"></i> Edit Profile
+                        </a>
+                        <a href="{% url 'user_management:workflow_guide' %}" class="btn btn-outline-info">
+                            <i class="bi bi-journal-text"></i> View Workflow Guide
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Quick Links</h5>
+                </div>
+                <div class="card-body">
+                    <div class="list-group">
+                        <a href="{% url 'home' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-house-door"></i> Home
+                        </a>
+                        <a href="{% url 'trials:start_trial' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-play-circle"></i> Start Trial
+                        </a>
+                        <a href="{% url 'trials:completed_trials' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-check-circle"></i> My Trials
+                        </a>
+                        <a href="{% url 'user_management:create_participation_request' %}" class="list-group-item list-group-item-action">
+                            <i class="bi bi-search"></i> Join a Research Study
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-9">
+            {% if messages %}
+                {% for message in messages %}
+                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show shadow-sm" role="alert" style="border-left: 4px solid {% if message.tags == 'success' %}#28a745{% elif message.tags == 'error' %}#dc3545{% elif message.tags == 'warning' %}#ffc107{% else %}#17a2b8{% endif %};">
+                        <div class="d-flex align-items-center">
+                            <i class="bi {% if message.tags == 'success' %}bi-check-circle-fill text-success{% elif message.tags == 'error' %}bi-exclamation-triangle-fill text-danger{% elif message.tags == 'warning' %}bi-exclamation-triangle-fill text-warning{% else %}bi-info-circle-fill text-info{% endif %} me-2"></i>
+                            <strong>{{ message }}</strong>
+                        </div>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                {% endfor %}
+            {% endif %}
+
+            {% if not profile_complete %}
+                <div class="alert alert-warning">
+                    <h5><i class="bi bi-exclamation-triangle"></i> Complete Your Profile</h5>
+                    <p>Please complete your participant profile to fully participate in research studies.</p>
+                    <a href="{% url 'user_management:edit_profile' %}" class="btn btn-warning">Complete Profile</a>
+                </div>
+            {% endif %}
+
+            {% if consent_forms and not has_valid_consent %}
+                <div class="alert alert-danger">
+                    <h5><i class="bi bi-exclamation-triangle"></i> Consent Required</h5>
+                    <p>You have consent forms assigned by researchers that need to be signed before participating in research studies.</p>
+                    <a href="{% url 'user_management:view_consent_form' consent_forms.0.id %}" class="btn btn-danger">Provide Consent</a>
+                </div>
+            {% endif %}
+
+            <!-- Available Consent Forms to Sign (Only when assigned by researchers) -->
+            {% if consent_forms %}
+            <div class="card shadow mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="bi bi-file-earmark-text"></i> Consent Forms Assigned by Researchers</h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Action Required:</strong> A researcher has assigned consent forms to you that need to be signed before you can participate in their research studies.
+                    </div>
+
+                    {% for consent_form in consent_forms %}
+                        <div class="consent-form-card mb-3 p-3 border rounded border-warning">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="fw-bold text-warning">
+                                        <i class="bi bi-file-earmark-text"></i> {{ consent_form.title }}
+                                    </h6>
+                                    <p class="text-muted mb-1">Version {{ consent_form.version }}</p>
+                                    <p class="small mb-2">{{ consent_form.content|truncatewords:20 }}</p>
+
+                                    <div class="consent-features">
+                                        {% if consent_form.includes_data_sharing %}
+                                            <span class="badge bg-info me-1">Data Sharing</span>
+                                        {% endif %}
+                                        {% if consent_form.includes_future_research %}
+                                            <span class="badge bg-info me-1">Future Research</span>
+                                        {% endif %}
+                                        {% if consent_form.includes_audio_recording %}
+                                            <span class="badge bg-info me-1">Audio Recording</span>
+                                        {% endif %}
+                                        {% if consent_form.includes_eeg_recording %}
+                                            <span class="badge bg-info me-1">EEG Recording</span>
+                                        {% endif %}
+                                        {% if consent_form.has_expiration %}
+                                            <span class="badge bg-secondary me-1">Expires in {{ consent_form.expiration_period }} days</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="text-end">
+                                    <a href="{% url 'user_management:view_consent_form' consent_form.id %}" class="btn btn-warning">
+                                        <i class="bi bi-pen"></i> Sign Now
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+
+                    <div class="text-center mt-3">
+                        <small class="text-muted">
+                            <i class="bi bi-shield-check"></i>
+                            All consent forms use secure digital signatures and are stored safely according to research ethics guidelines.
+                        </small>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <div class="card shadow mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Upcoming Sessions</h5>
+                </div>
+                <div class="card-body">
+                    {% if upcoming_sessions %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Researcher</th>
+                                        <th>Date & Time</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for session in upcoming_sessions %}
+                                        <tr>
+                                            <td>{{ session.title }}</td>
+                                            <td>{{ session.researcher.user.username }}</td>
+                                            <td>{{ session.scheduled_start|date:"M d, Y - h:i A" }}</td>
+                                            <td>
+                                                <span class="badge {% if session.status == 'scheduled' %}bg-info{% elif session.status == 'in_progress' %}bg-primary{% endif %}">
+                                                    {{ session.status|title }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-calendar-x display-4 text-muted"></i>
+                            <p class="mt-3">No upcoming sessions scheduled.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% if pending_requests_count > 0 %}
+            <div class="card shadow mb-4">
+                <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="bi bi-clock-history"></i> Your Research Participation Requests</h5>
+                </div>
+                <div class="card-body">
+                    {% for request in pending_requests %}
+                        <div class="request-card mb-3 p-3 border rounded">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <h6 class="fw-bold">
+                                        {% if request.researcher %}
+                                            Request to {{ request.researcher.user.first_name|default:request.researcher.user.username }} {{ request.researcher.user.last_name }}
+                                        {% else %}
+                                            Open Invitation Request
+                                        {% endif %}
+                                    </h6>
+                                    <p class="text-muted mb-1">{{ request.get_request_type_display }}</p>
+                                    <small class="text-muted">Submitted {{ request.created_at|date:"M d, Y" }}</small>
+                                    {% if request.participant_message %}
+                                        <p class="small mt-2"><strong>Your message:</strong> "{{ request.participant_message|truncatewords:15 }}"</p>
+                                    {% endif %}
+                                </div>
+                                <div class="text-end">
+                                    {% if request.status == 'pending' %}
+                                        <span class="badge bg-warning">Pending Review</span>
+                                    {% elif request.status == 'approved' %}
+                                        <span class="badge bg-success mb-2">Approved!</span>
+                                        <div>
+                                            <button class="btn btn-sm btn-success confirm-btn" data-request-id="{{ request.id }}">
+                                                <i class="bi bi-check"></i> Confirm
+                                            </button>
+                                            <button class="btn btn-sm btn-outline-secondary decline-btn" data-request-id="{{ request.id }}">
+                                                <i class="bi bi-x"></i> Decline
+                                            </button>
+                                        </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    {% endfor %}
+                    <div class="text-center">
+                        <a href="{% url 'user_management:create_participation_request' %}" class="btn btn-primary">
+                            <i class="bi bi-plus"></i> Request New Study
+                        </a>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Pending Consent Assignments -->
+            {% if pending_assignments %}
+            <div class="card shadow mb-4">
+                <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0">
+                        <i class="bi bi-exclamation-triangle"></i>
+                        Pending Consent Forms
+                        <span class="badge bg-dark">{{ pending_assignments_count }}</span>
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Action Required:</strong> You have consent forms that need your review and signature before you can participate in research studies.
+                    </div>
+
+                    {% for assignment in pending_assignments %}
+                    <div class="card mb-3 {% if assignment.is_urgent %}border-danger{% else %}border-warning{% endif %}">
+                        <div class="card-body">
+                            <div class="row align-items-center">
+                                <div class="col-md-8">
+                                    <h6 class="card-title mb-1">
+                                        {{ assignment.consent_form.title }}
+                                        {% if assignment.is_urgent %}
+                                            <span class="badge bg-danger ms-2">URGENT</span>
+                                        {% endif %}
+                                        <span class="badge bg-info ms-1">{{ assignment.consent_form.get_form_type_display }}</span>
+                                    </h6>
+                                    <p class="card-text text-muted mb-2">
+                                        <small>
+                                            <i class="bi bi-person"></i> Assigned by: {{ assignment.researcher.user.get_full_name|default:assignment.researcher.user.username }}
+                                            <br>
+                                            <i class="bi bi-calendar"></i> Due: {{ assignment.due_date|date:"M d, Y" }}
+                                            {% if assignment.is_overdue %}
+                                                <span class="text-danger">(OVERDUE)</span>
+                                            {% endif %}
+                                            <br>
+                                            <i class="bi bi-flag"></i> Priority:
+                                            {% if assignment.priority_level == 1 %}Low
+                                            {% elif assignment.priority_level == 2 %}Medium
+                                            {% else %}High{% endif %}
+                                        </small>
+                                    </p>
+                                    {% if assignment.assignment_message %}
+                                    <div class="alert alert-light py-2 mb-2">
+                                        <small><strong>Message from researcher:</strong> {{ assignment.assignment_message }}</small>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <a href="{% url 'user_management:review_consent_assignment' assignment.id %}"
+                                       class="btn btn-primary btn-sm mb-1">
+                                        <i class="bi bi-eye"></i> Review & Sign
+                                    </a>
+                                    <br>
+                                    <a href="{% url 'user_management:view_consent_form' assignment.consent_form.id %}"
+                                       class="btn btn-outline-secondary btn-sm">
+                                        <i class="bi bi-file-text"></i> View Details
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Consent Records -->
+            <div class="card shadow mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-file-earmark-check"></i>
+                        My Consent Forms
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if consent_records %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Consent Form</th>
+                                        <th>Version</th>
+                                        <th>Date Signed</th>
+                                        <th>Expiration</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for record in consent_records %}
+                                        <tr>
+                                            <td>
+                                                {{ record.consent_form.title }}
+                                                <br>
+                                                <small class="text-muted">{{ record.consent_form.get_form_type_display }}</small>
+                                            </td>
+                                            <td>{{ record.consent_form.version }}</td>
+                                            <td>
+                                                {% if record.signed_at %}
+                                                    {{ record.signed_at|date:"M d, Y" }}
+                                                    <br><small class="text-muted">{{ record.signed_at|time:"H:i" }}</small>
+                                                {% else %}
+                                                    <span class="text-muted">Not signed</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if record.expires_at %}
+                                                    {% if record.is_expired %}
+                                                        <span class="badge bg-danger">Expired</span>
+                                                    {% else %}
+                                                        <span class="badge bg-info">{{ record.expires_at|date:"M d, Y" }}</span>
+                                                    {% endif %}
+                                                {% else %}
+                                                    <span class="badge bg-secondary">No Expiration</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if record.status == 'pending' %}
+                                                    <span class="badge bg-warning">Pending Signature</span>
+                                                {% elif record.status == 'signed' %}
+                                                    {% if record.is_valid %}
+                                                        <span class="badge bg-success">Active</span>
+                                                    {% else %}
+                                                        <span class="badge bg-danger">Expired</span>
+                                                    {% endif %}
+                                                {% elif record.status == 'withdrawn' %}
+                                                    <span class="badge bg-secondary">Withdrawn</span>
+                                                {% elif record.status == 'declined' %}
+                                                    <span class="badge bg-danger">Declined</span>
+                                                {% else %}
+                                                    <span class="badge bg-secondary">{{ record.get_status_display }}</span>
+                                                {% endif %}
+                                            </td>
+                                            <td>
+                                                {% if record.status == 'pending' %}
+                                                    <a href="{% url 'user_management:sign_consent' record.id %}" class="btn btn-sm btn-success">
+                                                        <i class="bi bi-pen"></i> Sign
+                                                    </a>
+                                                {% endif %}
+                                                <a href="{% url 'user_management:view_consent_form' record.consent_form.id %}" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-eye"></i> View
+                                                </a>
+                                                {% if record.status == 'signed' %}
+                                                    <a href="{% url 'user_management:download_consent_pdf' record.id %}" class="btn btn-sm btn-outline-info" target="_blank">
+                                                        <i class="bi bi-file-pdf"></i> PDF
+                                                    </a>
+                                                    {% if record.is_valid %}
+                                                        <a href="{% url 'user_management:withdraw_consent' record.id %}" class="btn btn-sm btn-outline-danger">
+                                                            <i class="bi bi-x-circle"></i> Withdraw
+                                                        </a>
+                                                    {% endif %}
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-file-earmark-x display-4 text-muted"></i>
+                            <p class="mt-3">No consent forms found.</p>
+                            {% if not pending_assignments %}
+                                <p class="text-muted">Consent forms will appear here when researchers assign them to you.</p>
+                            {% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Past Sessions</h5>
+                </div>
+                <div class="card-body">
+                    {% if past_sessions %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Title</th>
+                                        <th>Researcher</th>
+                                        <th>Date & Time</th>
+                                        <th>Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for session in past_sessions %}
+                                        <tr>
+                                            <td>{{ session.title }}</td>
+                                            <td>{{ session.researcher.user.username }}</td>
+                                            <td>{{ session.scheduled_start|date:"M d, Y - h:i A" }}</td>
+                                            <td>
+                                                <span class="badge
+                                                    {% if session.status == 'completed' %}bg-success
+                                                    {% elif session.status == 'cancelled' %}bg-danger
+                                                    {% elif session.status == 'no_show' %}bg-warning
+                                                    {% else %}bg-secondary{% endif %}">
+                                                    {{ session.status|title }}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4">
+                            <i class="bi bi-calendar-check display-4 text-muted"></i>
+                            <p class="mt-3">No past sessions found.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .avatar-circle {
+        width: 80px;
+        height: 80px;
+        background-color: #007bff;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin: 0 auto;
+    }
+
+    .avatar-initials {
+        color: white;
+        font-size: 32px;
+        font-weight: bold;
+    }
+
+    .request-card {
+        transition: all 0.3s ease;
+        border-left: 4px solid #17a2b8;
+    }
+
+    .request-card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        transform: translateY(-2px);
+    }
+</style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+
+    // Handle confirm buttons
+    document.querySelectorAll('.confirm-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const requestId = this.dataset.requestId;
+            confirmParticipation(requestId, 'confirm');
+        });
+    });
+
+    // Handle decline buttons
+    document.querySelectorAll('.decline-btn').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const requestId = this.dataset.requestId;
+            if (confirm('Are you sure you want to decline this research invitation?')) {
+                confirmParticipation(requestId, 'decline');
+            }
+        });
+    });
+
+    function confirmParticipation(requestId, action) {
+        const formData = new FormData();
+        formData.append('csrfmiddlewaretoken', csrfToken);
+        formData.append('action', action);
+
+        console.log('Sending request to:', `/user_management/confirm-participation/${requestId}/`);
+        console.log('CSRF Token:', csrfToken);
+
+        fetch(`/user_management/confirm-participation/${requestId}/`, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            console.log('Response status:', response.status);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Response data:', data);
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error: ' + (data.error || 'Unknown error'));
+            }
+        })
+        .catch(error => {
+            console.error('Error details:', error);
+            alert('An error occurred: ' + error.message + '. Please try again.');
+        });
+    }
+});
+
+// Highlight success messages
+document.addEventListener('DOMContentLoaded', function() {
+    const successAlerts = document.querySelectorAll('.alert-success');
+    successAlerts.forEach(alert => {
+        // Add a subtle animation to draw attention
+        alert.style.animation = 'pulse 2s ease-in-out';
+
+        // Auto-dismiss after 8 seconds instead of default
+        setTimeout(() => {
+            if (alert.parentNode) {
+                alert.style.transition = 'opacity 0.5s ease';
+                alert.style.opacity = '0';
+                setTimeout(() => {
+                    if (alert.parentNode) {
+                        alert.remove();
+                    }
+                }, 500);
+            }
+        }, 8000);
+    });
+});
+</script>
+
+<style>
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+</style>
+{% endblock content %}

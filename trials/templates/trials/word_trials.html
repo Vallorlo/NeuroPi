@@ -40,11 +40,11 @@
                             
                             <!-- Participant action buttons -->
                             <div class="mt-3 d-flex gap-2">
-                                <a href="{% url 'start_trial' %}" class="btn btn-outline-primary btn-sm">
+                                <a href="{% url 'trials:start_trial' %}" class="btn btn-outline-primary btn-sm">
                                     <i class="bi bi-person-plus"></i> New Participant
                                 </a>
-                                
-                                <form method="post" action="{% url 'word_trials' %}" class="d-inline">
+
+                                <form method="post" action="{% url 'trials:word_trials' %}" class="d-inline">
                                     {% csrf_token %}
                                     <input type="hidden" name="existing_participant" value="{{ participant_name }}">
                                     <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#selectWordModal">
@@ -104,7 +104,7 @@
                                                 <p>Motor + Non-Vocal - Perform the action while thinking about the word</p>
                                             {% endif %}
                                         </div>
-                                        <a href="{% url 'capture_stage' %}?word={{ word }}&stage={{ trial.stage }}" class="btn btn-success w-100">
+                                        <a href="{% url 'trials:capture_stage' %}?word={{ word }}&stage={{ trial.stage }}" class="btn btn-success w-100">
                                             Start Stage
                                         </a>
                                     </div>
@@ -127,7 +127,7 @@
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <form method="post" action="{% url 'word_trials' %}" id="changeWordForm">
+                <form method="post" action="{% url 'trials:word_trials' %}" id="changeWordForm">
                     {% csrf_token %}
                     <input type="hidden" name="existing_participant" value="{{ participant_name }}">
                     <input type="hidden" name="microphone_index" value="{{ microphone_index }}">

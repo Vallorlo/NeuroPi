@@ -109,13 +109,13 @@
             <div class="row mt-4">
                 <div class="col-12">
                     <div class="d-grid gap-2 d-md-flex justify-content-md-center">
-                        <a href="{% url 'start_trial' %}" class="btn btn-lg btn-primary me-md-2">
+                        <a href="{% url 'trials:start_trial' %}" class="btn btn-lg btn-primary me-md-2">
                             <i class="bi bi-plus-circle-fill me-2"></i>Start New Trial
                         </a>
-                        <a href="{% url 'completed_trials' %}" class="btn btn-lg btn-outline-success me-md-2">
+                        <a href="{% url 'trials:completed_trials' %}" class="btn btn-lg btn-outline-success me-md-2">
                             <i class="bi bi-list-check me-2"></i>View All Trials
                         </a>
-                        <a href="{% url 'visual_trial_setup' %}" class="btn btn-lg btn-outline-info">
+                        <a href="{% url 'trials:visual_trial_setup' %}" class="btn btn-lg btn-outline-info">
                             <i class="bi bi-arrow-repeat me-2"></i>Run Same Setup
                         </a>
                     </div>
@@ -234,7 +234,7 @@
         // Auto-redirect after 30 seconds if no action taken
         setTimeout(() => {
             if (confirm('Would you like to return to the trial selection page?')) {
-                window.location.href = '{% url "start_trial" %}';
+                window.location.href = '{% url "trials:start_trial" %}';
             }
         }, 30000);
     });

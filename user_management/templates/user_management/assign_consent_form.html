@@ -1,0 +1,213 @@
+{% extends 'user_management/base.html' %}
+{% load static %}
+
+{% block title %}Assign Consent Form - NeuroPi{% endblock %}
+
+{% block breadcrumb_items %}
+<li class="breadcrumb-item active" aria-current="page">Assign Consent Form</li>
+{% endblock %}
+
+{% block page_content %}
+<!-- Page Header -->
+<div class="page-header">
+    <div class="d-flex justify-content-between align-items-center flex-wrap">
+        <div>
+            <h1>
+                <i class="fas fa-user-plus me-3"></i>
+                Assign Consent Form
+            </h1>
+            <p class="subtitle">Assign consent forms to research participants</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+            <a href="{% url 'user_management:consent_management' %}" class="action-button">
+                <i class="fas fa-arrow-left"></i>
+                Back to Consent Management
+            </a>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="dashboard-card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-user-plus me-2"></i> Assign Consent Form
+                </h5>
+            </div>
+            <div class="card-body">
+
+                    <form method="post" action="{% if consent_form %}{% url 'user_management:assign_consent_form' consent_form.id %}{% else %}{% url 'user_management:assign_consent_form_general' %}{% endif %}" class="needs-validation" novalidate>
+                        {% csrf_token %}
+                        
+                        {% if consent_form %}
+                            <!-- Hidden field for pre-selected consent form -->
+                            <input type="hidden" name="consent_form" value="{{ consent_form.id }}" id="id_consent_form">
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    <i class="bi bi-file-earmark-text"></i> Consent Form
+                                </label>
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6>{{ consent_form.title }}</h6>
+                                        <p class="text-muted small">{{ consent_form.summary|default:"No description available" }}</p>
+                                        <span class="badge bg-info">Version {{ consent_form.version }}</span>
+                                        <span class="badge bg-secondary ms-2">{{ consent_form.get_form_type_display }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        {% else %}
+                            <div class="mb-3">
+                                <label for="{{ form.consent_form.id_for_label }}" class="form-label">
+                                    <i class="bi bi-file-earmark-text"></i> Consent Form *
+                                </label>
+                                {{ form.consent_form }}
+                                {% if form.consent_form.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {{ form.consent_form.errors.0 }}
+                                    </div>
+                                {% endif %}
+                                {% if form.consent_form.help_text %}
+                                    <div class="form-text">{{ form.consent_form.help_text }}</div>
+                                {% endif %}
+                            </div>
+                        {% endif %}
+
+                        <div class="mb-3">
+                            <label for="{{ form.participant.id_for_label }}" class="form-label">
+                                <i class="bi bi-person"></i> Participant *
+                            </label>
+                            {{ form.participant }}
+                            {% if form.participant.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.participant.errors.0 }}
+                                </div>
+                            {% endif %}
+                            {% if form.participant.help_text %}
+                                <div class="form-text">{{ form.participant.help_text }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.due_date.id_for_label }}" class="form-label">
+                                <i class="bi bi-calendar"></i> Due Date
+                            </label>
+                            {{ form.due_date }}
+                            {% if form.due_date.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.due_date.errors.0 }}
+                                </div>
+                            {% endif %}
+                            {% if form.due_date.help_text %}
+                                <div class="form-text">{{ form.due_date.help_text }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="{{ form.priority_level.id_for_label }}" class="form-label">
+                                        <i class="bi bi-flag"></i> Priority Level *
+                                    </label>
+                                    {{ form.priority_level }}
+                                    {% if form.priority_level.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.priority_level.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    {% if form.priority_level.help_text %}
+                                        <div class="form-text">{{ form.priority_level.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <div class="form-check mt-4">
+                                        {{ form.is_urgent }}
+                                        <label class="form-check-label" for="{{ form.is_urgent.id_for_label }}">
+                                            <i class="bi bi-exclamation-triangle text-warning"></i> Mark as Urgent
+                                        </label>
+                                    </div>
+                                    {% if form.is_urgent.errors %}
+                                        <div class="invalid-feedback d-block">
+                                            {{ form.is_urgent.errors.0 }}
+                                        </div>
+                                    {% endif %}
+                                    {% if form.is_urgent.help_text %}
+                                        <div class="form-text">{{ form.is_urgent.help_text }}</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="{{ form.assignment_message.id_for_label }}" class="form-label">
+                                <i class="bi bi-chat-text"></i> Notes
+                            </label>
+                            {{ form.assignment_message }}
+                            {% if form.assignment_message.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {{ form.assignment_message.errors.0 }}
+                                </div>
+                            {% endif %}
+                            {% if form.assignment_message.help_text %}
+                                <div class="form-text">{{ form.assignment_message.help_text }}</div>
+                            {% endif %}
+                        </div>
+
+                        <div class="d-flex justify-content-between">
+                            <a href="{% url 'user_management:consent_management' %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to Consent Management
+                            </a>
+                            <button type="submit" class="btn btn-success">
+                                <i class="bi bi-person-plus"></i> Assign Consent Form
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Add form validation with custom handler
+    const forms = document.querySelectorAll('.needs-validation');
+    Array.from(forms).forEach(form => {
+        form.setAttribute('data-custom-handler', 'true'); // Prevent global handler
+
+        form.addEventListener('submit', event => {
+            console.log('Consent form validation triggered');
+
+            if (!form.checkValidity()) {
+                console.log('Consent form validation failed');
+                event.preventDefault();
+                event.stopPropagation();
+                form.classList.add('was-validated');
+                return false;
+            }
+
+            console.log('Consent form validation passed');
+            form.classList.add('was-validated');
+
+            // Add loading state
+            const submitBtn = form.querySelector('button[type="submit"]');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                const originalText = submitBtn.innerHTML;
+                submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Assigning...';
+
+                // Fallback re-enable
+                setTimeout(() => {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = originalText;
+                }, 30000);
+            }
+        });
+    });
+});
+</script>
+{% endblock %}

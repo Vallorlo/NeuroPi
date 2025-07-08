@@ -38,11 +38,14 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'django.contrib.sites',
     'trials',
     'plot.apps.PlotConfig',
     'accounts',
     'motor_imagery',
     'bci',
+    'pi_main',
+    'user_management',
     'eeg_visualization',
 ]
 
@@ -151,5 +154,12 @@ MEDIA_ROOT = BASE_DIR / 'models'
 # Media files configuration for uploaded EEG sessions and models
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+
+# Sites framework
+SITE_ID = 1
+
+# Email configuration (for development)
+EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+DEFAULT_FROM_EMAIL = 'noreply@neuropi.com'
 
 

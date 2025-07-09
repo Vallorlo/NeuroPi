@@ -129,7 +129,7 @@ class SessionUploadView(LoginRequiredMixin, CreateView):
         
         # Process the uploaded file
         try:
-            file_info = process_session_file(self.object.session_file.path)
+            file_info = process_session_file(self.object)
             self.object.channels = file_info['channels']
             self.object.classes = file_info['classes']
             self.object.total_samples = file_info['total_samples']
@@ -175,7 +175,7 @@ class MultipleSessionUploadView(LoginRequiredMixin, FormView):
                 )
                 
                 # Process file
-                file_info = process_session_file(session.session_file.path)
+                file_info = process_session_file(session)
                 session.channels = file_info['channels']
                 session.classes = file_info['classes']
                 session.total_samples = file_info['total_samples']

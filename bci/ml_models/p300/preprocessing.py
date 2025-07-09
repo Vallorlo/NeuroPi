@@ -611,6 +611,7 @@ class P300Preprocessor:
         return feature_matrix
 
 
+
 def load_and_preprocess_p300_data(csv_files: List[str], 
                                  epoch_length: float = 1.0,
                                  apply_smote: bool = True,

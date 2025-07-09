@@ -1,0 +1,12 @@
+{% load communicator_tags %}
+
+<div class="prediction-container">
+    <div class="prediction-label d-flex justify-content-between align-items-center">
+        <span>{{ label }}:</span>
+        <span class="prediction-value">{{ confidence|format_confidence }}</span>
+    </div>
+    <div class="prediction-bar">
+        <div class="confidence-fill {% if high_confidence %}bg-success high-confidence{% else %}bg-secondary{% endif %}" 
+             style="width: {{ confidence|floatformat:1|default:0 }}%"></div>
+    </div>
+</div>

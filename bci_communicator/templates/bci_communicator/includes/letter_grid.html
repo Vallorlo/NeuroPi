@@ -1,0 +1,17 @@
+% load communicator_tags %}
+
+<div class="letter-grid-section">
+    <h6 class="text-center mb-3">{{ side|title }} Hand 
+        <small class="text-muted">({{ letters|join:"," }})</small>
+    </h6>
+    <div class="text-center">
+        {% for letter in letters %}
+            <button class="letter-btn {{ side|lower }}-letter 
+                    {% if current_selection == letter %}highlighted{% endif %}" 
+                    data-letter="{{ letter }}" 
+                    data-side="{{ side|lower }}">
+                {{ letter }}
+            </button>
+        {% endfor %}
+    </div>
+</div>

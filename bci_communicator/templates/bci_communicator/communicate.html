@@ -1,0 +1,301 @@
+<!-- bci_communicator/templates/bci_communicator/communicate.html -->
+{% extends 'layout.html' %}
+{% load static %}
+
+{% block title %}BCI Communication - {{ session.session_name }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'bci_communicator/css/communicator.css' %}">
+<style>
+    /* Override body styling for communication interface */
+    body {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+    }
+    
+    .text-display {
+        background: rgba(255,255,255,0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 15px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+        border: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .letter-grid {
+        background: rgba(255,255,255,0.05);
+        backdrop-filter: blur(5px);
+        border-radius: 12px;
+        padding: 1.5rem;
+    }
+    
+    .letter-btn {
+        width: 60px;
+        height: 60px;
+        margin: 5px;
+        border: 2px solid rgba(255,255,255,0.3);
+        background: rgba(255,255,255,0.1);
+        color: white;
+        border-radius: 10px;
+        font-size: 1.5rem;
+        font-weight: bold;
+        transition: all 0.3s ease;
+    }
+    
+    .letter-btn.highlighted {
+        background: rgba(255,255,0,0.7);
+        color: black;
+        transform: scale(1.1);
+        box-shadow: 0 0 20px rgba(255,255,0,0.5);
+    }
+    
+    .letter-btn.selected-side {
+        border-color: #00ff00;
+        background: rgba(0,255,0,0.2);
+    }
+    
+    .status-card {
+        background: rgba(255,255,255,0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 12px;
+    }
+    
+    .prediction-bar {
+        height: 20px;
+        background: rgba(255,255,255,0.2);
+        border-radius: 10px;
+        overflow: hidden;
+    }
+    
+    .confidence-fill {
+        height: 100%;
+        border-radius: 10px;
+        transition: width 0.3s ease;
+    }
+    
+    /* Override card styling for communication interface */
+    .card {
+        background: rgba(255,255,255,0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.2);
+        color: white;
+    }
+    
+    .card-header {
+        background: rgba(255,255,255,0.1);
+        border-bottom: 1px solid rgba(255,255,255,0.2);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row py-3">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <h4><i class="fas fa-comments"></i> {{ session.session_name }}</h4>
+                <div>
+                    <button id="startBtn" class="btn btn-success me-2">
+                        <i class="fas fa-play"></i> Start
+                    </button>
+                    <button id="stopBtn" class="btn btn-danger me-2" disabled>
+                        <i class="fas fa-stop"></i> Stop
+                    </button>
+                    <a href="{% url 'bci_communicator:dashboard' %}" class="btn btn-outline-light">
+                        <i class="fas fa-arrow-left"></i> Back
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Interface -->
+    <div class="row">
+        <!-- Text Display -->
+        <div class="col-12">
+            <div class="text-display">
+                <h5>Communication Output</h5>
+                <div class="d-flex align-items-center">
+                    <div id="currentText" class="flex-grow-1 h3 mb-0 font-monospace">
+                        {{ session.current_text|default:"" }}
+                    </div>
+                    <div id="currentWord" class="text-warning h4 mb-0 ms-3">
+                        {{ session.current_word|default:"" }}
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <small>Words: <span id="wordCount">0</span> | Characters: <span id="charCount">0</span></small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Letter Navigation -->
+        <div class="col-md-8">
+            <div class="letter-grid">
+                <h5>Letter Navigation</h5>
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6 class="text-center">Right Hand <small>(A,E,I,O,S,T)</small></h6>
+                        <div class="text-center">
+                            {% for letter in right_letters %}
+                                <button class="letter-btn right-letter" data-letter="{{ letter }}" data-side="right">
+                                    {{ letter }}
+                                </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-center">Left Hand <small>(H,L,N,P,R,Y)</small></h6>
+                        <div class="text-center">
+                            {% for letter in left_letters %}
+                                <button class="letter-btn left-letter" data-letter="{{ letter }}" data-side="left">
+                                    {{ letter }}
+                                </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="text-center mt-3">
+                    <button class="btn btn-warning me-2" onclick="manualAction('add_space')">
+                        <i class="fas fa-space-shuttle"></i> Space (Feet)
+                    </button>
+                    <button class="btn btn-info me-2" onclick="showWordSuggestions()">
+                        <i class="fas fa-lightbulb"></i> Confirm (Rest)
+                    </button>
+                    <button class="btn btn-outline-light" onclick="manualAction('clear_text')">
+                        <i class="fas fa-trash"></i> Clear
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Status Panel -->
+        <div class="col-md-4">
+            <!-- Current State -->
+            <div class="status-card mb-3">
+                <div class="card-body">
+                    <h6><i class="fas fa-brain"></i> System Status</h6>
+                    <div class="mb-2">
+                        <strong>State:</strong> 
+                        <span id="currentState" class="badge bg-primary">{{ session.communication_state }}</span>
+                    </div>
+                    <div class="mb-2">
+                        <strong>Selected Side:</strong> 
+                        <span id="selectedSide">{{ session.selected_side|default:"None" }}</span>
+                    </div>
+                    <div>
+                        <strong>Current Letter:</strong> 
+                        <span id="currentLetter" class="badge bg-warning text-dark">{{ session.get_current_letter|default:"None" }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Motor Imagery Predictions -->
+            <div class="status-card mb-3">
+                <div class="card-body">
+                    <h6><i class="fas fa-brain"></i> Motor Imagery</h6>
+                    <div id="motorImageryPredictions">
+                        <div class="small mb-1">
+                            <span>Right Hand:</span>
+                            <div class="prediction-bar">
+                                <div class="confidence-fill bg-success" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="small mb-1">
+                            <span>Left Hand:</span>
+                            <div class="prediction-bar">
+                                <div class="confidence-fill bg-success" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="small mb-1">
+                            <span>Feet:</span>
+                            <div class="prediction-bar">
+                                <div class="confidence-fill bg-warning" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="small mb-1">
+                            <span>Rest:</span>
+                            <div class="prediction-bar">
+                                <div class="confidence-fill bg-info" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Word Suggestions -->
+            <div class="status-card mb-3">
+                <div class="card-body">
+                    <h6><i class="fas fa-spell-check"></i> Word Suggestions</h6>
+                    <div id="wordSuggestions">
+                        <p class="text-muted small">Type letters to see suggestions...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- P300 Status -->
+            <div class="status-card">
+                <div class="card-body">
+                    <h6><i class="fas fa-eye"></i> P300 Confirmation</h6>
+                    <div id="p300Status">
+                        <p class="text-muted small">Inactive</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Events -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="status-card">
+                <div class="card-body">
+                    <h6><i class="fas fa-list"></i> Recent Events</h6>
+                    <div id="recentEvents" style="max-height: 200px; overflow-y: auto;">
+                        <p class="text-muted small">No events yet...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Word Suggestion Modal -->
+<div class="modal fade" id="wordSuggestionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Word Suggestions</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Current word: <strong id="modalCurrentWord"></strong></p>
+                <div id="modalSuggestions"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'bci_communicator/js/communicator.js' %}"></script>
+<script>
+    // Initialize communicator with session data
+    const communicator = new BCICommunicator({
+        sessionId: {{ session.id }},
+        vocabularyWords: {{ vocabulary_words|safe }},
+        rightLetters: {{ right_letters|safe }},
+        leftLetters: {{ left_letters|safe }},
+        csrfToken: '{{ csrf_token }}'
+    });
+    
+    // Start the interface
+    communicator.init();
+</script>
+{% endblock %}

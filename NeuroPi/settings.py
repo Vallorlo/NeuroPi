@@ -46,9 +46,16 @@ INSTALLED_APPS = [
     'bci',
     'user_management',
     'eeg_visualization',
+    'bci_communicator',
 ]
 
-
+BCI_COMMUNICATOR = {
+    'SESSION_TIMEOUT': 3600,
+    'MAX_EVENTS_RETENTION': 1000,
+    'POLLING_INTERVAL': 500,
+    'CLEANUP_OLD_SESSIONS_DAYS': 7,
+    'CLEANUP_OLD_EVENTS_DAYS': 1,
+}
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',

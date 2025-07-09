@@ -1,0 +1,18 @@
+{% load communicator_tags %}
+
+<div class="word-suggestions-container">
+    {% if suggestions %}
+        <div class="small mb-2 text-muted">Suggestions for "{{ current_word }}":</div>
+        {% for word in suggestions %}
+            <button class="word-suggestion btn btn-sm btn-outline-light me-1 mb-1" 
+                    onclick="manualAction('complete_word', {word: '{{ word }}'})"
+                    data-word="{{ word }}">
+                {{ word }}
+            </button>
+        {% endfor %}
+    {% elif current_word %}
+        <p class="text-muted small">No suggestions for "{{ current_word }}"</p>
+    {% else %}
+        <p class="text-muted small">Type letters to see suggestions...</p>
+    {% endif %}
+</div

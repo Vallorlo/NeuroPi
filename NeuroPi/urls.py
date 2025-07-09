@@ -25,6 +25,7 @@ urlpatterns = [
     path('eeg-visualization/', include('eeg_visualization.urls', namespace='pi_main')),
     path('user_management/', include('user_management.urls')),
     path('BCI/', bci_redirect),
+     path('communicator/', include('bci_communicator.urls')),
 ]
 
 if settings.DEBUG:

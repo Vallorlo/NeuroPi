@@ -1,0 +1,25 @@
+{% load communicator_tags %}
+
+<div class="event-item event-{{ event.event_type|lower|cut:'_'|cut:' ' }}">
+    <div class="d-flex justify-content-between align-items-start">
+        <div class="flex-grow-1">
+            <strong>{{ event.event_type|get_class_name }}</strong>
+            {% if event.selected_letter %}
+                - Letter: {{ event.selected_letter }}
+            {% elif event.completed_word %}
+                - Word: {{ event.completed_word }}
+            {% elif event.predicted_class is not None %}
+                - Class: {{ event.predicted_class|get_class_name }}
+            {% endif %}
+            
+            {% if event.confidence %}
+                <div class="small text-muted">
+                    Confidence: {{ event.confidence|format_confidence }}
+                </div>
+            {% endif %}
+        </div>
+        <small class="event-timestamp text-muted">
+            {{ event.timestamp|time_since_event }}
+        </small>
+    </div>
+</div>

@@ -1,0 +1,39 @@
+{% extends 'layout.html' %}
+
+{% block title %}Error - BCI Communicator{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-body text-center">
+                    <div class="mb-4">
+                        <i class="fas fa-exclamation-triangle fa-4x text-warning"></i>
+                    </div>
+                    <h4 class="card-title">Communication Error</h4>
+                    <p class="card-text">{{ error_message|default:"An unexpected error occurred." }}</p>
+                    
+                    {% if error_details %}
+                        <div class="alert alert-warning text-start">
+                            <strong>Details:</strong><br>
+                            {{ error_details }}
+                        </div>
+                    {% endif %}
+                    
+                    <div class="mt-4">
+                        <a href="{% url 'bci_communicator:dashboard' %}" class="btn btn-primary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                        </a>
+                        {% if session_id %}
+                            <a href="{% url 'bci_communicator:communicate' session_id %}" class="btn btn-outline-secondary ms-2">
+                                <i class="fas fa-redo me-2"></i>Try Again
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,264 +1,506 @@
-<!-- bci_communicator/templates/bci_communicator/communicate.html -->
-{% extends 'layout.html' %}
+{% extends 'base.html' %}
 {% load static %}
+{% load communicator_tags %}
 
-{% block title %}BCI Communication - {{ session.session_name }}{% endblock %}
+{% block title %}BCI Communicator - Moving Window System{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{% static 'bci_communicator/css/communicator.css' %}">
 <style>
-    /* Override body styling for communication interface */
-    body {
+    /* Moving Window System Specific Styles */
+    .moving-window-container {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px 0;
         color: white;
     }
     
-    .text-display {
-        background: rgba(255,255,255,0.1);
-        backdrop-filter: blur(10px);
+    /* PROMINENT P300 WORD SUGGESTIONS - Top Priority */
+    .word-suggestions-prominent {
+        background: rgba(255, 255, 255, 0.15);
+        border: 2px solid rgba(255, 255, 255, 0.3);
         border-radius: 15px;
-        padding: 2rem;
-        margin-bottom: 2rem;
-        border: 1px solid rgba(255,255,255,0.2);
+        padding: 25px;
+        margin-bottom: 25px;
+        text-align: center;
+        min-height: 100px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
     }
     
-    .letter-grid {
-        background: rgba(255,255,255,0.05);
-        backdrop-filter: blur(5px);
+    .word-suggestions-title {
+        font-size: 1.3rem;
+        font-weight: bold;
+        margin-bottom: 15px;
+        color: #ffd700;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    .word-suggestion-item {
+        display: inline-block;
+        background: linear-gradient(45deg, #ff6b6b, #ee5a52);
+        border: 3px solid #fff;
         border-radius: 12px;
-        padding: 1.5rem;
+        padding: 15px 25px;
+        margin: 8px;
+        font-size: 1.4rem;
+        font-weight: bold;
+        color: white;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+        min-width: 100px;
+    }
+    
+    .word-suggestion-item:hover {
+        transform: scale(1.1);
+        box-shadow: 0 8px 25px rgba(255, 107, 107, 0.4);
+    }
+    
+    /* Text Output */
+    .text-output {
+        background: rgba(0, 0, 0, 0.3);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 30px;
+        font-family: 'Courier New', monospace;
+        font-size: 1.8rem;
+        min-height: 70px;
+        display: flex;
+        align-items: center;
+    }
+    
+    .completed-text {
+        color: #90EE90;
+    }
+    
+    .current-word {
+        color: #ffd700;
+        font-weight: bold;
+    }
+    
+    .cursor {
+        animation: blink 1s infinite;
+        color: #fff;
+        margin-left: 5px;
+    }
+    
+    @keyframes blink {
+        0%, 50% { opacity: 1; }
+        51%, 100% { opacity: 0; }
+    }
+    
+    /* Letter Groups with Moving Windows */
+    .letter-groups {
+        display: flex;
+        gap: 30px;
+        margin-bottom: 30px;
+    }
+    
+    .letter-group {
+        flex: 1;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 15px;
+        padding: 20px;
+        text-align: center;
+    }
+    
+    .letter-group-title {
+        font-size: 1.3rem;
+        font-weight: bold;
+        margin-bottom: 20px;
+        color: #ffd700;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    .letter-container {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+        flex-wrap: wrap;
     }
     
     .letter-btn {
-        width: 60px;
-        height: 60px;
-        margin: 5px;
-        border: 2px solid rgba(255,255,255,0.3);
-        background: rgba(255,255,255,0.1);
+        width: 70px;
+        height: 70px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        background: rgba(255, 255, 255, 0.1);
         color: white;
-        border-radius: 10px;
-        font-size: 1.5rem;
+        font-size: 1.6rem;
         font-weight: bold;
+        border-radius: 12px;
+        cursor: default;
         transition: all 0.3s ease;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
     }
     
-    .letter-btn.highlighted {
-        background: rgba(255,255,0,0.7);
-        color: black;
-        transform: scale(1.1);
-        box-shadow: 0 0 20px rgba(255,255,0,0.5);
-    }
-    
-    .letter-btn.selected-side {
-        border-color: #00ff00;
-        background: rgba(0,255,0,0.2);
+    /* Status Panel */
+    .status-panel {
+        display: flex;
+        gap: 15px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
     }
     
     .status-card {
-        background: rgba(255,255,255,0.1);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255,255,255,0.2);
+        flex: 1;
+        min-width: 200px;
+        background: rgba(255, 255, 255, 0.1);
         border-radius: 12px;
+        padding: 15px;
+        text-align: center;
+    }
+    
+    .status-card h6 {
+        margin: 0 0 10px 0;
+        color: #ffd700;
+        font-size: 1rem;
+        font-weight: bold;
+    }
+    
+    .status-value {
+        font-size: 1.1rem;
+        font-weight: bold;
+        color: white;
+    }
+    
+    /* Control Buttons */
+    .control-panel {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        margin-bottom: 30px;
+    }
+    
+    .control-btn {
+        padding: 12px 25px;
+        border: none;
+        border-radius: 25px;
+        font-size: 1rem;
+        font-weight: bold;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    }
+    
+    .btn-start { background: #28a745; color: white; }
+    .btn-stop { background: #dc3545; color: white; }
+    .btn-test { background: #17a2b8; color: white; }
+    
+    .control-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    
+    .control-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    
+    /* Motor Imagery Prediction Bars */
+    .prediction-bars {
+        display: flex;
+        gap: 10px;
+        margin-top: 10px;
     }
     
     .prediction-bar {
-        height: 20px;
-        background: rgba(255,255,255,0.2);
-        border-radius: 10px;
+        flex: 1;
+        height: 25px;
+        background: rgba(255, 255, 255, 0.2);
+        border-radius: 12px;
         overflow: hidden;
+        position: relative;
     }
     
     .confidence-fill {
         height: 100%;
-        border-radius: 10px;
+        width: 0%;
+        border-radius: 12px;
         transition: width 0.3s ease;
     }
     
-    /* Override card styling for communication interface */
-    .card {
-        background: rgba(255,255,255,0.1);
-        backdrop-filter: blur(10px);
-        border: 1px solid rgba(255,255,255,0.2);
-        color: white;
+    .fill-right { background: linear-gradient(90deg, #4ecdc4, #44c2a8); }
+    .fill-left { background: linear-gradient(90deg, #ff6b6b, #ee5a52); }
+    .fill-feet { background: linear-gradient(90deg, #ffd93d, #ffcc00); }
+    .fill-rest { background: linear-gradient(90deg, #a8e6cf, #7fcdcd); }
+    
+    /* Instructions */
+    .instructions {
+        background: rgba(0, 0, 0, 0.2);
+        border-radius: 12px;
+        padding: 20px;
+        margin-top: 20px;
     }
     
-    .card-header {
-        background: rgba(255,255,255,0.1);
-        border-bottom: 1px solid rgba(255,255,255,0.2);
+    .instructions h5 {
+        color: #ffd700;
+        margin-bottom: 15px;
+        font-weight: bold;
+    }
+    
+    .instructions ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+    
+    .instructions li {
+        padding: 8px 0 8px 20px;
+        border-left: 3px solid #28a745;
+        margin-bottom: 8px;
+        position: relative;
+    }
+    
+    .instructions li:before {
+        content: "•";
+        color: #28a745;
+        font-weight: bold;
+        position: absolute;
+        left: 8px;
+    }
+    
+    /* Cooldown Indicator */
+    .cooldown-indicator {
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: rgba(255, 193, 7, 0.95);
+        color: #333;
+        padding: 15px 25px;
+        border-radius: 25px;
+        font-weight: bold;
+        display: none;
+        z-index: 9999;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    
+    .cooldown-indicator.active {
+        display: block;
+        animation: cooldown-flash 0.5s ease-in-out;
+    }
+    
+    @keyframes cooldown-flash {
+        0% { opacity: 0; transform: scale(0.8); }
+        100% { opacity: 1; transform: scale(1); }
+    }
+    
+    /* Events Display */
+    .events-container {
+        max-height: 200px;
+        overflow-y: auto;
+    }
+    
+    .event-item {
+        padding: 8px;
+        margin-bottom: 5px;
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 6px;
+        font-size: 0.9rem;
+    }
+    
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .letter-groups {
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .status-panel {
+            flex-direction: column;
+        }
+        
+        .control-panel {
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .word-suggestion-item {
+            font-size: 1.2rem;
+            padding: 12px 20px;
+            margin: 5px;
+        }
+        
+        .letter-btn {
+            width: 60px;
+            height: 60px;
+            font-size: 1.4rem;
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
-    <!-- Header -->
-    <div class="row py-3">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center">
-                <h4><i class="fas fa-comments"></i> {{ session.session_name }}</h4>
-                <div>
-                    <button id="startBtn" class="btn btn-success me-2">
-                        <i class="fas fa-play"></i> Start
-                    </button>
-                    <button id="stopBtn" class="btn btn-danger me-2" disabled>
-                        <i class="fas fa-stop"></i> Stop
-                    </button>
-                    <a href="{% url 'bci_communicator:dashboard' %}" class="btn btn-outline-light">
-                        <i class="fas fa-arrow-left"></i> Back
-                    </a>
+<div class="moving-window-container">
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="text-center mb-4">
+            <h1><i class="fas fa-brain text-warning"></i> BCI Moving Window Communicator</h1>
+            <p class="text-muted mb-0">Session: {{ session.session_name }}</p>
+            <div class="mt-2">
+                <span class="badge bg-info me-2" id="systemStatus">Ready</span>
+                <span class="badge bg-secondary" id="lastPrediction">Last: None</span>
+            </div>
+        </div>
+
+        <!-- PROMINENT P300 WORD SUGGESTIONS (TOP PRIORITY) -->
+        <div class="word-suggestions-prominent" id="wordSuggestionsPanel">
+            <div class="word-suggestions-title">
+                <i class="fas fa-lightbulb"></i> Word Suggestions - Focus to Select with P300
+            </div>
+            <div id="wordSuggestions">
+                <div class="text-muted">Type letters to see word suggestions...</div>
+            </div>
+        </div>
+
+        <!-- Text Output -->
+        <div class="text-output">
+            <span class="completed-text" id="currentText">{{ session.current_text }}</span>
+            <span class="current-word" id="currentWord">{{ session.current_word }}</span>
+            <span class="cursor">|</span>
+        </div>
+
+        <!-- Letter Groups with Moving Windows -->
+        <div class="letter-groups">
+            <!-- Left Letters Group -->
+            <div class="letter-group">
+                <div class="letter-group-title">
+                    <i class="fas fa-hand-paper fa-flip-horizontal"></i> Left Hand Letters
+                </div>
+                <div class="letter-container" id="leftLetters">
+                    {% for letter in left_letters %}
+                        <div class="letter-btn" data-letter="{{ letter }}" data-group="left" data-index="{{ forloop.counter0 }}">
+                            {{ letter }}
+                        </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <!-- Right Letters Group -->
+            <div class="letter-group">
+                <div class="letter-group-title">
+                    <i class="fas fa-hand-paper"></i> Right Hand Letters
+                </div>
+                <div class="letter-container" id="rightLetters">
+                    {% for letter in right_letters %}
+                        <div class="letter-btn" data-letter="{{ letter }}" data-group="right" data-index="{{ forloop.counter0 }}">
+                            {{ letter }}
+                        </div>
+                    {% endfor %}
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Main Interface -->
-    <div class="row">
-        <!-- Text Display -->
-        <div class="col-12">
-            <div class="text-display">
-                <h5>Communication Output</h5>
-                <div class="d-flex align-items-center">
-                    <div id="currentText" class="flex-grow-1 h3 mb-0 font-monospace">
-                        {{ session.current_text|default:"" }}
-                    </div>
-                    <div id="currentWord" class="text-warning h4 mb-0 ms-3">
-                        {{ session.current_word|default:"" }}
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <small>Words: <span id="wordCount">0</span> | Characters: <span id="charCount">0</span></small>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="row">
-        <!-- Letter Navigation -->
-        <div class="col-md-8">
-            <div class="letter-grid">
-                <h5>Letter Navigation</h5>
-                <div class="row">
-                    <div class="col-md-6">
-                        <h6 class="text-center">Right Hand <small>(A,E,I,O,S,T)</small></h6>
-                        <div class="text-center">
-                            {% for letter in right_letters %}
-                                <button class="letter-btn right-letter" data-letter="{{ letter }}" data-side="right">
-                                    {{ letter }}
-                                </button>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <h6 class="text-center">Left Hand <small>(H,L,N,P,R,Y)</small></h6>
-                        <div class="text-center">
-                            {% for letter in left_letters %}
-                                <button class="letter-btn left-letter" data-letter="{{ letter }}" data-side="left">
-                                    {{ letter }}
-                                </button>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-                
-                <!-- Action Buttons -->
-                <div class="text-center mt-3">
-                    <button class="btn btn-warning me-2" onclick="manualAction('add_space')">
-                        <i class="fas fa-space-shuttle"></i> Space (Feet)
-                    </button>
-                    <button class="btn btn-info me-2" onclick="showWordSuggestions()">
-                        <i class="fas fa-lightbulb"></i> Confirm (Rest)
-                    </button>
-                    <button class="btn btn-outline-light" onclick="manualAction('clear_text')">
-                        <i class="fas fa-trash"></i> Clear
-                    </button>
-                </div>
-            </div>
+        <!-- Control Panel -->
+        <div class="control-panel">
+            <button class="control-btn btn-start" id="startBtn">
+                <i class="fas fa-play"></i> Start BCI System
+            </button>
+            <button class="control-btn btn-stop" id="stopBtn" disabled>
+                <i class="fas fa-stop"></i> Stop System
+            </button>
+            <button class="control-btn btn-test" onclick="testMovingWindow()">
+                <i class="fas fa-vial"></i> Test Window Movement
+            </button>
         </div>
 
         <!-- Status Panel -->
-        <div class="col-md-4">
-            <!-- Current State -->
-            <div class="status-card mb-3">
-                <div class="card-body">
-                    <h6><i class="fas fa-brain"></i> System Status</h6>
-                    <div class="mb-2">
-                        <strong>State:</strong> 
-                        <span id="currentState" class="badge bg-primary">{{ session.communication_state }}</span>
-                    </div>
-                    <div class="mb-2">
-                        <strong>Selected Side:</strong> 
-                        <span id="selectedSide">{{ session.selected_side|default:"None" }}</span>
-                    </div>
-                    <div>
-                        <strong>Current Letter:</strong> 
-                        <span id="currentLetter" class="badge bg-warning text-dark">{{ session.get_current_letter|default:"None" }}</span>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Motor Imagery Predictions -->
-            <div class="status-card mb-3">
-                <div class="card-body">
-                    <h6><i class="fas fa-brain"></i> Motor Imagery</h6>
-                    <div id="motorImageryPredictions">
-                        <div class="small mb-1">
-                            <span>Right Hand:</span>
-                            <div class="prediction-bar">
-                                <div class="confidence-fill bg-success" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        <div class="small mb-1">
-                            <span>Left Hand:</span>
-                            <div class="prediction-bar">
-                                <div class="confidence-fill bg-success" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        <div class="small mb-1">
-                            <span>Feet:</span>
-                            <div class="prediction-bar">
-                                <div class="confidence-fill bg-warning" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        <div class="small mb-1">
-                            <span>Rest:</span>
-                            <div class="prediction-bar">
-                                <div class="confidence-fill bg-info" style="width: 0%"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Word Suggestions -->
-            <div class="status-card mb-3">
-                <div class="card-body">
-                    <h6><i class="fas fa-spell-check"></i> Word Suggestions</h6>
-                    <div id="wordSuggestions">
-                        <p class="text-muted small">Type letters to see suggestions...</p>
-                    </div>
-                </div>
-            </div>
-
-            <!-- P300 Status -->
+        <div class="status-panel">
             <div class="status-card">
-                <div class="card-body">
-                    <h6><i class="fas fa-eye"></i> P300 Confirmation</h6>
-                    <div id="p300Status">
-                        <p class="text-muted small">Inactive</p>
-                    </div>
-                </div>
+                <h6><i class="fas fa-crosshairs"></i> Window Position</h6>
+                <div class="status-value" id="windowPosition">L:H R:A</div>
+            </div>
+            <div class="status-card">
+                <h6><i class="fas fa-clock"></i> Cooldown Status</h6>
+                <div class="status-value" id="cooldownStatus">Ready</div>
+            </div>
+            <div class="status-card">
+                <h6><i class="fas fa-eye"></i> P300 State</h6>
+                <div class="status-value" id="p300State">Inactive</div>
+            </div>
+            <div class="status-card">
+                <h6><i class="fas fa-brain"></i> Active Group</h6>
+                <div class="status-value" id="activeGroup">Left</div>
             </div>
         </div>
-    </div>
 
-    <!-- Recent Events -->
-    <div class="row mt-4">
-        <div class="col-12">
-            <div class="status-card">
-                <div class="card-body">
-                    <h6><i class="fas fa-list"></i> Recent Events</h6>
-                    <div id="recentEvents" style="max-height: 200px; overflow-y: auto;">
-                        <p class="text-muted small">No events yet...</p>
+        <!-- Motor Imagery Prediction Bars -->
+        <div class="status-card">
+            <h6><i class="fas fa-chart-bar"></i> Motor Imagery Predictions</h6>
+            <div class="prediction-bars" id="motorImageryPredictions">
+                <div class="prediction-bar">
+                    <div class="confidence-fill fill-right"></div>
+                </div>
+                <div class="prediction-bar">
+                    <div class="confidence-fill fill-left"></div>
+                </div>
+                <div class="prediction-bar">
+                    <div class="confidence-fill fill-feet"></div>
+                </div>
+                <div class="prediction-bar">
+                    <div class="confidence-fill fill-rest"></div>
+                </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 0.9rem;">
+                <span>Right</span>
+                <span>Left</span>
+                <span>Feet</span>
+                <span>Rest</span>
+            </div>
+        </div>
+
+        <!-- Recent Events -->
+        <div class="status-card">
+            <h6><i class="fas fa-history"></i> Recent Events</h6>
+            <div class="events-container" id="recentEvents">
+                <p class="text-muted small">No events yet...</p>
+            </div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="instructions">
+            <h5><i class="fas fa-info-circle"></i> How the Moving Window System Works:</h5>
+            <ul>
+                <li><strong>Left Motor Imagery:</strong> Moves highlight window LEFT within the current letter group (wraps around)</li>
+                <li><strong>Right Motor Imagery:</strong> Moves highlight window RIGHT within the current letter group (wraps around)</li>
+                <li><strong>Rest:</strong> Confirms and submits the letter under the current window (based on last prediction)</li>
+                <li><strong>Feet:</strong> Inserts a space between words</li>
+                <li><strong>2-Second Cooldown:</strong> Prevents prediction spam - wait for "Ready" status</li>
+                <li><strong>P300 Word Selection:</strong> When word suggestions appear, focus on the desired word to select it</li>
+                <li><strong>Window Navigation:</strong> Each group has its own moving window that wraps around the edges</li>
+            </ul>
+            
+            <div class="mt-3">
+                <h6><i class="fas fa-keyboard"></i> Test Shortcuts (when system is running):</h6>
+                <ul>
+                    <li><strong>Ctrl+1:</strong> Simulate Left Hand prediction</li>
+                    <li><strong>Ctrl+2:</strong> Simulate Right Hand prediction</li>
+                    <li><strong>Ctrl+3:</strong> Simulate Rest prediction</li>
+                    <li><strong>Ctrl+Space:</strong> Simulate Feet prediction</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Models Information -->
+        <div class="mt-4">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="status-card">
+                        <h6><i class="fas fa-brain"></i> Motor Imagery Model</h6>
+                        <div class="status-value">{{ motor_imagery_model.name }}</div>
+                        <small class="text-muted">Classes: {{ motor_imagery_model.class_labels|join:", " }}</small>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="status-card">
+                        <h6><i class="fas fa-eye"></i> P300 Model</h6>
+                        <div class="status-value">{{ p300_model.name }}</div>
+                        <small class="text-muted">Classes: {{ p300_model.class_labels|join:", " }}</small>
                     </div>
                 </div>
             </div>
@@ -266,36 +508,80 @@
     </div>
 </div>
 
-<!-- Word Suggestion Modal -->
-<div class="modal fade" id="wordSuggestionModal" tabindex="-1">
-    <div class="modal-dialog">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Word Suggestions</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <p>Current word: <strong id="modalCurrentWord"></strong></p>
-                <div id="modalSuggestions"></div>
-            </div>
-        </div>
-    </div>
+<!-- Cooldown Indicator -->
+<div class="cooldown-indicator" id="cooldownIndicator">
+    <i class="fas fa-hourglass-half"></i> Cooldown Active - Please Wait...
 </div>
+
+<!-- Hidden CSRF Token -->
+<input type="hidden" name="csrfmiddlewaretoken" value="{{ csrf_token }}">
+
+<script>
+    // Make session data available globally
+    window.sessionId = {{ session.id }};
+    
+    // Configuration for the moving window system
+    window.bciConfig = {
+        sessionId: {{ session.id }},
+        sessionName: "{{ session.session_name }}",
+        leftLetters: {{ left_letters|jsonify }},
+        rightLetters: {{ right_letters|jsonify }},
+        vocabularyWords: {{ vocabulary_words|jsonify }},
+        models: {
+            motorImagery: {
+                name: "{{ motor_imagery_model.name }}",
+                classes: {{ motor_imagery_model.class_labels|jsonify }}
+            },
+            p300: {
+                name: "{{ p300_model.name }}",
+                classes: {{ p300_model.class_labels|jsonify }}
+            }
+        }
+    };
+    
+    console.log('🎮 Moving Window BCI System loaded');
+    console.log('📊 Configuration:', window.bciConfig);
+    
+    // Test function for moving window
+    function testMovingWindow() {
+        if (!window.bciCommunicator) {
+            alert('Please start the BCI system first!');
+            return;
+        }
+        
+        if (!window.bciCommunicator.isRunning) {
+            alert('BCI system is not running. Click "Start BCI System" first.');
+            return;
+        }
+        
+        alert('🧪 Test sequence starting:\n1. Move left window LEFT\n2. Move right window RIGHT\n3. Confirm letter\n\nWatch the windows move!');
+        
+        // Test sequence with delays
+        setTimeout(() => window.bciCommunicator.simulatePrediction(1, 0.9), 1000);  // LEFT_HAND
+        setTimeout(() => window.bciCommunicator.simulatePrediction(0, 0.9), 4000);  // RIGHT_HAND  
+        setTimeout(() => window.bciCommunicator.simulatePrediction(3, 0.9), 7000);  // REST
+    }
+</script>
 {% endblock %}
 
 {% block extra_js %}
+<!-- Load the moving window JavaScript -->
 <script src="{% static 'bci_communicator/js/communicator.js' %}"></script>
+
 <script>
-    // Initialize communicator with session data
-    const communicator = new BCICommunicator({
-        sessionId: {{ session.id }},
-        vocabularyWords: {{ vocabulary_words|safe }},
-        rightLetters: {{ right_letters|safe }},
-        leftLetters: {{ left_letters|safe }},
-        csrfToken: '{{ csrf_token }}'
-    });
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔧 Moving window page loaded successfully');
     
-    // Start the interface
-    communicator.init();
+    // Show initial help message
+    setTimeout(() => {
+        if (window.bciCommunicator) {
+            console.log('✅ Moving Window BCI Communicator ready!');
+            console.log('🎯 The moving windows are highlighted in gold');
+            console.log('💡 Word suggestions will appear prominently at the top');
+            console.log('⏰ 2-second cooldown prevents spam');
+            console.log('🧠 Use Ctrl+1/2/3/Space to test predictions');
+        }
+    }, 1000);
+});
 </script>
 {% endblock %}

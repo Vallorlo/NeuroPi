@@ -20,12 +20,16 @@ from sklearn.utils.class_weight import compute_class_weight
 from imblearn.over_sampling import SMOTE
 from imblearn.under_sampling import RandomUnderSampler
 import pickle
+import json
 from tqdm import tqdm
 import warnings
 from typing import Tuple, Dict, Any
 from datetime import datetime
 from django.conf import settings
-
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import classification_report, confusion_matrix
+import numpy as np
 from ..base import BCITrainer
 from .models import P300_CNN_LSTM_Attention, P300_EEGNet, create_p300_model
 from .preprocessing import P300Preprocessor, load_and_preprocess_p300_data
@@ -543,6 +547,76 @@ class P300Trainer(BCITrainer):
         
         return avg_loss, accuracy
     
+    def save_training_results(self, train_history, best_val_acc, test_acc, model_dir):
+        """Save comprehensive P300 training results and generate analysis figures"""
+        
+        # Create results directory
+        results_dir = os.path.join(model_dir, 'training_results')
+        os.makedirs(results_dir, exist_ok=True)
+        
+        # Save training history
+        training_results = {
+            'best_validation_accuracy': best_val_acc,
+            'test_accuracy': test_acc,
+            'final_epoch': len(train_history['train_losses']),
+            'train_losses': train_history['train_losses'],
+            'train_accuracies': train_history['train_accuracies'],
+            'val_losses': train_history['val_losses'],
+            'val_accuracies': train_history['val_accuracies'],
+            'training_completed': True
+        }
+        
+        with open(os.path.join(results_dir, 'training_history.json'), 'w') as f:
+            json.dump(training_results, f, indent=2)
+        
+        # Generate training convergence plots
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+        
+        # Loss plot
+        epochs = range(1, len(train_history['train_losses']) + 1)
+        ax1.plot(epochs, train_history['train_losses'], 'b-', label='Training Loss')
+        ax1.plot(epochs, train_history['val_losses'], 'r-', label='Validation Loss')
+        ax1.set_title('P300 Training and Validation Loss')
+        ax1.set_xlabel('Epoch')
+        ax1.set_ylabel('Loss')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+        
+        # Accuracy plot
+        ax2.plot(epochs, train_history['train_accuracies'], 'b-', label='Training Accuracy')
+        ax2.plot(epochs, train_history['val_accuracies'], 'r-', label='Validation Accuracy')
+        ax2.axhline(y=best_val_acc, color='green', linestyle='--', 
+                label=f'Best Val: {best_val_acc:.2f}%')
+        ax2.axhline(y=test_acc, color='orange', linestyle='--', 
+                label=f'Test: {test_acc:.2f}%')
+        ax2.set_title('P300 Training and Validation Accuracy')
+        ax2.set_xlabel('Epoch')
+        ax2.set_ylabel('Accuracy (%)')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig(os.path.join(results_dir, 'training_convergence.png'), dpi=300, bbox_inches='tight')
+        plt.close()
+        
+        # Save performance summary
+        performance_summary = {
+            'model_type': self.model_type,
+            'epochs_trained': len(train_history['train_losses']),
+            'best_validation_accuracy': best_val_acc,
+            'test_accuracy': test_acc,
+            'training_efficiency': {
+                'convergence_epoch': np.argmax(train_history['val_accuracies']) + 1,
+                'final_train_accuracy': train_history['train_accuracies'][-1],
+                'final_val_accuracy': train_history['val_accuracies'][-1]
+            }
+        }
+        
+        with open(os.path.join(results_dir, 'performance_summary.json'), 'w') as f:
+            json.dump(performance_summary, f, indent=2)
+        
+        print(f"P300 training results saved to: {results_dir}")
+
     def train(self) -> Dict[str, Any]:
         """Ultimate training loop with advanced techniques"""
         try:
@@ -719,21 +793,23 @@ class P300Trainer(BCITrainer):
             )
             
             print("✅ Ultimate P300 model training completed successfully!")
+            training_history = {
+                'train_losses': train_losses,
+                'train_accuracies': train_accuracies,
+                'val_losses': val_losses,
+                'val_accuracies': val_accuracies
+            }
+            
+            # Save training results and figures
+            self.save_training_results(training_history, best_val_acc, test_acc, model_dir)
             
             return {
                 'status': 'completed',
-                'best_val_accuracy': best_val_acc,
+                'validation_accuracy': best_val_acc,
                 'test_accuracy': test_acc,
-                'model_path': model_save_path,
-                'training_history': {
-                    'train_losses': train_losses,
-                    'train_accuracies': train_accuracies,
-                    'val_losses': val_losses,
-                    'val_accuracies': val_accuracies
-                },
-                'total_epochs': len(train_losses)
+                'training_epochs': len(train_losses),
+                'model_path': model_save_path
             }
-            
         except Exception as e:
             print(f"❌ Ultimate P300 training failed: {str(e)}")
             self.update_model_status('failed')

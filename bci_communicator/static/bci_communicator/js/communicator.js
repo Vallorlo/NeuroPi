@@ -1,158 +1,166 @@
-// bci_communicator/static/bci_communicator/js/communicator.js
+/**
+ * BCI Communicator - Moving Window Frontend Implementation
+ * This implements the exact moving window system with cooldown and prominent P300 word suggestions
+ */
 
-class BCICommunicator {
-    constructor(config) {
-        this.sessionId = config.sessionId;
-        this.vocabularyWords = config.vocabularyWords;
-        this.rightLetters = config.rightLetters;
-        this.leftLetters = config.leftLetters;
-        this.csrfToken = config.csrfToken;
-        
-        // State management
+class BCIMovingWindowCommunicator {
+    constructor(sessionId) {
+        this.sessionId = sessionId;
         this.isRunning = false;
         this.pollingInterval = null;
         this.lastEventTimestamp = null;
-        this.currentState = 'NAVIGATING';
         
-        // UI elements
-        this.elements = {};
+        // Window positions (synced with backend)
+        this.leftWindowIndex = 0;
+        this.rightWindowIndex = 0;
+        this.activeGroup = 'left';
+        
+        // Cooldown state
+        this.inCooldown = false;
+        this.cooldownDuration = 2000; // 2 seconds
+        this.cooldownTimer = null;
+        
+        // P300 state
+        this.p300Enabled = false;
+        this.wordSuggestionsAvailable = false;
         
         // Configuration
         this.config = {
-            pollingInterval: 500, // ms
-            maxEvents: 20,
-            animationDuration: 300,
-            confidenceThreshold: 0.7
+            pollingInterval: 150, // Fast polling for real-time response
+            animationDuration: 800,
+            cooldownDuration: 2000
         };
         
-        // Bind methods
-        this.handleStartClick = this.handleStartClick.bind(this);
-        this.handleStopClick = this.handleStopClick.bind(this);
-        this.handleLetterClick = this.handleLetterClick.bind(this);
-        this.updateInterface = this.updateInterface.bind(this);
-    }
-    
-    init() {
-        console.log('Initializing BCI Communicator...');
-        this.setupElements();
+        // Motor imagery class mappings
+        this.CLASSES = {
+            RIGHT_HAND: 0,
+            LEFT_HAND: 1,
+            FEET: 2,
+            REST: 3
+        };
+        
+        this.initializeElements();
         this.setupEventListeners();
-        this.setupWordSuggestions();
-        this.updateCharacterCounts();
-        console.log('BCI Communicator initialized');
+        this.updateWindowHighlights();
+        
+        console.log('🎮 BCI Moving Window Communicator initialized');
     }
     
-    setupElements() {
-        // Get all necessary DOM elements
+    initializeElements() {
         this.elements = {
+            // Control buttons
             startBtn: document.getElementById('startBtn'),
             stopBtn: document.getElementById('stopBtn'),
+            
+            // Text display
             currentText: document.getElementById('currentText'),
             currentWord: document.getElementById('currentWord'),
-            currentState: document.getElementById('currentState'),
-            selectedSide: document.getElementById('selectedSide'),
-            currentLetter: document.getElementById('currentLetter'),
-            wordCount: document.getElementById('wordCount'),
-            charCount: document.getElementById('charCount'),
-            motorImageryPredictions: document.getElementById('motorImageryPredictions'),
+            
+            // Status displays
+            systemStatus: document.getElementById('systemStatus'),
+            cooldownStatus: document.getElementById('cooldownStatus'),
+            windowPosition: document.getElementById('windowPosition'),
+            lastPrediction: document.getElementById('lastPrediction'),
+            
+            // Letter groups
+            leftLetters: document.querySelectorAll('#leftLetters .letter-btn'),
+            rightLetters: document.querySelectorAll('#rightLetters .letter-btn'),
+            
+            // P300 word suggestions (prominent display)
+            wordSuggestionsPanel: document.getElementById('wordSuggestionsPanel'),
             wordSuggestions: document.getElementById('wordSuggestions'),
-            p300Status: document.getElementById('p300Status'),
-            recentEvents: document.getElementById('recentEvents'),
-            letterButtons: document.querySelectorAll('.letter-btn'),
-            rightLetters: document.querySelectorAll('.right-letter'),
-            leftLetters: document.querySelectorAll('.left-letter')
+            
+            // Prediction bars
+            motorImageryBars: document.getElementById('motorImageryPredictions'),
+            
+            // Cooldown indicator
+            cooldownIndicator: document.getElementById('cooldownIndicator'),
+            
+            // Recent events
+            recentEvents: document.getElementById('recentEvents')
         };
     }
     
     setupEventListeners() {
-        // Start/Stop buttons
-        this.elements.startBtn.addEventListener('click', this.handleStartClick);
-        this.elements.stopBtn.addEventListener('click', this.handleStopClick);
+        // Control buttons
+        if (this.elements.startBtn) {
+            this.elements.startBtn.addEventListener('click', () => this.startCommunication());
+        }
+        if (this.elements.stopBtn) {
+            this.elements.stopBtn.addEventListener('click', () => this.stopCommunication());
+        }
         
-        // Letter buttons for manual testing
-        this.elements.letterButtons.forEach(btn => {
-            btn.addEventListener('click', this.handleLetterClick);
-        });
-        
-        // Keyboard shortcuts
-        document.addEventListener('keydown', (e) => {
-            if (e.ctrlKey) {
-                switch(e.key) {
-                    case 's':
-                        e.preventDefault();
-                        this.isRunning ? this.stopCommunication() : this.startCommunication();
-                        break;
-                    case ' ':
-                        e.preventDefault();
-                        this.manualAction('add_space');
-                        break;
-                    case 'c':
-                        e.preventDefault();
-                        this.manualAction('clear_text');
-                        break;
-                }
+        // Keyboard shortcuts for testing
+        document.addEventListener('keydown', (e) => this.handleKeyboardShortcuts(e));
+    }
+    
+    handleKeyboardShortcuts(e) {
+        if (e.ctrlKey) {
+            switch(e.key) {
+                case 's':
+                    e.preventDefault();
+                    this.isRunning ? this.stopCommunication() : this.startCommunication();
+                    break;
+                case '1':
+                    e.preventDefault();
+                    this.simulatePrediction(this.CLASSES.LEFT_HAND, 0.85);
+                    break;
+                case '2':
+                    e.preventDefault();
+                    this.simulatePrediction(this.CLASSES.RIGHT_HAND, 0.85);
+                    break;
+                case '3':
+                    e.preventDefault();
+                    this.simulatePrediction(this.CLASSES.REST, 0.85);
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    this.simulatePrediction(this.CLASSES.FEET, 0.85);
+                    break;
             }
-        });
-    }
-    
-    setupWordSuggestions() {
-        // Initialize word suggestion display
-        this.updateWordSuggestions('');
-    }
-    
-    async handleStartClick() {
-        console.log('Starting communication system...');
-        await this.startCommunication();
-    }
-    
-    async handleStopClick() {
-        console.log('Stopping communication system...');
-        await this.stopCommunication();
-    }
-    
-    handleLetterClick(event) {
-        const letter = event.target.dataset.letter;
-        if (letter) {
-            this.manualAction('add_letter', { letter: letter });
         }
     }
     
     async startCommunication() {
         try {
-            const response = await this.apiCall(`/start/${this.sessionId}/`, 'POST');
+            const response = await this.apiCall(`/api/start/${this.sessionId}/`, 'POST');
             
             if (response.status === 'success') {
                 this.isRunning = true;
-                this.elements.startBtn.disabled = true;
-                this.elements.stopBtn.disabled = false;
-                
-                // Start polling for updates
+                this.updateControlButtons();
                 this.startPolling();
                 
-                this.showNotification('Communication system started!', 'success');
+                this.showNotification('🚀 BCI Moving Window System Started!', 'success');
+                console.log('✅ BCI system started');
             } else {
                 throw new Error(response.message);
             }
         } catch (error) {
-            console.error('Failed to start communication:', error);
+            console.error('❌ Failed to start communication:', error);
             this.showNotification(`Failed to start: ${error.message}`, 'error');
         }
     }
     
     async stopCommunication() {
         try {
-            const response = await this.apiCall(`/stop/${this.sessionId}/`, 'POST');
+            const response = await this.apiCall(`/api/stop/${this.sessionId}/`, 'POST');
             
             this.isRunning = false;
-            this.elements.startBtn.disabled = false;
-            this.elements.stopBtn.disabled = true;
-            
-            // Stop polling
+            this.updateControlButtons();
             this.stopPolling();
             
-            this.showNotification('Communication system stopped', 'info');
+            this.showNotification('🛑 Communication system stopped', 'info');
+            console.log('🛑 BCI system stopped');
         } catch (error) {
-            console.error('Failed to stop communication:', error);
+            console.error('❌ Failed to stop communication:', error);
             this.showNotification(`Failed to stop: ${error.message}`, 'error');
+        }
+    }
+    
+    updateControlButtons() {
+        if (this.elements.startBtn && this.elements.stopBtn) {
+            this.elements.startBtn.disabled = this.isRunning;
+            this.elements.stopBtn.disabled = !this.isRunning;
         }
     }
     
@@ -178,112 +186,433 @@ class BCICommunicator {
     
     async fetchSessionStatus() {
         try {
-            const response = await this.apiCall(`/status/${this.sessionId}/`);
+            const response = await this.apiCall(`/api/status/${this.sessionId}/`);
             this.updateInterface(response);
         } catch (error) {
-            console.error('Failed to fetch session status:', error);
-            // Don't show notifications for polling errors to avoid spam
+            console.error('❌ Failed to fetch session status:', error);
         }
     }
     
     updateInterface(data) {
         const session = data.session;
         const events = data.events;
+        const systemStatus = data.system_status;
         
-        // Update session state
+        // Update session display
         this.updateSessionDisplay(session);
         
-        // Process new events
-        this.processEvents(events);
+        // Process new events for window movements
+        this.processEventsForMovingWindows(events);
         
-        // Update predictions if available
-        this.updatePredictionDisplay(events);
+        // Update system status
+        if (systemStatus && systemStatus.state_info) {
+            this.updateWindowPositions(systemStatus.state_info);
+            this.updateCooldownStatus(systemStatus.state_info);
+            this.updateP300Status(systemStatus.state_info);
+        }
         
         // Update word suggestions
         this.updateWordSuggestions(session.current_word);
     }
     
-    updateSessionDisplay(session) {
-        // Update text display
-        this.elements.currentText.textContent = session.current_text;
-        this.elements.currentWord.textContent = session.current_word;
+    processEventsForMovingWindows(events) {
+        const newEvents = this.getNewEvents(events);
         
-        // Update state indicators
-        this.updateStateDisplay(session.communication_state);
-        this.elements.selectedSide.textContent = session.selected_side || 'None';
-        this.elements.currentLetter.textContent = session.current_letter || 'None';
+        newEvents.forEach(event => {
+            console.log(`📡 Processing event: ${event.type}`, event);
+            
+            switch(event.type) {
+                case 'MOTOR_PREDICTION':
+                    this.handleMotorPredictionEvent(event);
+                    break;
+                case 'LETTER_SELECTED':
+                    this.handleLetterSelectionEvent(event);
+                    break;
+                case 'WORD_COMPLETED':
+                    this.handleWordCompletionEvent(event);
+                    break;
+                case 'SPACE_INSERTED':
+                    this.handleSpaceInsertionEvent(event);
+                    break;
+                case 'P300_CONFIRMATION':
+                    this.handleP300ConfirmationEvent(event);
+                    break;
+                case 'STATE_CHANGED':
+                    if (event.new_state === 'WORD_SUGGESTIONS_AVAILABLE') {
+                        this.handleWordSuggestionsAvailable(event);
+                    }
+                    break;
+            }
+        });
         
-        // Update letter highlighting
-        this.updateLetterHighlighting(session);
-        
-        // Update character counts
-        this.updateCharacterCounts();
-        
-        // Store current state
-        this.currentState = session.communication_state;
+        // Update recent events display
+        this.updateRecentEventsDisplay(events);
     }
     
-    updateStateDisplay(state) {
-        this.elements.currentState.textContent = state;
-        this.elements.currentState.className = `badge state-${state.toLowerCase()}`;
+    handleMotorPredictionEvent(event) {
+        const { predicted_class, confidence, metadata } = event;
         
-        // Update state-specific UI
-        switch(state) {
-            case 'NAVIGATING':
-                this.clearLetterHighlighting();
-                break;
-            case 'SELECTING':
-                // Letter highlighting is handled in updateLetterHighlighting
-                break;
-            case 'CONFIRMING':
-                this.showP300Interface();
-                break;
+        // Update prediction bars
+        this.updateMotorImageryBars(predicted_class, confidence);
+        
+        if (metadata) {
+            const { action, active_group, left_window_index, right_window_index } = metadata;
+            
+            // Update local window positions
+            if (left_window_index !== undefined) this.leftWindowIndex = left_window_index;
+            if (right_window_index !== undefined) this.rightWindowIndex = right_window_index;
+            if (active_group) this.activeGroup = active_group;
+            
+            // Animate window movement
+            switch(action) {
+                case 'move_window_left':
+                    this.animateWindowMovement('left', active_group);
+                    break;
+                case 'move_window_right':
+                    this.animateWindowMovement('right', active_group);
+                    break;
+            }
+            
+            // Update window highlights
+            this.updateWindowHighlights();
+            
+            // Start cooldown visualization
+            this.startCooldownVisualization();
+        }
+        
+        // Update last prediction display
+        const classNames = ['Right Hand', 'Left Hand', 'Feet', 'Rest'];
+        if (this.elements.lastPrediction) {
+            this.elements.lastPrediction.textContent = `${classNames[predicted_class]} (${(confidence * 100).toFixed(1)}%)`;
         }
     }
     
-    updateLetterHighlighting(session) {
-        // Clear existing highlighting
-        this.clearLetterHighlighting();
+    handleLetterSelectionEvent(event) {
+        const { selected_letter, metadata } = event;
         
-        if (session.communication_state === 'SELECTING') {
-            // Highlight selected side
-            const sideClass = session.selected_side === 'RIGHT' ? 'right-letter' : 'left-letter';
-            document.querySelectorAll(`.${sideClass}`).forEach(btn => {
-                btn.classList.add('selected-side');
-            });
+        console.log(`✅ Letter selected: ${selected_letter}`);
+        
+        // Animate letter confirmation
+        this.animateLetterConfirmation(selected_letter, metadata?.window_source);
+        
+        // Show feedback
+        this.showActionFeedback(`Letter selected: ${selected_letter}`, 'success');
+    }
+    
+    handleWordCompletionEvent(event) {
+        const { completed_word } = event;
+        
+        console.log(`🎯 Word completed: ${completed_word}`);
+        
+        // Animate word completion
+        this.animateWordCompletion(completed_word);
+        
+        // Show feedback
+        this.showActionFeedback(`Word completed: ${completed_word}`, 'success');
+    }
+    
+    handleSpaceInsertionEvent(event) {
+        console.log('⎵ Space inserted');
+        this.showActionFeedback('Space inserted', 'info');
+    }
+    
+    handleP300ConfirmationEvent(event) {
+        const { confidence, metadata } = event;
+        const predicted_word = metadata?.predicted_word;
+        
+        console.log(`👁️ P300 confirmation: ${predicted_word} (${(confidence * 100).toFixed(1)}%)`);
+        
+        if (predicted_word) {
+            this.animateP300Selection(predicted_word);
+        }
+    }
+    
+    handleWordSuggestionsAvailable(event) {
+        const { metadata } = event;
+        
+        if (metadata && metadata.suggestions) {
+            this.displayWordSuggestions(metadata.suggestions);
+            this.p300Enabled = metadata.p300_enabled || false;
+        }
+    }
+    
+    // MOVING WINDOW VISUALIZATION
+    updateWindowHighlights() {
+        // Clear all existing highlights
+        document.querySelectorAll('.letter-btn').forEach(btn => {
+            btn.classList.remove('window-highlight', 'window-active');
+        });
+        
+        // Highlight left window
+        if (this.elements.leftLetters[this.leftWindowIndex]) {
+            this.elements.leftLetters[this.leftWindowIndex].classList.add('window-highlight');
+            if (this.activeGroup === 'left') {
+                this.elements.leftLetters[this.leftWindowIndex].classList.add('window-active');
+            }
+        }
+        
+        // Highlight right window
+        if (this.elements.rightLetters[this.rightWindowIndex]) {
+            this.elements.rightLetters[this.rightWindowIndex].classList.add('window-highlight');
+            if (this.activeGroup === 'right') {
+                this.elements.rightLetters[this.rightWindowIndex].classList.add('window-active');
+            }
+        }
+        
+        // Update window position display
+        if (this.elements.windowPosition) {
+            const leftLetter = this.elements.leftLetters[this.leftWindowIndex]?.textContent || '?';
+            const rightLetter = this.elements.rightLetters[this.rightWindowIndex]?.textContent || '?';
+            this.elements.windowPosition.textContent = `L:${leftLetter} R:${rightLetter}`;
+        }
+    }
+    
+    animateWindowMovement(direction, group) {
+        const targetGroup = group === 'left' ? this.elements.leftLetters : this.elements.rightLetters;
+        const targetIndex = group === 'left' ? this.leftWindowIndex : this.rightWindowIndex;
+        
+        // Add movement animation class
+        if (targetGroup[targetIndex]) {
+            targetGroup[targetIndex].classList.add('window-moving');
+            setTimeout(() => {
+                targetGroup[targetIndex].classList.remove('window-moving');
+            }, this.config.animationDuration);
+        }
+        
+        console.log(`🎯 Window moved ${direction} in ${group} group`);
+    }
+    
+    animateLetterConfirmation(letter, windowSource) {
+        const btn = document.querySelector(`[data-letter="${letter}"]`);
+        if (btn) {
+            btn.classList.add('letter-confirmed');
+            setTimeout(() => {
+                btn.classList.remove('letter-confirmed');
+            }, this.config.animationDuration);
+        }
+    }
+    
+    animateWordCompletion(word) {
+        if (this.elements.currentWord) {
+            this.elements.currentWord.classList.add('word-completed');
+            setTimeout(() => {
+                this.elements.currentWord.classList.remove('word-completed');
+            }, this.config.animationDuration);
+        }
+    }
+    
+    // COOLDOWN VISUALIZATION
+    startCooldownVisualization() {
+        this.inCooldown = true;
+        
+        // Show cooldown indicator
+        if (this.elements.cooldownIndicator) {
+            this.elements.cooldownIndicator.classList.add('active');
+        }
+        
+        // Update cooldown status
+        if (this.elements.cooldownStatus) {
+            this.elements.cooldownStatus.textContent = 'Active';
+            this.elements.cooldownStatus.className = 'status-value cooldown-active';
+        }
+        
+        // Start countdown
+        let remaining = this.config.cooldownDuration;
+        const countdownInterval = setInterval(() => {
+            remaining -= 100;
             
-            // Highlight current letter
-            if (session.current_letter) {
-                const currentBtn = document.querySelector(`[data-letter="${session.current_letter}"]`);
-                if (currentBtn) {
-                    currentBtn.classList.add('highlighted');
+            if (this.elements.cooldownStatus) {
+                this.elements.cooldownStatus.textContent = `${(remaining / 1000).toFixed(1)}s`;
+            }
+            
+            if (remaining <= 0) {
+                clearInterval(countdownInterval);
+                this.endCooldownVisualization();
+            }
+        }, 100);
+    }
+    
+    endCooldownVisualization() {
+        this.inCooldown = false;
+        
+        // Hide cooldown indicator
+        if (this.elements.cooldownIndicator) {
+            this.elements.cooldownIndicator.classList.remove('active');
+        }
+        
+        // Update cooldown status
+        if (this.elements.cooldownStatus) {
+            this.elements.cooldownStatus.textContent = 'Ready';
+            this.elements.cooldownStatus.className = 'status-value';
+        }
+        
+        console.log('✅ Cooldown visualization ended');
+    }
+    
+    // PROMINENT P300 WORD SUGGESTIONS
+    displayWordSuggestions(suggestions) {
+        if (!this.elements.wordSuggestions) return;
+        
+        if (suggestions && suggestions.length > 0) {
+            const suggestionsHtml = suggestions.map(word => `
+                <div class="word-suggestion-item" 
+                     data-word="${word}" 
+                     onclick="window.bciCommunicator.selectWordSuggestion('${word}')">
+                    ${word}
+                </div>
+            `).join('');
+            
+            this.elements.wordSuggestions.innerHTML = suggestionsHtml;
+            
+            // Show P300 panel prominently
+            if (this.elements.wordSuggestionsPanel) {
+                this.elements.wordSuggestionsPanel.classList.add('p300-active');
+            }
+            
+            console.log(`💡 Displaying ${suggestions.length} word suggestions for P300`);
+        } else {
+            this.elements.wordSuggestions.innerHTML = '<div class="text-muted">Type letters to see word suggestions...</div>';
+            
+            if (this.elements.wordSuggestionsPanel) {
+                this.elements.wordSuggestionsPanel.classList.remove('p300-active');
+            }
+        }
+    }
+    
+    selectWordSuggestion(word) {
+        console.log(`👁️ Word suggestion clicked: ${word} (simulating P300)`);
+        
+        // Animate P300 selection
+        this.animateP300Selection(word);
+        
+        // In real implementation, this would be detected by P300 model
+        // For now, we simulate the selection
+        setTimeout(() => {
+            this.simulateWordCompletion(word);
+        }, 1000);
+    }
+    
+    animateP300Selection(word) {
+        const wordBtn = document.querySelector(`[data-word="${word}"]`);
+        if (wordBtn) {
+            wordBtn.classList.add('p300-focused');
+            setTimeout(() => {
+                wordBtn.classList.remove('p300-focused');
+            }, 1000);
+        }
+    }
+    
+    // UPDATE METHODS
+    updateSessionDisplay(session) {
+        if (this.elements.currentText) {
+            this.elements.currentText.textContent = session.current_text || '';
+        }
+        if (this.elements.currentWord) {
+            this.elements.currentWord.textContent = session.current_word || '';
+        }
+    }
+    
+    updateWindowPositions(stateInfo) {
+        if (stateInfo.left_window_index !== undefined) {
+            this.leftWindowIndex = stateInfo.left_window_index;
+        }
+        if (stateInfo.right_window_index !== undefined) {
+            this.rightWindowIndex = stateInfo.right_window_index;
+        }
+        if (stateInfo.active_group) {
+            this.activeGroup = stateInfo.active_group;
+        }
+        
+        this.updateWindowHighlights();
+    }
+    
+    updateCooldownStatus(stateInfo) {
+        if (stateInfo.in_cooldown !== undefined) {
+            this.inCooldown = stateInfo.in_cooldown;
+            
+            if (stateInfo.cooldown_remaining && stateInfo.cooldown_remaining > 0) {
+                if (this.elements.cooldownStatus) {
+                    this.elements.cooldownStatus.textContent = `${stateInfo.cooldown_remaining.toFixed(1)}s`;
+                    this.elements.cooldownStatus.className = 'status-value cooldown-active';
+                }
+            } else if (!this.inCooldown) {
+                if (this.elements.cooldownStatus) {
+                    this.elements.cooldownStatus.textContent = 'Ready';
+                    this.elements.cooldownStatus.className = 'status-value';
                 }
             }
         }
     }
     
-    clearLetterHighlighting() {
-        this.elements.letterButtons.forEach(btn => {
-            btn.classList.remove('highlighted', 'selected-side');
-        });
+    updateP300Status(stateInfo) {
+        if (stateInfo.p300_enabled !== undefined) {
+            this.p300Enabled = stateInfo.p300_enabled;
+            // Update P300 status display if element exists
+        }
     }
     
-    processEvents(events) {
-        // Filter new events
-        const newEvents = this.filterNewEvents(events);
+    updateMotorImageryBars(predictedClass, confidence) {
+        if (!this.elements.motorImageryBars) return;
         
-        // Process each new event
-        newEvents.forEach(event => {
-            this.processEvent(event);
-        });
+        // Reset all bars
+        const bars = this.elements.motorImageryBars.querySelectorAll('.confidence-fill');
+        bars.forEach(bar => bar.style.width = '0%');
         
-        // Update events display
-        this.updateEventsDisplay(events);
+        // Set the predicted class bar
+        if (bars[predictedClass]) {
+            bars[predictedClass].style.width = (confidence * 100) + '%';
+        }
     }
     
-    filterNewEvents(events) {
+    updateWordSuggestions(currentWord) {
+        // This will be handled by the STATE_CHANGED event from backend
+        // when word suggestions become available
+    }
+    
+    updateRecentEventsDisplay(events) {
+        if (!this.elements.recentEvents) return;
+        
+        const eventsHtml = events.slice(0, 5).map(event => {
+            const timeStr = new Date(event.timestamp).toLocaleTimeString();
+            return `
+                <div class="event-item">
+                    <div class="d-flex justify-content-between">
+                        <span>${this.getEventDescription(event)}</span>
+                        <small class="text-muted">${timeStr}</small>
+                    </div>
+                </div>
+            `;
+        }).join('');
+        
+        this.elements.recentEvents.innerHTML = eventsHtml || '<p class="text-muted small">No events yet...</p>';
+    }
+    
+    getEventDescription(event) {
+        switch(event.type) {
+            case 'MOTOR_PREDICTION':
+                const actions = ['Right Hand', 'Left Hand', 'Feet', 'Rest'];
+                return `🧠 ${actions[event.predicted_class] || 'Unknown'}`;
+            case 'LETTER_SELECTED':
+                return `✅ Selected: ${event.selected_letter}`;
+            case 'WORD_COMPLETED':
+                return `🎯 Completed: ${event.completed_word}`;
+            case 'SPACE_INSERTED':
+                return `⎵ Space inserted`;
+            case 'P300_CONFIRMATION':
+                return `👁️ P300: ${event.metadata?.predicted_word || 'Confirmation'}`;
+            default:
+                return event.type;
+        }
+    }
+    
+    // UTILITY METHODS
+    getNewEvents(events) {
+        if (!events || events.length === 0) {
+            return [];
+        }
+        
         if (!this.lastEventTimestamp) {
-            this.lastEventTimestamp = events.length > 0 ? events[0].timestamp : null;
+            this.lastEventTimestamp = events[0].timestamp;
             return events;
         }
         
@@ -298,324 +627,187 @@ class BCICommunicator {
         return newEvents;
     }
     
-    processEvent(event) {
-        switch(event.type) {
-            case 'LETTER_SELECTED':
-                this.animateLetterSelection(event.selected_letter);
-                break;
-            case 'WORD_COMPLETED':
-                this.animateWordCompletion(event.completed_word);
-                break;
-            case 'MOTOR_PREDICTION':
-                // Handled in updatePredictionDisplay
-                break;
-            case 'P300_CONFIRMATION':
-                this.handleP300Confirmation(event);
-                break;
-        }
-    }
-    
-    updatePredictionDisplay(events) {
-        // Find latest motor imagery prediction
-        const latestMIPrediction = events.find(e => e.type === 'MOTOR_PREDICTION');
-        
-        if (latestMIPrediction && latestMIPrediction.probabilities) {
-            this.updateMotorImageryBars(latestMIPrediction.probabilities);
-        }
-        
-        // Find latest P300 prediction
-        const latestP300Prediction = events.find(e => e.type === 'P300_CONFIRMATION');
-        
-        if (latestP300Prediction) {
-            this.updateP300Display(latestP300Prediction);
-        }
-    }
-    
-    updateMotorImageryBars(probabilities) {
-        const bars = this.elements.motorImageryPredictions.querySelectorAll('.confidence-fill');
-        const labels = ['Right Hand', 'Left Hand', 'Feet', 'Rest'];
-        
-        Object.keys(probabilities).forEach((classIdx, i) => {
-            if (bars[i]) {
-                const confidence = probabilities[classIdx] * 100;
-                bars[i].style.width = `${confidence}%`;
-                
-                // Add high confidence class for animation
-                if (confidence > this.config.confidenceThreshold * 100) {
-                    bars[i].classList.add('high-confidence');
-                } else {
-                    bars[i].classList.remove('high-confidence');
-                }
-                
-                // Update label with confidence value
-                const container = bars[i].closest('.prediction-container');
-                if (container) {
-                    const valueSpan = container.querySelector('.prediction-value') || 
-                                   this.createPredictionValueSpan(container);
-                    valueSpan.textContent = `${confidence.toFixed(1)}%`;
-                }
-            }
-        });
-    }
-    
-    createPredictionValueSpan(container) {
-        const label = container.querySelector('.prediction-label');
-        const valueSpan = document.createElement('span');
-        valueSpan.className = 'prediction-value';
-        label.appendChild(valueSpan);
-        return valueSpan;
-    }
-    
-    updateP300Display(event) {
-        const status = this.elements.p300Status;
-        
-        if (this.currentState === 'CONFIRMING') {
-            status.innerHTML = `
-                <div class="small">
-                    <strong>Active</strong><br>
-                    Confidence: ${(event.confidence * 100).toFixed(1)}%<br>
-                    <span class="text-warning">Look at suggested word to confirm</span>
-                </div>
-            `;
-        } else {
-            status.innerHTML = '<p class="text-muted small">Inactive</p>';
-        }
-    }
-    
-    showP300Interface() {
-        // Update P300 status
-        this.elements.p300Status.innerHTML = `
-            <div class="small">
-                <strong class="text-info">P300 Active</strong><br>
-                <span class="text-warning">Focus on word suggestion to confirm</span>
-            </div>
-        `;
-    }
-    
-    updateWordSuggestions(currentWord) {
-        const suggestions = this.getWordSuggestions(currentWord);
-        
-        if (suggestions.length > 0) {
-            const suggestionHtml = suggestions.map(word => 
-                `<button class="word-suggestion" onclick="manualAction('complete_word', {word: '${word}'})">${word}</button>`
-            ).join('');
-            
-            this.elements.wordSuggestions.innerHTML = `
-                <div class="small mb-2">Suggestions for "${currentWord}":</div>
-                ${suggestionHtml}
-            `;
-        } else if (currentWord) {
-            this.elements.wordSuggestions.innerHTML = 
-                `<p class="text-muted small">No suggestions for "${currentWord}"</p>`;
-        } else {
-            this.elements.wordSuggestions.innerHTML = 
-                '<p class="text-muted small">Type letters to see suggestions...</p>';
-        }
-    }
-    
-    getWordSuggestions(partial) {
-        if (!partial) return [];
-        
-        const partialUpper = partial.toUpperCase();
-        return this.vocabularyWords
-            .filter(word => word.startsWith(partialUpper))
-            .sort((a, b) => {
-                // Prioritize shorter words and common words
-                const scoreA = this.getWordScore(a);
-                const scoreB = this.getWordScore(b);
-                return scoreB - scoreA;
-            })
-            .slice(0, 5); // Limit to 5 suggestions
-    }
-    
-    getWordScore(word) {
-        // Simple scoring based on word frequency
-        const frequencies = {
-            'YES': 10, 'NO': 10,
-            'HELP': 8, 'HI': 8,
-            'STOP': 6, 'SO': 6, 'TO': 6,
-            'IS': 4, 'IT': 4, 'OR': 4
-        };
-        return frequencies[word] || 1;
-    }
-    
-    updateCharacterCounts() {
-        const text = this.elements.currentText.textContent || '';
-        const words = text.trim() ? text.trim().split(/\s+/).length : 0;
-        
-        this.elements.wordCount.textContent = words;
-        this.elements.charCount.textContent = text.length;
-    }
-    
-    updateEventsDisplay(events) {
-        const eventsHtml = events.slice(0, this.config.maxEvents).map(event => {
-            const time = new Date(event.timestamp).toLocaleTimeString();
-            const typeClass = `event-${event.type.toLowerCase().replace('_', '-')}`;
-            
-            let description = this.getEventDescription(event);
-            
-            return `
-                <div class="event-item ${typeClass}">
-                    <div class="d-flex justify-content-between">
-                        <span>${description}</span>
-                        <span class="event-timestamp">${time}</span>
-                    </div>
-                    ${event.confidence ? `<small>Confidence: ${(event.confidence * 100).toFixed(1)}%</small>` : ''}
-                </div>
-            `;
-        }).join('');
-        
-        this.elements.recentEvents.innerHTML = eventsHtml || '<p class="text-muted small">No events yet...</p>';
-    }
-    
-    getEventDescription(event) {
-        switch(event.type) {
-            case 'MOTOR_PREDICTION':
-                const actions = ['Right Hand', 'Left Hand', 'Feet', 'Rest'];
-                return `Motor: ${actions[event.predicted_class] || 'Unknown'}`;
-            case 'P300_CONFIRMATION':
-                return `P300: ${event.metadata?.predicted_word || 'Confirmation'}`;
-            case 'LETTER_SELECTED':
-                return `Selected: ${event.selected_letter}`;
-            case 'WORD_COMPLETED':
-                return `Completed: ${event.completed_word}`;
-            case 'SIDE_SELECTED':
-                return `Side: ${event.metadata?.selected_side}`;
-            case 'SPACE_INSERTED':
-                return 'Space inserted';
-            case 'STATE_CHANGED':
-                return `State: ${event.new_state}`;
-            default:
-                return event.type;
-        }
-    }
-    
-    animateLetterSelection(letter) {
-        const btn = document.querySelector(`[data-letter="${letter}"]`);
-        if (btn) {
-            btn.classList.add('recently-selected');
-            setTimeout(() => {
-                btn.classList.remove('recently-selected');
-            }, 1000);
-        }
-    }
-    
-    animateWordCompletion(word) {
-        this.elements.currentWord.classList.add('success-flash');
-        setTimeout(() => {
-            this.elements.currentWord.classList.remove('success-flash');
-        }, 600);
-    }
-    
-    handleP300Confirmation(event) {
-        // Visual feedback for P300 confirmation
-        this.elements.p300Status.classList.add('success-flash');
-        setTimeout(() => {
-            this.elements.p300Status.classList.remove('success-flash');
-        }, 600);
-    }
-    
-    async manualAction(action, data = {}) {
-        try {
-            const formData = new FormData();
-            formData.append('action', action);
-            
-            // Add additional data
-            Object.keys(data).forEach(key => {
-                formData.append(key, data[key]);
-            });
-            
-            const response = await this.apiCall(`/action/${this.sessionId}/`, 'POST', formData);
-            
-            if (response.status === 'success') {
-                // Trigger immediate status update
-                this.fetchSessionStatus();
-            } else {
-                throw new Error(response.message);
-            }
-        } catch (error) {
-            console.error('Manual action failed:', error);
-            this.showNotification(`Action failed: ${error.message}`, 'error');
-        }
-    }
-    
-    async apiCall(endpoint, method = 'GET', body = null) {
-        const url = `/communicator${endpoint}`;
+    async apiCall(url, method = 'GET', data = null) {
         const options = {
             method: method,
-            headers: {}
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': this.getCsrfToken()
+            }
         };
         
-        if (method === 'POST') {
-            options.headers['X-CSRFToken'] = this.csrfToken;
-            
-            if (body instanceof FormData) {
-                options.body = body;
-            } else {
-                options.headers['Content-Type'] = 'application/json';
-                options.body = JSON.stringify(body);
-            }
+        if (data) {
+            options.body = JSON.stringify(data);
         }
         
-        const response = await fetch(url, options);
+        const response = await fetch(`/communicator${url}`, options);
         
         if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         return await response.json();
     }
     
-    showNotification(message, type = 'info') {
-        // Create notification element
-        const notification = document.createElement('div');
-        notification.className = `alert alert-${type} alert-dismissible fade show position-fixed`;
-        notification.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-        notification.innerHTML = `
-            ${message}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        `;
+    getCsrfToken() {
+        return document.querySelector('[name=csrfmiddlewaretoken]')?.value || '';
+    }
+    
+    showNotification(message, type) {
+        console.log(`${type.toUpperCase()}: ${message}`);
         
-        document.body.appendChild(notification);
+        // Create toast notification
+        const toast = document.createElement('div');
+        toast.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'danger' : 'info'} position-fixed`;
+        toast.style.top = '20px';
+        toast.style.right = '20px';
+        toast.style.zIndex = '9999';
+        toast.innerHTML = `<i class="fas fa-robot"></i> ${message}`;
         
-        // Auto-remove after 5 seconds
+        document.body.appendChild(toast);
+        
         setTimeout(() => {
-            if (notification.parentNode) {
-                notification.remove();
+            if (toast.parentNode) {
+                toast.parentNode.removeChild(toast);
             }
-        }, 5000);
+        }, 3000);
+    }
+    
+    showActionFeedback(message, type) {
+        this.showNotification(message, type);
+    }
+    
+    // TESTING/SIMULATION METHODS
+    simulatePrediction(classIndex, confidence) {
+        if (!this.isRunning || this.inCooldown) {
+            console.log('🚫 Simulation ignored - system not running or in cooldown');
+            return;
+        }
+        
+        const classNames = ['Right Hand', 'Left Hand', 'Feet', 'Rest'];
+        console.log(`🧪 Simulating prediction: ${classNames[classIndex]} (${(confidence * 100).toFixed(1)}%)`);
+        
+        // This would normally come from the backend via polling
+        // For testing, we can simulate the prediction process
+        this.handleMotorPredictionEvent({
+            type: 'MOTOR_PREDICTION',
+            predicted_class: classIndex,
+            confidence: confidence,
+            metadata: {
+                action: classIndex === 1 ? 'move_window_left' : classIndex === 0 ? 'move_window_right' : 'other',
+                active_group: this.activeGroup,
+                left_window_index: this.leftWindowIndex,
+                right_window_index: this.rightWindowIndex
+            }
+        });
+    }
+    
+    simulateWordCompletion(word) {
+        // Simulate word completion
+        this.handleWordCompletionEvent({
+            type: 'WORD_COMPLETED',
+            completed_word: word
+        });
     }
 }
 
-// Global functions for template usage
-function manualAction(action, data = {}) {
-    if (window.communicator) {
-        window.communicator.manualAction(action, data);
-    }
-}
-
-function showWordSuggestions() {
-    const modal = new bootstrap.Modal(document.getElementById('wordSuggestionModal'));
-    
-    // Update modal content
-    const currentWord = document.getElementById('currentWord').textContent;
-    document.getElementById('modalCurrentWord').textContent = currentWord;
-    
-    const suggestions = window.communicator ? window.communicator.getWordSuggestions(currentWord) : [];
-    const suggestionsDiv = document.getElementById('modalSuggestions');
-    
-    if (suggestions.length > 0) {
-        suggestionsDiv.innerHTML = suggestions.map(word =>
-            `<button class="btn btn-outline-primary me-2 mb-2" onclick="manualAction('complete_word', {word: '${word}'}); bootstrap.Modal.getInstance(document.getElementById('wordSuggestionModal')).hide();">${word}</button>`
-        ).join('');
+// Global initialization
+document.addEventListener('DOMContentLoaded', function() {
+    const sessionId = window.sessionId; // Set in template
+    if (sessionId) {
+        window.bciCommunicator = new BCIMovingWindowCommunicator(sessionId);
+        console.log('🎮 BCI Moving Window Communicator initialized');
+        
+        // Add help text
+        console.log('🎮 Keyboard shortcuts for testing:');
+        console.log('   Ctrl+1: Simulate LEFT_HAND prediction');
+        console.log('   Ctrl+2: Simulate RIGHT_HAND prediction');
+        console.log('   Ctrl+3: Simulate REST prediction');
+        console.log('   Ctrl+Space: Simulate FEET prediction');
+        console.log('   Ctrl+S: Start/Stop system');
     } else {
-        suggestionsDiv.innerHTML = '<p class="text-muted">No suggestions available</p>';
+        console.error('❌ Session ID not found - cannot initialize BCI Communicator');
+    }
+});
+
+// CSS for moving window animations
+const style = document.createElement('style');
+style.textContent = `
+    .window-highlight {
+        background: linear-gradient(45deg, #ffd700, #ffed4a) !important;
+        color: #333 !important;
+        border-color: #ffd700 !important;
+        transform: scale(1.15) !important;
+        box-shadow: 0 8px 25px rgba(255, 215, 0, 0.6) !important;
+        z-index: 10 !important;
+        animation: window-glow 2s ease-in-out infinite !important;
     }
     
-    modal.show();
-}
-
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('BCI Communicator script loaded');
-});
+    .window-active {
+        animation: window-pulse 1s ease-in-out infinite !important;
+    }
+    
+    .window-moving {
+        animation: window-move 0.5s ease-out !important;
+    }
+    
+    .letter-confirmed {
+        background: linear-gradient(45deg, #28a745, #20c997) !important;
+        animation: confirm-pulse 1s ease-out !important;
+    }
+    
+    .word-completed {
+        animation: word-success 1s ease-out !important;
+    }
+    
+    .p300-focused {
+        animation: p300-focus 1s ease-in-out !important;
+        background: linear-gradient(45deg, #ff6b6b, #ee5a52) !important;
+        transform: scale(1.2) !important;
+    }
+    
+    .p300-active {
+        border: 3px solid #ffd700 !important;
+        box-shadow: 0 0 20px rgba(255, 215, 0, 0.5) !important;
+    }
+    
+    .cooldown-active {
+        color: #ffc107 !important;
+        font-weight: bold !important;
+    }
+    
+    @keyframes window-glow {
+        0%, 100% { box-shadow: 0 8px 25px rgba(255, 215, 0, 0.6); }
+        50% { box-shadow: 0 12px 35px rgba(255, 215, 0, 0.9); }
+    }
+    
+    @keyframes window-pulse {
+        0%, 100% { transform: scale(1.15); }
+        50% { transform: scale(1.25); }
+    }
+    
+    @keyframes window-move {
+        0% { transform: scale(1.15) rotate(-5deg); }
+        50% { transform: scale(1.3) rotate(5deg); }
+        100% { transform: scale(1.15) rotate(0deg); }
+    }
+    
+    @keyframes confirm-pulse {
+        0% { transform: scale(1.15); }
+        50% { transform: scale(1.4); }
+        100% { transform: scale(1); }
+    }
+    
+    @keyframes word-success {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.2); background-color: #28a745; }
+        100% { transform: scale(1); }
+    }
+    
+    @keyframes p300-focus {
+        0% { transform: scale(1); opacity: 1; }
+        50% { transform: scale(1.3); opacity: 0.8; }
+        100% { transform: scale(1.2); opacity: 1; }
+    }
+`;
+document.head.appendChild(style);

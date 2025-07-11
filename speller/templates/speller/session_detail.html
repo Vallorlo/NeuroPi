@@ -1,0 +1,408 @@
+<!-- speller/templates/speller/session_detail.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ session.name }} - Speller Session{% endblock %}
+
+{% block extra_css %}
+<style>
+    .status-card {
+        border-left: 4px solid;
+    }
+    .status-running { border-color: #28a745; }
+    .status-stopped { border-color: #6c757d; }
+    .status-ready { border-color: #007bff; }
+    .status-error { border-color: #dc3545; }
+    
+    .stat-card {
+        transition: transform 0.2s ease-in-out;
+    }
+    .stat-card:hover {
+        transform: translateY(-2px);
+    }
+    
+    .letter-grid-preview {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 5px;
+        margin: 10px 0;
+    }
+    .letter-cell-preview {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+        padding: 8px;
+        text-align: center;
+        font-weight: bold;
+    }
+    .vocabulary-tag {
+        display: inline-block;
+        background: #e9ecef;
+        padding: 2px 8px;
+        margin: 2px;
+        border-radius: 12px;
+        font-size: 0.8rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <nav aria-label="breadcrumb">
+                        <ol class="breadcrumb">
+                            <li class="breadcrumb-item"><a href="{% url 'speller:dashboard' %}">Speller</a></li>
+                            <li class="breadcrumb-item active">{{ session.name }}</li>
+                        </ol>
+                    </nav>
+                    <h1 class="h3 mb-0">{{ session.name }}</h1>
+                    <p class="text-muted mb-0">Speller Session Details</p>
+                </div>
+                <div class="text-end">
+                    {% if is_running %}
+                    <a href="{% url 'speller:speller_interface' session.pk %}" class="btn btn-success btn-lg me-2">
+                        <i class="fas fa-tv me-2"></i>View Interface
+                    </a>
+                    <a href="{% url 'speller:stop_session' session.pk %}" class="btn btn-outline-danger">
+                        <i class="fas fa-stop me-2"></i>Stop Session
+                    </a>
+                    {% else %}
+                    <a href="{% url 'speller:start_session' session.pk %}" class="btn btn-primary btn-lg">
+                        <i class="fas fa-play me-2"></i>Start Speller
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- Main Session Info -->
+        <div class="col-md-8">
+            <!-- Session Status -->
+            <div class="card status-card status-{{ session.status }} mb-4">
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="card-title mb-1">
+                                <i class="fas fa-circle 
+                                    {% if session.status == 'running' %}text-success
+                                    {% elif session.status == 'ready' %}text-primary
+                                    {% elif session.status == 'stopped' %}text-secondary
+                                    {% else %}text-danger{% endif %} me-2"></i>
+                                Status: {{ session.get_status_display }}
+                            </h5>
+                            <p class="card-text text-muted mb-0">
+                                {% if session.status == 'running' %}
+                                    Session is actively running. EEG data is being processed for speller control.
+                                {% elif session.status == 'ready' %}
+                                    Session is ready to start. Click "Start Speller" to begin.
+                                {% elif session.status == 'stopped' %}
+                                    Session has been stopped. You can restart it anytime.
+                                {% else %}
+                                    Session encountered an error. Check EEG device connection.
+                                {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            {% if session.started_at %}
+                            <small class="text-muted d-block">Last Started:</small>
+                            <strong>{{ session.started_at|date:"M d, Y H:i:s" }}</strong>
+                            {% endif %}
+                            {% if session.stopped_at %}
+                            <small class="text-muted d-block">Last Stopped:</small>
+                            <strong>{{ session.stopped_at|date:"M d, Y H:i:s" }}</strong>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Text Output -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-keyboard me-2"></i>Current Text Output
+                    </h5>
+                </div>
+                <div class="card-body">
+                    {% if session.current_text %}
+                    <div class="bg-light p-3 rounded border" style="min-height: 100px; font-family: 'Courier New', monospace; font-size: 1.2rem; line-height: 1.5;">
+                        {{ session.current_text }}
+                    </div>
+                    <div class="mt-2">
+                        <small class="text-muted">
+                            Length: {{ session.current_text|length }} characters
+                            | Words: {{ session.current_text|wordcount }}
+                        </small>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-keyboard fa-3x mb-3 opacity-50"></i>
+                        <p class="mb-0">No text has been typed yet</p>
+                        <small>Start the speller session to begin typing with your brain!</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Session Configuration -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-cogs me-2"></i>Session Configuration
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <!-- Models -->
+                        <div class="col-md-6 mb-3">
+                            <h6>Models</h6>
+                            <div class="mb-2">
+                                <strong>Motor Imagery:</strong>
+                                <div class="text-muted">{{ session.motor_imagery_model.name }}</div>
+                                <small class="text-muted">{{ session.motor_imagery_model.n_classes }} classes</small>
+                            </div>
+                            <div>
+                                <strong>P300:</strong>
+                                <div class="text-muted">{{ session.p300_model.name }}</div>
+                                <small class="text-muted">{{ session.p300_model.n_classes }} classes</small>
+                            </div>
+                        </div>
+                        
+                        <!-- Letter Configuration -->
+                        <div class="col-md-6 mb-3">
+                            <h6>Letter Layout</h6>
+                            <div class="mb-2">
+                                <strong>Left Side:</strong>
+                                <div class="letter-grid-preview" style="grid-template-columns: repeat({{ session.left_side_letters|length }}, 1fr);">
+                                    {% for letter in session.left_side_letters %}
+                                    <div class="letter-cell-preview">{{ letter }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            <div>
+                                <strong>Right Side:</strong>
+                                <div class="letter-grid-preview" style="grid-template-columns: repeat({{ session.right_side_letters|length }}, 1fr);">
+                                    {% for letter in session.right_side_letters %}
+                                    <div class="letter-cell-preview">{{ letter }}</div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Vocabulary -->
+                    <div class="row">
+                        <div class="col-12">
+                            <h6>Vocabulary Words</h6>
+                            <div>
+                                {% for word in session.vocabulary_words %}
+                                <span class="vocabulary-tag">{{ word }}</span>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Events -->
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-history me-2"></i>Recent Events
+                    </h5>
+                    <a href="{% url 'speller:session_events' session.pk %}" class="btn btn-outline-secondary btn-sm">
+                        <i class="fas fa-list me-1"></i>View All
+                    </a>
+                </div>
+                <div class="card-body">
+                    {% if recent_events %}
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Time</th>
+                                    <th>Event</th>
+                                    <th>Details</th>
+                                    <th>Confidence</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for event in recent_events %}
+                                <tr>
+                                    <td>
+                                        <small>{{ event.timestamp|time:"H:i:s" }}</small>
+                                    </td>
+                                    <td>
+                                        <span class="badge 
+                                            {% if event.event_type == 'MOTOR_PREDICTION' %}bg-primary
+                                            {% elif event.event_type == 'P300_CONFIRMATION' %}bg-info
+                                            {% elif event.event_type == 'LETTER_SELECTED' %}bg-success
+                                            {% elif event.event_type == 'WORD_COMPLETED' %}bg-warning
+                                            {% else %}bg-secondary{% endif %}">
+                                            {{ event.get_event_type_display }}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <small>
+                                            {% if event.event_type == 'LETTER_SELECTED' %}
+                                                Letter: {{ event.event_data.letter }}
+                                            {% elif event.event_type == 'WORD_COMPLETED' %}
+                                                Word: {{ event.event_data.completed_word }}
+                                            {% elif event.event_type == 'MOTOR_PREDICTION' %}
+                                                {{ event.event_data.predicted_label }}
+                                            {% else %}
+                                                {{ event.event_data|truncatechars:30 }}
+                                            {% endif %}
+                                        </small>
+                                    </td>
+                                    <td>
+                                        {% if event.confidence %}
+                                        <small>{{ event.confidence|floatformat:1 }}%</small>
+                                        {% else %}
+                                        <small class="text-muted">-</small>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-history fa-2x mb-2 opacity-50"></i>
+                        <p class="mb-0">No events recorded yet</p>
+                        <small>Events will appear here once you start using the speller</small>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Sidebar -->
+        <div class="col-md-4">
+            <!-- Quick Stats -->
+            <div class="card stat-card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-chart-bar me-2"></i>Session Statistics
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6 mb-3">
+                            <div class="h4 text-primary mb-1">{{ stats.total_events }}</div>
+                            <small class="text-muted">Total Events</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="h4 text-success mb-1">{{ stats.letters_selected }}</div>
+                            <small class="text-muted">Letters Selected</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="h4 text-info mb-1">{{ stats.motor_predictions }}</div>
+                            <small class="text-muted">Motor Predictions</small>
+                        </div>
+                        <div class="col-6 mb-3">
+                            <div class="h4 text-warning mb-1">{{ stats.words_completed }}</div>
+                            <small class="text-muted">Words Completed</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="h4 text-secondary mb-1">{{ stats.p300_confirmations }}</div>
+                            <small class="text-muted">P300 Confirmations</small>
+                        </div>
+                        <div class="col-6">
+                            <div class="h4 text-dark mb-1">{{ stats.spaces_inserted }}</div>
+                            <small class="text-muted">Spaces Inserted</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Session Info -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-info-circle me-2"></i>Session Info
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Created:</strong>
+                        <div class="text-muted">{{ session.created_at|date:"M d, Y H:i" }}</div>
+                    </div>
+                    
+                    {% if session.started_at %}
+                    <div class="mb-3">
+                        <strong>Last Started:</strong>
+                        <div class="text-muted">{{ session.started_at|date:"M d, Y H:i:s" }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    {% if session.stopped_at %}
+                    <div class="mb-3">
+                        <strong>Last Stopped:</strong>
+                        <div class="text-muted">{{ session.stopped_at|date:"M d, Y H:i:s" }}</div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="mb-3">
+                        <strong>Session ID:</strong>
+                        <div class="text-muted small">{{ session.id }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="card">
+                <div class="card-header">
+                    <h6 class="card-title mb-0">
+                        <i class="fas fa-tools me-2"></i>Actions
+                    </h6>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        {% if is_running %}
+                        <a href="{% url 'speller:speller_interface' session.pk %}" class="btn btn-success">
+                            <i class="fas fa-tv me-2"></i>View Interface
+                        </a>
+                        <a href="{% url 'speller:stop_session' session.pk %}" class="btn btn-outline-danger">
+                            <i class="fas fa-stop me-2"></i>Stop Session
+                        </a>
+                        {% else %}
+                        <a href="{% url 'speller:start_session' session.pk %}" class="btn btn-primary">
+                            <i class="fas fa-play me-2"></i>Start Speller
+                        </a>
+                        {% endif %}
+                        
+                        <a href="{% url 'speller:session_events' session.pk %}" class="btn btn-outline-secondary">
+                            <i class="fas fa-list me-2"></i>View All Events
+                        </a>
+                        
+                        <hr>
+                        
+                        <a href="{% url 'speller:delete_session' session.pk %}" class="btn btn-outline-danger">
+                            <i class="fas fa-trash me-2"></i>Delete Session
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-refresh session status every 10 seconds if running
+    {% if is_running %}
+    setInterval(function() {
+        location.reload();
+    }, 10000);
+    {% endif %}
+</script>
+{% endblock %}

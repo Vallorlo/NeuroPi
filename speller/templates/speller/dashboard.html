@@ -1,0 +1,287 @@
+<!-- speller/templates/speller/dashboard.html -->
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}BCI Speller Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .speller-card {
+        transition: transform 0.2s ease-in-out;
+    }
+    .speller-card:hover {
+        transform: translateY(-5px);
+    }
+    .status-badge {
+        font-size: 0.75rem;
+    }
+    .model-requirement {
+        padding: 10px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+    }
+    .requirement-met {
+        background: #d4edda;
+        border: 1px solid #c3e6cb;
+        color: #155724;
+    }
+    .requirement-missing {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        color: #721c24;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Header -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">
+                        <i class="fas fa-brain text-primary me-2"></i>
+                        BCI Speller Dashboard
+                    </h1>
+                    <p class="text-muted mb-0">Hybrid Motor Imagery + P300 Brain-Computer Interface</p>
+                </div>
+                {% if has_required_models %}
+                <a href="{% url 'speller:create_session' %}" class="btn btn-primary btn-lg">
+                    <i class="fas fa-plus me-2"></i>New Speller Session
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Model Requirements Check -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-cogs me-2"></i>Model Requirements
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="model-requirement {% if mi_models_count > 0 %}requirement-met{% else %}requirement-missing{% endif %}">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="fas fa-hand-paper me-2"></i>
+                                        <strong>Motor Imagery Model</strong>
+                                    </div>
+                                    <span class="badge {% if mi_models_count > 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ mi_models_count }} Active
+                                    </span>
+                                </div>
+                                <small class="d-block mt-1">
+                                    Required for window movement control (LEFT_HAND, RIGHT_HAND, FEET, REST)
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="model-requirement {% if p300_models_count > 0 %}requirement-met{% else %}requirement-missing{% endif %}">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <div>
+                                        <i class="fas fa-lightbulb me-2"></i>
+                                        <strong>P300 Model</strong>
+                                    </div>
+                                    <span class="badge {% if p300_models_count > 0 %}bg-success{% else %}bg-danger{% endif %}">
+                                        {{ p300_models_count }} Active
+                                    </span>
+                                </div>
+                                <small class="d-block mt-1">
+                                    Required for word suggestion confirmation
+                                </small>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {% if not has_required_models %}
+                    <div class="alert alert-warning mt-3 mb-0">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        <strong>Missing Required Models:</strong>
+                        You need both Motor Imagery and P300 trained models to use the Speller.
+                        <a href="{% url 'bci:dashboard' %}" class="alert-link">Train models here</a>.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sessions List -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="card-title mb-0">
+                        <i class="fas fa-list me-2"></i>Speller Sessions
+                    </h5>
+                    <span class="badge bg-info">{{ sessions.count }} Total</span>
+                </div>
+                <div class="card-body">
+                    {% if sessions %}
+                    <div class="row">
+                        {% for session in sessions %}
+                        <div class="col-md-6 col-lg-4 mb-4">
+                            <div class="card speller-card h-100">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-start mb-3">
+                                        <h6 class="card-title mb-0">{{ session.name }}</h6>
+                                        <span class="badge status-badge 
+                                            {% if session.status == 'running' %}bg-success
+                                            {% elif session.status == 'ready' %}bg-info
+                                            {% elif session.status == 'stopped' %}bg-secondary
+                                            {% else %}bg-danger{% endif %}">
+                                            {{ session.get_status_display }}
+                                        </span>
+                                    </div>
+                                    
+                                    <!-- Session Info -->
+                                    <div class="mb-3">
+                                        <small class="text-muted d-block">
+                                            <i class="fas fa-hand-paper me-1"></i>
+                                            MI: {{ session.motor_imagery_model.name|truncatechars:20 }}
+                                        </small>
+                                        <small class="text-muted d-block">
+                                            <i class="fas fa-lightbulb me-1"></i>
+                                            P300: {{ session.p300_model.name|truncatechars:20 }}
+                                        </small>
+                                    </div>
+                                    
+                                    <!-- Letters Configuration -->
+                                    <div class="mb-3">
+                                        <small class="text-muted">
+                                            <strong>Letters:</strong>
+                                            {{ session.left_side_letters|join:"," }} | {{ session.right_side_letters|join:"," }}
+                                        </small>
+                                    </div>
+                                    
+                                    <!-- Current Text Preview -->
+                                    {% if session.current_text %}
+                                    <div class="mb-3">
+                                        <small class="text-muted d-block">Current Text:</small>
+                                        <div class="bg-light p-2 rounded">
+                                            <small class="font-monospace">{{ session.current_text|truncatechars:50 }}</small>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <!-- Timestamps -->
+                                    <small class="text-muted d-block mb-2">
+                                        <i class="fas fa-calendar me-1"></i>
+                                        Created: {{ session.created_at|date:"M d, Y H:i" }}
+                                    </small>
+                                    
+                                    {% if session.started_at %}
+                                    <small class="text-muted d-block mb-3">
+                                        <i class="fas fa-play me-1"></i>
+                                        Last Started: {{ session.started_at|date:"M d, Y H:i:s" }}
+                                    </small>
+                                    {% endif %}
+                                </div>
+                                
+                                <!-- Actions -->
+                                <div class="card-footer bg-transparent">
+                                    <div class="d-grid gap-2">
+                                        {% if session.status == 'running' %}
+                                        <a href="{% url 'speller:speller_interface' session.pk %}" class="btn btn-success btn-sm">
+                                            <i class="fas fa-tv me-1"></i>View Interface
+                                        </a>
+                                        <a href="{% url 'speller:stop_session' session.pk %}" class="btn btn-outline-danger btn-sm">
+                                            <i class="fas fa-stop me-1"></i>Stop Session
+                                        </a>
+                                        {% else %}
+                                        <a href="{% url 'speller:start_session' session.pk %}" class="btn btn-primary btn-sm">
+                                            <i class="fas fa-play me-1"></i>Start Speller
+                                        </a>
+                                        {% endif %}
+                                        
+                                        <a href="{% url 'speller:session_detail' session.pk %}" class="btn btn-outline-secondary btn-sm">
+                                            <i class="fas fa-eye me-1"></i>View Details
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                        <i class="fas fa-brain fa-3x text-muted mb-3"></i>
+                        <h5 class="text-muted">No Speller Sessions Yet</h5>
+                        <p class="text-muted mb-4">Create your first speller session to start communicating with your brain!</p>
+                        {% if has_required_models %}
+                        <a href="{% url 'speller:create_session' %}" class="btn btn-primary">
+                            <i class="fas fa-plus me-2"></i>Create First Session
+                        </a>
+                        {% else %}
+                        <a href="{% url 'bci:dashboard' %}" class="btn btn-outline-primary">
+                            <i class="fas fa-cogs me-2"></i>Train Required Models
+                        </a>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Info Panel -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card bg-light">
+                <div class="card-body">
+                    <h6 class="card-title">
+                        <i class="fas fa-info-circle me-2"></i>How the BCI Speller Works
+                    </h6>
+                    <div class="row">
+                        <div class="col-md-3">
+                            <div class="text-center mb-3">
+                                <i class="fas fa-hand-paper fa-2x text-primary mb-2"></i>
+                                <h6>Motor Imagery</h6>
+                                <small>Think left/right hand movements to navigate letter windows</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center mb-3">
+                                <i class="fas fa-bed fa-2x text-info mb-2"></i>
+                                <h6>REST Command</h6>
+                                <small>Relax to confirm letters or activate word suggestions</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center mb-3">
+                                <i class="fas fa-lightbulb fa-2x text-warning mb-2"></i>
+                                <h6>P300 Suggestions</h6>
+                                <small>Focus on word suggestions for auto-completion</small>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="text-center mb-3">
+                                <i class="fas fa-shoe-prints fa-2x text-success mb-2"></i>
+                                <h6>FEET for Space</h6>
+                                <small>Think feet movement to insert spaces between words</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Auto-refresh status indicators
+    setInterval(function() {
+        // This could poll for session status updates
+        // For now, just refresh badges color based on last known state
+    }, 30000); // Every 30 seconds
+</script>
+{% endblock %}

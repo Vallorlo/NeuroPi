@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'user_management',
     'eeg_visualization',
     'bci_communicator',
+    'speller',
 ]
 
 BCI_COMMUNICATOR = {

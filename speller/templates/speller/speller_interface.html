@@ -1,0 +1,574 @@
+<!-- speller/templates/speller/speller_interface.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BCI Speller - {{ session.name }}</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        .speller-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            margin: 20px auto;
+            padding: 30px;
+            max-width: 1200px;
+        }
+        
+        .letter-grid {
+            display: grid;
+            gap: 10px;
+            padding: 20px;
+            border-radius: 15px;
+            background: #f8f9fa;
+            border: 2px solid #dee2e6;
+            min-height: 200px;
+        }
+        
+        .left-grid {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+        }
+        
+        .right-grid {
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+        }
+        
+        .letter-cell {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            font-weight: bold;
+            color: #495057;
+            background: white;
+            border: 3px solid #dee2e6;
+            border-radius: 10px;
+            min-height: 80px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .letter-cell.selected {
+            background: linear-gradient(45deg, #28a745, #20c997);
+            color: white;
+            border-color: #28a745;
+            box-shadow: 0 4px 15px rgba(40, 167, 69, 0.4);
+            transform: scale(1.1);
+        }
+        
+        .text-output {
+            min-height: 120px;
+            font-size: 1.5rem;
+            padding: 20px;
+            border: 3px solid #007bff;
+            border-radius: 15px;
+            background: white;
+            font-family: 'Courier New', monospace;
+            line-height: 1.4;
+        }
+        
+        .word-suggestions {
+            background: linear-gradient(45deg, #007bff, #6f42c1);
+            color: white;
+            border-radius: 15px;
+            padding: 15px;
+            margin-bottom: 20px;
+            min-height: 80px;
+        }
+        
+        .suggestion-word {
+            display: inline-block;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 8px 15px;
+            margin: 5px;
+            border-radius: 20px;
+            font-weight: bold;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+        
+        .suggestion-word.highlight {
+            background: rgba(255, 255, 255, 0.9);
+            color: #007bff;
+            border-color: white;
+            transform: scale(1.1);
+        }
+        
+        .status-panel {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-active { background-color: #28a745; }
+        .status-p300 { background-color: #007bff; }
+        .status-cooldown { background-color: #ffc107; }
+        .status-error { background-color: #dc3545; }
+        
+        .grid-title {
+            text-align: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: linear-gradient(45deg, #f8f9fa, #e9ecef);
+            border-radius: 10px;
+        }
+        
+        .control-panel {
+            background: #fff;
+            border-radius: 15px;
+            padding: 20px;
+            border: 2px solid #dee2e6;
+        }
+        
+        .cooldown-bar {
+            height: 4px;
+            background: #dc3545;
+            border-radius: 2px;
+            transition: width 0.1s linear;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .pulsing {
+            animation: pulse 1s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="speller-container">
+            <!-- Header -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h1 class="text-center mb-3">
+                        <i class="fas fa-brain me-3"></i>BCI Speller
+                        <small class="text-muted">{{ session.name }}</small>
+                    </h1>
+                </div>
+            </div>
+            
+            <!-- Status Panel -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <div class="status-panel">
+                        <div class="row">
+                            <div class="col-md-2">
+                                <div class="d-flex align-items-center">
+                                    <span class="status-indicator status-active" id="status-indicator"></span>
+                                    <strong>Mode: <span id="current-mode">Motor Imagery</span></strong>
+                                </div>
+                            </div>
+                            <div class="col-md-2">
+                                <strong>Rest Count: <span id="rest-count">0</span></strong>
+                            </div>
+                            <div class="col-md-2">
+                                <strong>Last Moved: <span id="last-moved">Left</span></strong>
+                            </div>
+                            <div class="col-md-3">
+                                <div id="cooldown-container" style="display: none;">
+                                    <div class="mb-1"><strong>Cooldown</strong></div>
+                                    <div class="progress" style="height: 8px;">
+                                        <div class="cooldown-bar" id="cooldown-bar" style="width: 0%;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div id="system-status-container">
+                                    <strong>System: <span id="system-status" class="text-success">Live Mode</span></strong>
+                                    <div id="testing-mode-notice" style="display: none;" class="small text-warning">
+                                        🧪 Simulated predictions for testing
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Word Suggestions (P300 Mode) -->
+            <div class="row mb-4" id="word-suggestions-container" style="display: none;">
+                <div class="col-12">
+                    <div class="word-suggestions">
+                        <h5 class="mb-3">
+                            <i class="fas fa-lightbulb me-2"></i>Word Suggestions
+                            <small class="float-end">Focus on your choice</small>
+                        </h5>
+                        <div id="word-suggestions"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Main Speller Interface -->
+            <div class="row mb-4">
+                <!-- Left Letter Grids -->
+                <div class="col-md-6">
+                    <div class="grid-title">
+                        <i class="fas fa-arrow-left me-2"></i>Left Side Letters
+                        <small class="d-block mt-1">Move with LEFT_HAND</small>
+                    </div>
+                    <div class="letter-grid left-grid" id="left-grid">
+                        <!-- Letters will be populated by JavaScript -->
+                    </div>
+                </div>
+                
+                <!-- Right Letter Grid -->
+                <div class="col-md-6">
+                    <div class="grid-title">
+                        <i class="fas fa-arrow-right me-2"></i>Right Side Letters
+                        <small class="d-block mt-1">Move with RIGHT_HAND</small>
+                    </div>
+                    <div class="letter-grid right-grid" id="right-grid">
+                        <!-- Letters will be populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Text Output -->
+            <div class="row mb-4">
+                <div class="col-12">
+                    <h5 class="mb-3">
+                        <i class="fas fa-keyboard me-2"></i>Text Output
+                        <small class="text-muted float-end">REST to confirm letter • FEET for space</small>
+                    </h5>
+                    <div class="text-output" id="text-output">
+                        <!-- Current text will be displayed here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Control Panel -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="control-panel">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h6 class="mb-3">Motor Imagery Controls</h6>
+                                <div class="row">
+                                    <div class="col-6 col-md-3 mb-2">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <i class="fas fa-hand-paper fa-2x mb-2 text-primary"></i>
+                                            <div><strong>LEFT HAND</strong></div>
+                                            <small>Move Window Left</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3 mb-2">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <i class="fas fa-hand-paper fa-2x mb-2 text-success"></i>
+                                            <div><strong>RIGHT HAND</strong></div>
+                                            <small>Move Window Right</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3 mb-2">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <i class="fas fa-shoe-prints fa-2x mb-2 text-warning"></i>
+                                            <div><strong>FEET</strong></div>
+                                            <small>Insert Space</small>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3 mb-2">
+                                        <div class="text-center p-3 bg-light rounded">
+                                            <i class="fas fa-bed fa-2x mb-2 text-info"></i>
+                                            <div><strong>REST</strong></div>
+                                            <small>Confirm Letter</small>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-4">
+                                <h6 class="mb-3">Session Controls</h6>
+                                <div class="d-grid gap-2">
+                                    <button class="btn btn-danger btn-lg" onclick="stopSpeller()">
+                                        <i class="fas fa-stop me-2"></i>Stop Speller
+                                    </button>
+                                    <button class="btn btn-secondary" onclick="clearText()">
+                                        <i class="fas fa-eraser me-2"></i>Clear Text
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        // Speller JavaScript Controller
+        class SpellerUI {
+            constructor() {
+                this.sessionId = '{{ session.id }}';
+                this.currentState = null;
+                this.updateInterval = null;
+                this.init();
+            }
+            
+            init() {
+                this.populateLetterGrids();
+                this.startStatusUpdates();
+                console.log('🎮 Speller UI initialized');
+            }
+            
+            populateLetterGrids() {
+                // Left side letters
+                const leftLetters = {{ session.left_side_letters|safe }};
+                const leftGrid = document.getElementById('left-grid');
+                leftGrid.innerHTML = '';
+                
+                leftLetters.forEach((letter, index) => {
+                    const cell = document.createElement('div');
+                    cell.className = 'letter-cell';
+                    cell.id = `left-${index}`;
+                    cell.textContent = letter;
+                    leftGrid.appendChild(cell);
+                });
+                
+                // Right side letters
+                const rightLetters = {{ session.right_side_letters|safe }};
+                const rightGrid = document.getElementById('right-grid');
+                rightGrid.innerHTML = '';
+                
+                rightLetters.forEach((letter, index) => {
+                    const cell = document.createElement('div');
+                    cell.className = 'letter-cell';
+                    cell.id = `right-${index}`;
+                    cell.textContent = letter;
+                    rightGrid.appendChild(cell);
+                });
+            }
+            
+            startStatusUpdates() {
+                this.updateInterval = setInterval(() => {
+                    this.fetchCurrentState();
+                }, 500); // Update every 500ms
+            }
+            
+            async fetchCurrentState() {
+                try {
+                    const response = await fetch(`/speller/session/${this.sessionId}/state/`);
+                    if (response.ok) {
+                        const state = await response.json();
+                        this.updateUI(state);
+                        this.currentState = state;
+                    }
+                } catch (error) {
+                    console.error('Error fetching speller state:', error);
+                }
+            }
+            
+            updateUI(state) {
+                // Update mode and status
+                document.getElementById('current-mode').textContent = state.current_mode;
+                document.getElementById('rest-count').textContent = state.consecutive_rest_count;
+                document.getElementById('last-moved').textContent = state.last_moved_side;
+                
+                // Update system status
+                const systemStatus = document.getElementById('system-status');
+                const testingNotice = document.getElementById('testing-mode-notice');
+                
+                if (state.testing_mode) {
+                    systemStatus.textContent = 'Testing Mode';
+                    systemStatus.className = 'text-warning';
+                    testingNotice.style.display = 'block';
+                } else {
+                    systemStatus.textContent = 'Live Mode';
+                    systemStatus.className = 'text-success';
+                    testingNotice.style.display = 'none';
+                }
+                
+                // Update status indicator
+                const indicator = document.getElementById('status-indicator');
+                indicator.className = 'status-indicator';
+                if (state.in_cooldown) {
+                    indicator.classList.add('status-cooldown');
+                } else if (state.current_mode === 'P300') {
+                    indicator.classList.add('status-p300');
+                } else {
+                    indicator.classList.add('status-active');
+                }
+                
+                // Update cooldown
+                this.updateCooldown(state);
+                
+                // Update letter selections
+                this.updateLetterSelections(state);
+                
+                // Update text output
+                document.getElementById('text-output').textContent = state.current_text || '';
+                
+                // Update word suggestions
+                this.updateWordSuggestions(state);
+            }
+            
+            updateCooldown(state) {
+                const container = document.getElementById('cooldown-container');
+                const bar = document.getElementById('cooldown-bar');
+                
+                if (state.in_cooldown) {
+                    container.style.display = 'block';
+                    const percentage = ((5.0 - state.cooldown_remaining) / 5.0) * 100;
+                    bar.style.width = `${percentage}%`;
+                } else {
+                    container.style.display = 'none';
+                }
+            }
+            
+            updateLetterSelections(state) {
+                // Clear all selections
+                document.querySelectorAll('.letter-cell').forEach(cell => {
+                    cell.classList.remove('selected', 'pulsing');
+                });
+                
+                // Highlight current selections
+                const leftCell = document.getElementById(`left-${state.left_window_index}`);
+                const rightCell = document.getElementById(`right-${state.right_window_index}`);
+                
+                if (leftCell) {
+                    leftCell.classList.add('selected');
+                    if (state.last_moved_side === 'left') {
+                        leftCell.classList.add('pulsing');
+                    }
+                }
+                
+                if (rightCell) {
+                    rightCell.classList.add('selected');
+                    if (state.last_moved_side === 'right') {
+                        rightCell.classList.add('pulsing');
+                    }
+                }
+            }
+            
+            updateWordSuggestions(state) {
+                const container = document.getElementById('word-suggestions-container');
+                const suggestionsDiv = document.getElementById('word-suggestions');
+                
+                if (state.current_mode === 'P300' && state.word_suggestions.length > 0) {
+                    container.style.display = 'block';
+                    suggestionsDiv.innerHTML = '';
+                    
+                    state.word_suggestions.forEach(word => {
+                        const span = document.createElement('span');
+                        span.className = 'suggestion-word';
+                        span.textContent = word;
+                        suggestionsDiv.appendChild(span);
+                    });
+                } else {
+                    container.style.display = 'none';
+                }
+            }
+            
+            stop() {
+                if (this.updateInterval) {
+                    clearInterval(this.updateInterval);
+                }
+            }
+        }
+        
+        // Global functions
+        let spellerUI;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            spellerUI = new SpellerUI();
+        });
+        
+        async function stopSpeller() {
+            if (confirm('Are you sure you want to stop the speller session?')) {
+                try {
+                    const response = await fetch(`/speller/session/${spellerUI.sessionId}/stop/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        spellerUI.stop();
+                        window.location.href = '/speller/';
+                    } else {
+                        alert('Error stopping speller session');
+                    }
+                } catch (error) {
+                    console.error('Error stopping speller:', error);
+                    alert('Error stopping speller session');
+                }
+            }
+        }
+        
+        async function clearText() {
+            if (confirm('Clear all text?')) {
+                try {
+                    const response = await fetch(`/speller/session/${spellerUI.sessionId}/clear/`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRFToken': getCookie('csrftoken'),
+                            'Content-Type': 'application/json'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        document.getElementById('text-output').textContent = '';
+                    }
+                } catch (error) {
+                    console.error('Error clearing text:', error);
+                }
+            }
+        }
+        
+        // Utility function to get CSRF token
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+        
+        // Handle page unload
+        window.addEventListener('beforeunload', function() {
+            if (spellerUI) {
+                spellerUI.stop();
+            }
+        });
+    </script>
+</body>
+</html>

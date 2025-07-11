@@ -1,0 +1,32 @@
+Motor Imagery Trial Session Summary
+===================================
+
+Participant: val
+Session Name: Presention
+Trial Type: Motor Imagery
+Session ID: 12
+Started: 2025-07-11 12:45:01.503566+00:00
+Completed: 2025-07-11 12:46:40.519247+00:00
+
+Configuration:
+  Imagery Duration: 8000ms
+  Cue Duration: 2000ms
+  Rest Duration: 2000ms
+  Trials per Class: 5
+
+Data Collection Results:
+  Total EEG Samples: 11464
+  Duration: 92.30 seconds
+  Sampling Rate: 124.21 Hz
+
+Motor Imagery Classes:
+  REST: 4314 samples (37.6%)
+  LEFT_HAND: 3066 samples (26.7%)
+  FEET: 2043 samples (17.8%)
+  RIGHT_HAND: 2041 samples (17.8%)
+
+Data Structure:
+  File Format: CSV
+  Columns: COUNTER, F3, FC5, AF3, F7, T7, P7, O1, O2, P8, T8, F8, AF4, FC6, F4, Timestamp, motor_imagery_class
+  EEG Channels: COUNTER, F3, FC5, AF3, F7, T7, P7, O1, O2, P8, T8, F8, AF4, FC6, F4
+  Labels: motor_imagery_class column contains imagery class labels

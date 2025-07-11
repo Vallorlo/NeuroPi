@@ -246,9 +246,9 @@ def start_visual_trial(request):
         request.session['word_sequence'] = word_sequence
         request.session['current_word_index'] = 0
         
-        return redirect('visual_trial_run')
+        return redirect('trials:visual_trial_run')
     
-    return redirect('start_trial')
+    return redirect('trials:start_trial')
 
 def visual_trial_run(request):
     """Run the visual word focus trial."""

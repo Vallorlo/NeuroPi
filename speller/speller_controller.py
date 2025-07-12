@@ -289,6 +289,13 @@ class SpellerController:
                                 }
                                 
                                 logger.info(f"🎯 Prediction: {prediction['predicted_label']} ({confidence:.2%})")
+                                print(f"\n=== MOTOR IMAGERY PREDICTION ===")
+                                print(f"Predicted: {prediction['predicted_label']} (Class {predicted_class})")
+                                print(f"Confidence: {confidence:.3f} ({confidence:.1%})")
+                                print(f"All Class Probabilities:")
+                                for i, prob in enumerate(probabilities):
+                                    print(f"  {self.mi_predictor.class_labels[i]}: {prob:.3f} ({prob:.1%})")
+                                print("=" * 35)
                                 self.process_motor_imagery_prediction(prediction)
                                 
                             except Exception as e:
@@ -454,8 +461,17 @@ class SpellerController:
             return []
         
         last_word = words[-1].upper()
-        suggestions = [word for word in self.session.vocabulary_words 
-                      if word.upper().startswith(last_word)]
+        
+        try:
+            from trials.models import WordSet, WordSetItem
+            word_set = WordSet.objects.get(name='Speller Vocabulary', is_active=True)
+            word_items = WordSetItem.objects.filter(word_set=word_set)
+            vocabulary_words = [item.word.upper() for item in word_items]
+        except:
+            vocabulary_words = self.session.vocabulary_words
+        
+        suggestions = [word for word in vocabulary_words 
+                    if word.upper().startswith(last_word)]
         
         return suggestions[:5]
     

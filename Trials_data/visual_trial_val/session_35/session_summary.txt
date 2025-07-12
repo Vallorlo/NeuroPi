@@ -1,0 +1,29 @@
+Visual Trial Session Summary
+============================
+
+Participant: val
+Word Set: Speller Vocabulary
+Session ID: 35
+Started: 2025-07-12 01:08:10.099358+00:00
+Completed: None
+Word Display Duration: 2000ms
+Rest Duration: 1000ms
+Repetitions per Word: 5
+
+Data Collection Results:
+Total EEG Samples: 20300
+Duration: 159.96 seconds
+Sampling Rate: 126.91 Hz
+
+Words in dataset:
+  XXXXX: 7196 samples
+  HE: 1330 samples
+  NO: 1329 samples
+  HI: 1318 samples
+  IS: 1317 samples
+  SO: 1308 samples
+  SHE: 1305 samples
+  HELP: 1304 samples
+  OR: 1303 samples
+  STOP: 1301 samples
+  OPEN: 1289 samples

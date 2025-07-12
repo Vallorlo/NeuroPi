@@ -121,7 +121,16 @@ class SpellerP300Predictor:
                 'is_valid_suggestion': is_valid_suggestion,
                 'timestamp': time.time()
             }
-            
+            print(f"\n=== P300 WORD PREDICTION ===")
+            print(f"Predicted: {result['predicted_word']} (Class {result['predicted_class']})")
+            print(f"Confidence: {result['confidence']:.3f} ({result['confidence']:.1%})")
+            print(f"Valid Suggestion: {result['is_valid_suggestion']}")
+            print(f"All Word Probabilities:")
+            for i, prob in enumerate(result['probabilities']):
+                if i < len(self.p300_predictor.class_labels):
+                    word = self.p300_predictor.class_labels[i]
+                    print(f"  {word}: {prob:.3f} ({prob:.1%})")
+            print("=" * 30)
             return result
             
         except Exception as e:

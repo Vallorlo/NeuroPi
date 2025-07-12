@@ -1,5 +1,6 @@
 # trials/management/commands/create_sample_wordsets.py
 # Django management command to create sample word sets for visual trials
+
 from django.core.management.base import BaseCommand
 from trials.models import WordSet, WordSetItem
 
@@ -35,22 +36,14 @@ class Command(BaseCommand):
                 'words': ['red', 'blue', 'green', 'yellow', 'purple']
             },
             {
-                'name': 'Motor Imagery',
+                'name': 'Motor Imagiry',
                 'description': 'Val Collection trial',
                 'words': ['SQUEEZE', 'KICK', 'SPIN', 'BRIGHT', 'SPEAK']
-            },
-            {
-                'name': 'Speller Vocabulary',
-                'description': 'P300 words that can be spelled with current letters (A,E,I,O,S,H,L,N,P,R)',
-                'words': [
-                    'HE', 'SHE', 'HI', 'SO', 'IS', 'OR', 'NO', 'HELP', 'STOP',
-                    'OPEN'
-                ]
             }
         ]
-       
+        
         created_count = 0
-       
+        
         for word_set_data in word_sets:
             # Check if word set already exists
             if WordSet.objects.filter(name=word_set_data['name']).exists():
@@ -58,14 +51,14 @@ class Command(BaseCommand):
                     self.style.WARNING(f'Word set "{word_set_data["name"]}" already exists, skipping...')
                 )
                 continue
-           
+            
             # Create word set
             word_set = WordSet.objects.create(
                 name=word_set_data['name'],
                 description=word_set_data['description'],
                 is_active=True
             )
-           
+            
             # Add words to the set
             for i, word in enumerate(word_set_data['words']):
                 WordSetItem.objects.create(
@@ -73,14 +66,14 @@ class Command(BaseCommand):
                     word=word,
                     order=i
                 )
-           
+            
             created_count += 1
             self.stdout.write(
                 self.style.SUCCESS(
                     f'Created word set "{word_set.name}" with {len(word_set_data["words"])} words'
                 )
             )
-       
+        
         if created_count > 0:
             self.stdout.write(
                 self.style.SUCCESS(f'\nSuccessfully created {created_count} word sets!')

@@ -1,0 +1,22 @@
+Visual Trial Session Summary
+============================
+
+Participant: val
+Word Set: Motor Imagiry
+Session ID: 29
+Started: 2025-07-11 13:02:06.163945+00:00
+Completed: None
+Word Display Duration: 3000ms
+Rest Duration: 2000ms
+Repetitions per Word: 10
+
+Data Collection Results:
+Total EEG Samples: 1799
+Duration: 14.17 seconds
+Sampling Rate: 126.94 Hz
+
+Words in dataset:
+  XXXXX: 626 samples
+  SPEAK: 391 samples
+  SQUEEZE: 391 samples
+  KICK: 391 samples
